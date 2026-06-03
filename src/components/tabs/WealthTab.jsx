@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
 import { fetchWithCache, formatAmount, showToast } from '../../lib/utils';
+import { buildProxyUrl, unwrapAllOrigins } from '../../lib/yahooProxy';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { WEALTH_PARAMS_KEY } from '../../lib/constants';
 
@@ -74,9 +75,8 @@ function symbolColor(sym) {
 async function fetchStockPrice(rawSymbol, forceRefresh = false) {
   const symbol = /^\d{4,6}$/.test(rawSymbol) ? rawSymbol + '.TW' : rawSymbol;
   const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-  const proxyUrl  = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
   try {
-    const data  = await fetchWithCache(proxyUrl, forceRefresh ? 0 : 6);
+    const data  = unwrapAllOrigins(await fetchWithCache(buildProxyUrl(targetUrl), forceRefresh ? 0 : 6));
     const meta  = data?.chart?.result?.[0]?.meta;
     return meta ? (meta.regularMarketPrice || meta.previousClose || null) : null;
   } catch { return null; }
@@ -85,9 +85,8 @@ async function fetchStockPrice(rawSymbol, forceRefresh = false) {
 async function fetchCAGR(symbol, years) {
   const range     = years + 'y';
   const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1mo&range=${range}`;
-  const proxyUrl  = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
   try {
-    const data   = await fetchWithCache(proxyUrl, 24);
+    const data   = unwrapAllOrigins(await fetchWithCache(buildProxyUrl(targetUrl), 24));
     const prices = (data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []).filter(p => p != null);
     if (prices.length < 2) return null;
     return Math.pow(prices[prices.length - 1] / prices[0], 1 / years) - 1;
@@ -95,12 +94,13 @@ async function fetchCAGR(symbol, years) {
 }
 
 // ── Holding Modal ─────────────────────────────────────────────────────────────
-function HoldingModal({ onClose, onSave }) {
-  const [search,    setSearch]    = useState('');
-  const [symbol,    setSymbol]    = useState('');
-  const [name,      setName]      = useState('');
-  const [shares,    setShares]    = useState('');
-  const [price,     setPrice]     = useState(null);
+function HoldingModal({ initial, onClose, onSave }) {
+  const isEdit = !!initial;
+  const [search,    setSearch]    = useState(initial ? `${(initial.symbol || '').replace('.TW', '')} ${initial.name || ''}`.trim() : '');
+  const [symbol,    setSymbol]    = useState(initial?.symbol || '');
+  const [name,      setName]      = useState(initial?.name || '');
+  const [shares,    setShares]    = useState(initial ? String(initial.shares ?? '') : '');
+  const [price,     setPrice]     = useState(initial?.lastPrice ?? null);
   const [loading,   setLoading]   = useState(false);
   const [dropdown,  setDropdown]  = useState([]);
 
@@ -130,14 +130,21 @@ function HoldingModal({ onClose, onSave }) {
   const handleSave = () => {
     const sym = symbol || search.trim().toUpperCase();
     if (!sym || !(parseFloat(shares) > 0)) { showToast('請填寫代號與股數', 'error'); return; }
-    onSave({ id: 'h-' + Date.now(), symbol: sym, name, shares: parseFloat(shares), lastPrice: price || null, lastUpdated: price ? new Date().toISOString() : null });
+    // 編輯時若未重新抓價，沿用原本的價格與更新時間
+    const finalPrice   = price != null ? price : (initial?.lastPrice ?? null);
+    const finalUpdated = price != null ? new Date().toISOString() : (initial?.lastUpdated ?? null);
+    onSave({
+      id: initial?.id || ('h-' + Date.now()),
+      symbol: sym, name, shares: parseFloat(shares),
+      lastPrice: finalPrice, lastUpdated: finalPrice ? finalUpdated : null,
+    });
   };
 
   return (
     <div className="modal-overlay active" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 380 }}>
         <div className="modal-header">
-          <h3>新增持股</h3>
+          <h3>{isEdit ? '編輯持股' : '新增持股'}</h3>
           <button className="icon-btn" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
         </div>
         <div className="form-group" id="stockSearchWrap" style={{ position: 'relative' }}>
@@ -165,7 +172,7 @@ function HoldingModal({ onClose, onSave }) {
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleSave}>
-            <i className="fa-solid fa-check"></i> 新增
+            <i className="fa-solid fa-check"></i> {isEdit ? '儲存' : '新增'}
           </button>
           <button className="btn" style={{ flex: 1, background: 'var(--bg-color)', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }} onClick={onClose}>取消</button>
         </div>
@@ -302,7 +309,7 @@ export default function WealthTab() {
 
   const savedParams = (() => { try { return JSON.parse(localStorage.getItem(WEALTH_PARAMS_KEY)) || {}; } catch { return {}; } })();
 
-  const [showHoldingModal, setShowHoldingModal] = useState(false);
+  const [holdingModal, setHoldingModal] = useState(null); // null=關閉, 'new'=新增, holding 物件=編輯
   const [editBankId,       setEditBankId]       = useState(null);
   const [showBankModal,    setShowBankModal]     = useState(false);
   const [fetchingId,       setFetchingId]        = useState(null);
@@ -371,11 +378,13 @@ export default function WealthTab() {
   }, [invRate, invMonthly, cashRate, cashMonthly, target, totalInvest, totalCash, totalAssets]);
 
   // ── Holdings actions ──
-  const handleAddHolding = async (holding) => {
-    const next = [...wealthHoldings, holding];
-    setWealthHoldings(next);
-    setShowHoldingModal(false);
-    showToast(`${holding.symbol} 已新增`);
+  const handleSaveHolding = (holding) => {
+    const exists = wealthHoldings.some(h => h.id === holding.id);
+    setWealthHoldings(exists
+      ? wealthHoldings.map(h => h.id === holding.id ? holding : h)
+      : [...wealthHoldings, holding]);
+    setHoldingModal(null);
+    showToast(`${holding.symbol} ${exists ? '已更新' : '已新增'}`);
   };
 
   const handleDeleteHolding = (id) => {
@@ -573,7 +582,7 @@ export default function WealthTab() {
             <button className="btn btn-secondary btn-sm" onClick={() => handleRefreshAll()} title="全部更新股價">
               <i className="fa-solid fa-rotate"></i> 更新價格
             </button>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowHoldingModal(true)}>
+            <button className="btn btn-primary btn-sm" onClick={() => setHoldingModal('new')}>
               <i className="fa-solid fa-plus"></i> 新增
             </button>
           </div>
@@ -601,6 +610,9 @@ export default function WealthTab() {
                     <div className="wealth-row-actions">
                       <button className="icon-btn" title="更新股價" onClick={() => handleRefreshPrice(h.id)}>
                         <i className={`fa-solid fa-rotate${fetchingId === h.id ? ' fa-spin' : ''}`}></i>
+                      </button>
+                      <button className="icon-btn" title="編輯" onClick={() => setHoldingModal(h)}>
+                        <i className="fa-solid fa-pen"></i>
                       </button>
                       <button className="icon-btn delete" title="刪除" onClick={() => handleDeleteHolding(h.id)}>
                         <i className="fa-solid fa-trash"></i>
@@ -756,7 +768,7 @@ export default function WealthTab() {
       </div>{/* end wealth-grid */}
 
       {/* Modals */}
-      {showHoldingModal && <HoldingModal onClose={() => setShowHoldingModal(false)} onSave={handleAddHolding} />}
+      {holdingModal && <HoldingModal initial={holdingModal === 'new' ? null : holdingModal} onClose={() => setHoldingModal(null)} onSave={handleSaveHolding} />}
       {showBankModal && (
         <BankModal
           initial={editBankId ? wealthBankAccounts.find(a => a.id === editBankId) : null}
