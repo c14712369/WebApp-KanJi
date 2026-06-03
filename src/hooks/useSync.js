@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAppStore } from '../store/appStore';
-import { mergeLifeExpenses } from '../lib/syncMerge';
+import { mergeLifeExpenses, purgePreAprilManualExpenses } from '../lib/syncMerge';
 import {
   STORAGE_KEY, CAT_KEY, LIFE_EXP_KEY, LIFE_CAT_KEY, LIFE_INC_CAT_KEY,
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
@@ -106,7 +106,11 @@ export function useSync() {
         // ── lifeExpenses 一律「依 id 合併」 ───────────────────────────────────
         // gmail_ 匯入列以雲端為準（GAS 擁有，含新增與刪除）、手動列以本地為準。
         // 不受下方時間戳方向影響，避免 GAS 匯入被前端推送蓋掉（重整後看不到帳單明細的根因）。
-        const mergedLife = mergeLifeExpenses(s.lifeExpenses, cloudData.lifeExpenses);
+        // 再施加一次性資料政策：移除 4/1 前的手動支出（保留收入/薪資與刷卡匯入），
+        // 因合併採聯集，需在每次合併後過濾才能讓雲端/本地兩端都洗淨且自我修復。
+        const mergedLife = purgePreAprilManualExpenses(
+          mergeLifeExpenses(s.lifeExpenses, cloudData.lifeExpenses)
+        );
 
         // 核心安全邏輯：計算資料筆數
         const localCount = (s.items?.length || 0) + (s.lifeExpenses?.length || 0) + (s.projects?.length || 0);

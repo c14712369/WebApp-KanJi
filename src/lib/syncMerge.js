@@ -33,3 +33,21 @@ export function mergeLifeExpenses(local = [], cloud = []) {
 
   return [...Object.values(manualById), ...cloudImported];
 }
+
+/**
+ * 一次性資料政策：移除「指定日期以前的手動支出列」。
+ * 條件＝ 非 gmail_ 匯入列 且 非收入(type !== 'income') 且 date < cutoff。
+ * 保留：收入/薪資、刷卡匯入(gmail_)、cutoff（含）之後的所有列。
+ * 設計為同步時的冪等過濾，因合併採聯集，需在每次合併後施加才能確保兩端都洗淨且自我修復。
+ * @param {Array} entries
+ * @param {string} cutoff - ISO 日期字串，預設 '2026-04-01'
+ */
+export function purgePreAprilManualExpenses(entries = [], cutoff = '2026-04-01') {
+  const arr = Array.isArray(entries) ? entries : [];
+  return arr.filter(e => {
+    if (!e) return false;
+    const isManualExpense = !isImportedId(e.id) && e.type !== 'income';
+    const beforeCutoff = (e.date || '') < cutoff;
+    return !(isManualExpense && beforeCutoff);
+  });
+}

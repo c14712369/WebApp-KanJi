@@ -3,7 +3,7 @@
  * 驗證雲端/本地合併邏輯——GAS 匯入列（gmail_）以雲端為準，手動列以本地為準。
  */
 import assert from 'node:assert';
-import { isImportedId, mergeLifeExpenses } from './syncMerge.js';
+import { isImportedId, mergeLifeExpenses, purgePreAprilManualExpenses } from './syncMerge.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -45,6 +45,36 @@ test('本地獨有的手動列要保留（雲端沒有也不丟）', () => {
 test('空輸入安全（不丟例外）', () => {
   assert.deepEqual(mergeLifeExpenses(undefined, undefined), []);
   assert.deepEqual(ids(mergeLifeExpenses([], [{ id: 'gmail_s_x' }])), ['gmail_s_x']);
+});
+
+console.log('\n[purgePreAprilManualExpenses]');
+test('移除 4/1 前的手動支出（無 type 視為支出）', () => {
+  const out = purgePreAprilManualExpenses([{ id: 'm1', date: '2026-03-10', amount: 75 }]);
+  assert.equal(out.length, 0);
+});
+test('保留薪資/收入（type=income）即使在 4 月前', () => {
+  const out = purgePreAprilManualExpenses([{ id: 's1', date: '2026-03-13', amount: 48000, type: 'income' }]);
+  assert.equal(out.length, 1);
+});
+test('保留刷卡匯入（gmail_）即使在 4 月前', () => {
+  const out = purgePreAprilManualExpenses([{ id: 'gmail_x', date: '2026-03-16', amount: 75 }]);
+  assert.equal(out.length, 1);
+});
+test('保留 4/1（含）之後的手動支出', () => {
+  const out = purgePreAprilManualExpenses([
+    { id: 'm_keep', date: '2026-04-01', amount: 50 },
+    { id: 'm_keep2', date: '2026-05-02', amount: 27 },
+  ]);
+  assert.deepEqual(out.map(e => e.id).sort(), ['m_keep', 'm_keep2']);
+});
+test('混合情境：只濾掉 4 月前手動支出，其餘全留', () => {
+  const out = purgePreAprilManualExpenses([
+    { id: 'm_old', date: '2026-02-09', amount: 260 },              // 刪
+    { id: 's_old', date: '2026-01-15', amount: 48000, type: 'income' }, // 留(收入)
+    { id: 'gmail_old', date: '2026-03-16', amount: 75 },           // 留(刷卡)
+    { id: 'm_new', date: '2026-04-15', amount: 100 },              // 留(4月後)
+  ]);
+  assert.deepEqual(out.map(e => e.id).sort(), ['gmail_old', 'm_new', 's_old']);
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);
