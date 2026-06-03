@@ -1,0 +1,1 @@
+{"name":"SubItemManager 收支管理系統","short_name":"收支管理","description":"記錄每一筆固定支出與日常生活費的財務管理工具","start_url":"/","display":"standalone","background_color":"#F0EDE8","theme_color":"#C17B2E","lang":"en","scope":"/","icons":[{"src":"favicon.ico","sizes":"192x192","type":"image/x-icon"},{"src":"favicon.ico","sizes":"512x512","type":"image/x-icon"}]}
