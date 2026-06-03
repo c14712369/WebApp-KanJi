@@ -5,7 +5,10 @@ import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import CategoryManageModal from '../modals/CategoryManageModal';
 import IconRenderer from '../../lib/IconRenderer';
+import { groupEntriesByDay, paginateGroups } from '../../lib/lifeGrouping';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
 
 // 進度條：從 0 滑動至目標寬度
 function BarFill({ value, className, id }) {
@@ -421,8 +424,10 @@ export default function LifeTab() {
         : (a.date.localeCompare(b.date) || (a.id || '').localeCompare(b.id || ''))
     );
 
-  const totalPages = Math.ceil(visibleEntries.length / PAGE_SIZE);
-  const pageItems  = visibleEntries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // 依日期分組，分頁時整天不切斷（避免同一天明細被拆到不同頁而誤以為漏記）
+  const dayGroups = groupEntriesByDay(visibleEntries);
+  const { totalPages, pageGroups } = paginateGroups(dayGroups, page, PAGE_SIZE);
+  const pageItems  = pageGroups.flatMap(g => g.entries);
 
   // ── Month nav ──
   const changeMonth = (delta) => {
@@ -550,9 +555,21 @@ export default function LifeTab() {
                     </div>
                   ) : (
                     <AnimatePresence mode="popLayout">
-                      {pageItems.map((e, idx) => {
+                      {pageGroups.map(group => {
+                        const gParts = (group.date || '').split('-');
+                        const gWeek = group.date ? WEEKDAY_NAMES[new Date(group.date + 'T00:00:00').getDay()] : '';
+                        return (
+                        <div key={group.date}>
+                          <div className="life-day-header">
+                            <span className="ldh-date">
+                              {parseInt(gParts[1])}/{parseInt(gParts[2])}
+                              <span className="ldh-week">（{gWeek}）</span>
+                            </span>
+                            <span className="ldh-total">合計 NT$ {formatAmount(group.total, 'expense')}</span>
+                          </div>
+                      {group.entries.map((e, idx) => {
                         const day = parseInt((e.date || '').split('-')[2]);
-                        const weekDayNames = ['日','一','二','三','四','五','六'];
+                        const weekDayNames = WEEKDAY_NAMES;
                         const weekDay = e.date ? weekDayNames[new Date(e.date + 'T00:00:00').getDay()] : '';
                         const rw  = rewardMap[e.id];
                         const isIncome = e.type === 'income';
@@ -598,6 +615,9 @@ export default function LifeTab() {
                               <button className="icon-btn delete" onClick={() => handleDelete(e.id)}><i className="fa-solid fa-trash"></i></button>
                             </div>
                           </motion.div>
+                        );
+                      })}
+                        </div>
                         );
                       })}
                     </AnimatePresence>

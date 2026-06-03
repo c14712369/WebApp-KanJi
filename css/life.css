@@ -829,3 +829,20 @@ body.modal-open {
 /* stat colors */
 .detail-value.stat-negative { color: var(--danger-color); }
 .detail-value.stat-positive { color: var(--success-color); }
+
+/* 明細依日期分組的標題列（黏性，捲動時當日標題不離開視窗） */
+.life-day-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 6px 6px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+.life-day-header .ldh-date  { font-size: 0.9rem;  font-weight: 600; color: var(--text-main); }
+.life-day-header .ldh-week  { font-size: 0.72rem; color: var(--text-muted); margin-left: 2px; }
+.life-day-header .ldh-total { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
