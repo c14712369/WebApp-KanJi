@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
 import { fetchWithCache, formatAmount, showToast } from '../../lib/utils';
-import { buildProxyUrl, unwrapAllOrigins } from '../../lib/yahooProxy';
+import { buildProxyUrl, unwrapAllOrigins, twSymbolCandidates } from '../../lib/yahooProxy';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { WEALTH_PARAMS_KEY } from '../../lib/constants';
 
@@ -17,6 +17,7 @@ const STOCK_LIST = [
   { symbol: '2357', name: '華碩', suffix: '.TW' },
   { symbol: '2382', name: '廣達', suffix: '.TW' },
   { symbol: '2303', name: '聯電', suffix: '.TW' },
+  { symbol: '6488', name: '環球晶', suffix: '.TWO' },
   { symbol: '2886', name: '兆豐金', suffix: '.TW' },
   { symbol: '2884', name: '玉山金', suffix: '.TW' },
   { symbol: '2882', name: '國泰金', suffix: '.TW' },
@@ -34,6 +35,7 @@ const STOCK_LIST = [
   { symbol: '00919',  name: '群益台灣精選高息',    suffix: '.TW' },
   { symbol: '00929',  name: '復華台灣科技優息',    suffix: '.TW' },
   { symbol: '00940',  name: '元大台灣價值高息',    suffix: '.TW' },
+  { symbol: '00981A', name: '主動統一台股增長',    suffix: '.TW' },
   { symbol: '00679B', name: '元大美債20年',       suffix: '.TW' },
   { symbol: '00687B', name: '國泰20年美債',       suffix: '.TW' },
   { symbol: 'SPY', name: 'S&P 500 ETF', suffix: '' },
@@ -73,13 +75,17 @@ function symbolColor(sym) {
 
 // ── Stock price fetch ─────────────────────────────────────────────────────────
 async function fetchStockPrice(rawSymbol, forceRefresh = false) {
-  const symbol = /^\d{4,6}$/.test(rawSymbol) ? rawSymbol + '.TW' : rawSymbol;
-  const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-  try {
-    const data  = unwrapAllOrigins(await fetchWithCache(buildProxyUrl(targetUrl), forceRefresh ? 0 : 6));
-    const meta  = data?.chart?.result?.[0]?.meta;
-    return meta ? (meta.regularMarketPrice || meta.previousClose || null) : null;
-  } catch { return null; }
+  // 上市(.TW)/上櫃(.TWO) 無法事先得知，依序嘗試候選代號，取第一個有價者。
+  for (const symbol of twSymbolCandidates(rawSymbol)) {
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+    try {
+      const data  = unwrapAllOrigins(await fetchWithCache(buildProxyUrl(targetUrl), forceRefresh ? 0 : 6));
+      const meta  = data?.chart?.result?.[0]?.meta;
+      const price = meta ? (meta.regularMarketPrice || meta.previousClose || null) : null;
+      if (price != null) return price;
+    } catch { /* 換下一個候選 */ }
+  }
+  return null;
 }
 
 async function fetchCAGR(symbol, years) {

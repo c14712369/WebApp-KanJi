@@ -28,3 +28,21 @@ export function unwrapAllOrigins(wrapped) {
   }
   return wrapped; // 已是原始 JSON
 }
+
+/**
+ * 由使用者輸入的代號推導出要查詢 Yahoo 的候選代號（依序嘗試），純函式。
+ * - 台股數字代號（可帶單一字母結尾，如 00631L 槓桿、00981A 主動式 ETF）：
+ *   一律補суffix。上市用 .TW、上櫃用 .TWO，無法事先得知掛牌市場，
+ *   故兩者都產生、依序嘗試（呼叫端取第一個有價者）。
+ * - 已帶 .TW / .TWO 者：把指定的擺前面，另一個當後備。
+ * - 其餘（美股等英文代號）：原樣回傳。
+ */
+export function twSymbolCandidates(rawSymbol) {
+  const s = (rawSymbol || '').trim();
+  if (!s) return [];
+  const m = s.match(/^(\d{3,6}[A-Za-z]?)(?:\.(TW|TWO))?$/i);
+  if (!m) return [s.toUpperCase()];
+  const base = m[1].toUpperCase();
+  const order = m[2] && m[2].toUpperCase() === 'TWO' ? ['TWO', 'TW'] : ['TW', 'TWO'];
+  return order.map(suf => `${base}.${suf}`);
+}

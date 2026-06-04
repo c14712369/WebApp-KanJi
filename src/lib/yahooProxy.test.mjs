@@ -3,7 +3,7 @@
  * 驗證 allorigins /get 回應的解包（corsproxy.io 失效後改用 allorigins）。
  */
 import assert from 'node:assert';
-import { unwrapAllOrigins } from './yahooProxy.js';
+import { unwrapAllOrigins, twSymbolCandidates } from './yahooProxy.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -31,6 +31,32 @@ test('null/空 → 回 null', () => {
 });
 test('contents 為非法 JSON → 回 null（不丟例外）', () => {
   assert.equal(unwrapAllOrigins({ contents: 'not json{' }), null);
+});
+
+console.log('\n[twSymbolCandidates]');
+test('純數字台股代號 → 補 .TW 再 .TWO（2330 上市）', () => {
+  assert.deepEqual(twSymbolCandidates('2330'), ['2330.TW', '2330.TWO']);
+});
+test('上櫃股 6488 仍會嘗試 .TWO 後備', () => {
+  assert.ok(twSymbolCandidates('6488').includes('6488.TWO'));
+});
+test('帶字母結尾的主動式 ETF 00981A → 補 .TW', () => {
+  assert.deepEqual(twSymbolCandidates('00981A'), ['00981A.TW', '00981A.TWO']);
+});
+test('槓桿 ETF 00631L 不會被字母吃掉', () => {
+  assert.deepEqual(twSymbolCandidates('00631L'), ['00631L.TW', '00631L.TWO']);
+});
+test('已指定 .TWO → 擺前面，.TW 當後備', () => {
+  assert.deepEqual(twSymbolCandidates('6488.TWO'), ['6488.TWO', '6488.TW']);
+});
+test('小寫輸入正規化為大寫', () => {
+  assert.deepEqual(twSymbolCandidates('00981a'), ['00981A.TW', '00981A.TWO']);
+});
+test('美股英文代號 → 原樣（大寫）', () => {
+  assert.deepEqual(twSymbolCandidates('aapl'), ['AAPL']);
+});
+test('空字串 → 空陣列', () => {
+  assert.deepEqual(twSymbolCandidates(''), []);
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);
