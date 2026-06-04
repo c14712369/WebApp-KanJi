@@ -96,3 +96,8 @@
     transform: scale(0.92);
 }
 
+
+/* 觸控：消除點擊 300ms 延遲與雙擊縮放 */
+.btn, .icon-btn, .pagination-btn, .tab-btn, .life-subtab-btn {
+  touch-action: manipulation;
+}

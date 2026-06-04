@@ -159,3 +159,9 @@ export async function getItemAmountForMonth(item, year, month) {
   const base    = calculateExpenseForMonth({ ...item, amount: item.originalAmount || item.amount }, year, month);
   return base * rate;
 }
+
+// 僅桌機（有 hover + 精準指標）才自動聚焦；手機 autoFocus 會彈鍵盤、頂版面
+export const autoFocusDesktop =
+  (typeof window !== 'undefined' && window.matchMedia)
+    ? window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    : false;

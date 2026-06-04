@@ -101,7 +101,7 @@ function SalaryModal({ lifeIncomeCategories, onClose }) {
         </div>
         <div className="form-group">
           <label className="form-label">月薪金額</label>
-          <input className="form-input" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
+          <input className="form-input" type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
         </div>
         <div className="form-group">
           <label className="form-label">收入分類</label>
@@ -111,7 +111,7 @@ function SalaryModal({ lifeIncomeCategories, onClose }) {
         </div>
         <div className="form-group">
           <label className="form-label">每月幾號入帳</label>
-          <input className="form-input" type="number" min="1" max="28" value={day} onChange={e => setDay(e.target.value)} />
+          <input className="form-input" type="number" inputMode="numeric" min="1" max="28" value={day} onChange={e => setDay(e.target.value)} />
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button className="btn btn-ghost" style={{ flex: 1 }} onClick={handleClear}>清除設定</button>

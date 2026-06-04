@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
-import { fetchWithCache, formatAmount, showToast } from '../../lib/utils';
+import { fetchWithCache, formatAmount, showToast, autoFocusDesktop } from '../../lib/utils';
 import { buildProxyUrl, unwrapAllOrigins, twSymbolCandidates } from '../../lib/yahooProxy';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { WEALTH_PARAMS_KEY } from '../../lib/constants';
@@ -155,7 +155,7 @@ function HoldingModal({ initial, onClose, onSave }) {
         </div>
         <div className="form-group" id="stockSearchWrap" style={{ position: 'relative' }}>
           <label className="form-label">搜尋股票代號 / 名稱</label>
-          <input className="form-input" autoFocus value={search} onChange={e => handleSearchChange(e.target.value)} onKeyDown={handleEnter} placeholder="輸入代號或名稱…" />
+          <input className="form-input" autoFocus={autoFocusDesktop} value={search} onChange={e => handleSearchChange(e.target.value)} onKeyDown={handleEnter} placeholder="輸入代號或名稱…" />
           {dropdown.length > 0 && (
             <div id="stockDropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 8, zIndex: 100, maxHeight: 200, overflowY: 'auto' }}>
               {dropdown.map((s, i) => (
@@ -174,7 +174,7 @@ function HoldingModal({ initial, onClose, onSave }) {
         )}
         <div className="form-group">
           <label className="form-label">股數</label>
-          <input className="form-input" type="number" min="0" step="any" value={shares} onChange={e => setShares(e.target.value)} placeholder="0" />
+          <input className="form-input" type="number" inputMode="decimal" min="0" step="any" value={shares} onChange={e => setShares(e.target.value)} placeholder="0" />
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleSave}>
@@ -225,7 +225,7 @@ function BankModal({ initial, onClose, onSave }) {
         </div>
         <div className="form-group" style={{ position: 'relative' }}>
           <label className="form-label">銀行 / 機構</label>
-          <input className="form-input" autoFocus value={bank} onChange={e => handleSearch(e.target.value)} onFocus={() => setDropdown(BANK_NAMES)} onBlur={() => setTimeout(() => setDropdown([]), 150)} placeholder="搜尋或輸入…" />
+          <input className="form-input" autoFocus={autoFocusDesktop} value={bank} onChange={e => handleSearch(e.target.value)} onFocus={() => setDropdown(BANK_NAMES)} onBlur={() => setTimeout(() => setDropdown([]), 150)} placeholder="搜尋或輸入…" />
           {dropdown.length > 0 && (
             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 8, zIndex: 100, maxHeight: 200, overflowY: 'auto' }}>
               {dropdown.map((b, i) => (
@@ -244,11 +244,11 @@ function BankModal({ initial, onClose, onSave }) {
         )}
         <div className="form-group">
           <label className="form-label">餘額（NT$）</label>
-          <input className="form-input" type="number" min="0" value={balance} onChange={e => setBalance(e.target.value)} placeholder="0" />
+          <input className="form-input" type="number" inputMode="decimal" min="0" value={balance} onChange={e => setBalance(e.target.value)} placeholder="0" />
         </div>
         <div className="form-group">
           <label className="form-label">年利率（%）</label>
-          <input className="form-input" type="number" min="0" step="0.01" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" />
+          <input className="form-input" type="number" inputMode="decimal" min="0" step="0.01" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" />
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>取消</button>
@@ -676,11 +676,11 @@ export default function WealthTab() {
             </div>
             <div className="form-group" style={{ marginBottom: 8 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>每月投入（NT$）</label>
-              <input className="form-input" id="wealthInvestMonthlyInput" type="number" min="0" value={invMonthly} onChange={e => { setInvMonthly(e.target.value); saveParams({ invMonthly: e.target.value }); }} />
+              <input className="form-input" id="wealthInvestMonthlyInput" type="number" inputMode="decimal" min="0" value={invMonthly} onChange={e => { setInvMonthly(e.target.value); saveParams({ invMonthly: e.target.value }); }} />
             </div>
             <div className="form-group" style={{ marginBottom: 8 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>預期年化報酬率（%）</label>
-              <input className="form-input" id="wealthInvestRateInput" type="number" min="0" step="0.1" value={invRate} onChange={e => { setInvRate(e.target.value); saveParams({ invRate: e.target.value }); }} />
+              <input className="form-input" id="wealthInvestRateInput" type="number" inputMode="decimal" min="0" step="0.1" value={invRate} onChange={e => { setInvRate(e.target.value); saveParams({ invRate: e.target.value }); }} />
             </div>
             {/* CAGR auto-fetch */}
             <div className="form-group" style={{ marginBottom: 4, position: 'relative' }} id="cagrSearchWrap">
@@ -729,11 +729,11 @@ export default function WealthTab() {
             </div>
             <div className="form-group" style={{ marginBottom: 8 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>每月存入（NT$）</label>
-              <input className="form-input" id="wealthCashMonthlyInput" type="number" min="0" value={cashMonthly} onChange={e => { setCashMonthly(e.target.value); saveParams({ cashMonthly: e.target.value }); }} />
+              <input className="form-input" id="wealthCashMonthlyInput" type="number" inputMode="decimal" min="0" value={cashMonthly} onChange={e => { setCashMonthly(e.target.value); saveParams({ cashMonthly: e.target.value }); }} />
             </div>
             <div className="form-group" style={{ marginBottom: 8 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>年利率（%）</label>
-              <input className="form-input" id="wealthCashRateInput" type="number" min="0" step="0.01" value={cashRate} onChange={e => { setCashRate(e.target.value); saveParams({ cashRate: e.target.value }); }} />
+              <input className="form-input" id="wealthCashRateInput" type="number" inputMode="decimal" min="0" step="0.01" value={cashRate} onChange={e => { setCashRate(e.target.value); saveParams({ cashRate: e.target.value }); }} />
             </div>
           </div>
         </div>
@@ -741,7 +741,7 @@ export default function WealthTab() {
         {/* Target */}
         <div className="form-group" style={{ marginTop: 8 }}>
           <label className="form-label">目標資產（NT$）</label>
-          <input className="form-input" id="wealthTargetInput" type="number" min="0" value={target} onChange={e => { setTarget(e.target.value); saveParams({ target: e.target.value }); }} />
+          <input className="form-input" id="wealthTargetInput" type="number" inputMode="decimal" min="0" value={target} onChange={e => { setTarget(e.target.value); saveParams({ target: e.target.value }); }} />
         </div>
 
         {/* Result */}

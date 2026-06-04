@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { showToast, formatAmount } from '../../lib/utils';
+import { showToast, formatAmount, autoFocusDesktop } from '../../lib/utils';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -27,11 +27,11 @@ function ProjectModal({ initial, onClose, onSave }) {
         </div>
         <div className="form-group">
           <label className="form-label">專案名稱</label>
-          <input className="form-input" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="旅遊、活動…" />
+          <input className="form-input" autoFocus={autoFocusDesktop} value={name} onChange={e => setName(e.target.value)} placeholder="旅遊、活動…" />
         </div>
         <div className="form-group">
           <label className="form-label">預算（NT$）</label>
-          <input className="form-input" type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" />
+          <input className="form-input" type="number" inputMode="decimal" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" />
         </div>
         <div className="form-group">
           <label className="form-label">出發 / 目標日期</label>
@@ -104,7 +104,7 @@ function ProjectDetailModal({ project, projectExpenses, projectCategories, onClo
           <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 8 }}>新增明細</div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 6, marginBottom: 6 }}>
             <input className="form-input" placeholder="項目名稱…" value={expName} onChange={e => setExpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddExp()} />
-            <input className="form-input" type="number" placeholder="金額" min="0" value={expAmt} onChange={e => setExpAmt(e.target.value)} />
+            <input className="form-input" type="number" inputMode="decimal" placeholder="金額" min="0" value={expAmt} onChange={e => setExpAmt(e.target.value)} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6 }}>
             <select className="form-select" id="projectExpCat" value={expCatId} onChange={e => setExpCatId(e.target.value)}>

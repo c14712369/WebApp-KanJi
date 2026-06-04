@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { getCycleLabel, toMonthlyAmount, fetchWithCache, showToast } from '../../lib/utils';
+import { getCycleLabel, toMonthlyAmount, fetchWithCache, showToast, autoFocusDesktop } from '../../lib/utils';
 import { DEFAULT_CATS } from '../../lib/constants';
 import IconRenderer from '../../lib/IconRenderer';
 import CategoryManageModal from '../modals/CategoryManageModal';
@@ -74,7 +74,7 @@ function ItemModal({ categories, onClose, onSave, initial }) {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">名稱</label>
-            <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="訂閱名稱…" autoFocus />
+            <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="訂閱名稱…" autoFocus={autoFocusDesktop} />
           </div>
           <div className="form-group">
             <label className="form-label">分類</label>
@@ -90,13 +90,13 @@ function ItemModal({ categories, onClose, onSave, initial }) {
           </div>
           <div className="form-group">
             <label className="form-label">金額（{form.currency}）</label>
-            <input className="form-input" type="number" min="0" step="any" value={form.originalAmount}
+            <input className="form-input" type="number" inputMode="decimal" min="0" step="any" value={form.originalAmount}
               onChange={e => set('originalAmount', e.target.value)} placeholder="0" />
           </div>
           {form.currency !== 'TWD' && (
             <div className="form-group" id="exchangeRateRow">
               <label className="form-label">匯率（1 {form.currency} = ? TWD）{loading && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}> 抓取中…</span>}</label>
-              <input className="form-input" type="number" min="0" step="any" value={form.exchangeRate}
+              <input className="form-input" type="number" inputMode="decimal" min="0" step="any" value={form.exchangeRate}
                 onChange={e => set('exchangeRate', e.target.value)} />
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
                 ≈ NT$ {twdAmount.toLocaleString()}
