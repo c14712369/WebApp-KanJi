@@ -557,9 +557,6 @@ export default function LifeTab() {
                             <span className="ldh-total">合計 NT$ {formatAmount(group.total, 'expense')}</span>
                           </div>
                       {group.entries.map((e, idx) => {
-                        const day = parseInt((e.date || '').split('-')[2]);
-                        const weekDayNames = WEEKDAY_NAMES;
-                        const weekDay = e.date ? weekDayNames[new Date(e.date + 'T00:00:00').getDay()] : '';
                         const rw  = rewardMap[e.id];
                         const isIncome = e.type === 'income';
                         const cat = isIncome 
@@ -575,8 +572,6 @@ export default function LifeTab() {
                             transition={{ duration: 0.15, delay: idx * 0.01, ease: "easeOut" }}
                             className={isIncome ? "life-income-row" : "life-exp-row"}
                           >
-                            <div className={isIncome ? "life-income-date" : "life-exp-date"}>{day}</div>
-                            <span style={{ fontSize: '0.6rem', opacity: 0.45, flexShrink: 0, marginLeft: -6 }}>({weekDay})</span>
                             <div className={isIncome ? "life-income-arrow" : "life-exp-dot"} style={{ background: cat.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {cat.icon && <IconRenderer name={cat.icon} size={14} color={cat.iconColor || "#fff"} />}
                             </div>
