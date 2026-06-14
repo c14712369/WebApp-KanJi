@@ -2,9 +2,47 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// 本機開發鏡像：在 vite dev 重現 api/yahoo.js（serverless）的行為，
+// 讓 /api/yahoo 在 `npm run dev` 也能用（正式環境由 Vercel Function 接手）。
+function yahooDevProxy() {
+  const ALLOWED_HOSTS = new Set(['query1.finance.yahoo.com', 'query2.finance.yahoo.com']);
+  const UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+  return {
+    name: 'yahoo-dev-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/yahoo', async (req, res) => {
+        const send = (code, obj) => {
+          res.statusCode = code;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(typeof obj === 'string' ? obj : JSON.stringify(obj));
+        };
+        try {
+          const reqUrl = new URL(req.originalUrl, 'http://localhost');
+          const target = reqUrl.searchParams.get('url');
+          if (!target) return send(400, { error: 'missing url param' });
+          const u = new URL(target);
+          if (u.protocol !== 'https:' || !ALLOWED_HOSTS.has(u.hostname)) {
+            return send(403, { error: 'host not allowed' });
+          }
+          const upstream = await fetch(u.toString(), { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+          const body = await upstream.text();
+          res.statusCode = upstream.status;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(body);
+        } catch {
+          send(502, { error: 'upstream fetch failed' });
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    yahooDevProxy(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],

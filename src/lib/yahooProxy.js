@@ -1,12 +1,14 @@
 /**
- * Yahoo Finance 取價的 CORS 代理輔助。
- * corsproxy.io 已失效（回 403），改用 allorigins，其 /get 端點會把回應包成
- * { contents: "<json 字串>", status: {...} }，需再 parse 一次。
+ * Yahoo Finance 取價的代理輔助。
+ * 過往靠第三方 CORS proxy（corsproxy.io→allorigins）皆已失效/不穩，
+ * 現改為打自家同源 Serverless Function（api/yahoo.js），由伺服器端帶 UA 代打 Yahoo，
+ * 回傳「原始 Yahoo JSON」（無包裹）。unwrapAllOrigins 對無 contents 的回應會原樣回傳，
+ * 故舊呼叫端不需改動；同時保留對舊式 { contents } 包裹的相容處理。
  */
 
-/** allorigins 代理基底；用 /get 取得包裹回應 */
+/** 同源 Serverless 代理：/api/yahoo?url=<encoded Yahoo URL> */
 export function buildProxyUrl(targetUrl) {
-  return `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+  return `/api/yahoo?url=${encodeURIComponent(targetUrl)}`;
 }
 
 /**
