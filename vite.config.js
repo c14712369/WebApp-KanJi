@@ -74,6 +74,16 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // 把穩定的第三方庫切成獨立 chunk，利於瀏覽器長期快取（改版時不必重抓）
+        manualChunks: {
+          'vendor-react':    ['react', 'react-dom'],
+          'vendor-motion':   ['framer-motion'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+        },
+      },
+    },
   },
   server: {
     port: 3000,

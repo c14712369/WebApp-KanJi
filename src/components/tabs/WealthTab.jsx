@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
-import { fetchWithCache, formatAmount, showToast, autoFocusDesktop } from '../../lib/utils';
+import { fetchWithCache, formatAmount, showToast, autoFocusDesktop, confirmDialog } from '../../lib/utils';
 import { buildProxyUrl, unwrapAllOrigins, twSymbolCandidates } from '../../lib/yahooProxy';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { WEALTH_PARAMS_KEY } from '../../lib/constants';
@@ -393,8 +393,9 @@ export default function WealthTab() {
     showToast(`${holding.symbol} ${exists ? '已更新' : '已新增'}`);
   };
 
-  const handleDeleteHolding = (id) => {
-    if (!confirm('確定刪除此持股？')) return;
+  const handleDeleteHolding = async (id) => {
+    const h = wealthHoldings.find(x => x.id === id);
+    if (!await confirmDialog({ title: '刪除持股', message: `確定要刪除「${h?.symbol || '此持股'}」嗎？`, confirmText: '刪除' })) return;
     setWealthHoldings(wealthHoldings.filter(h => h.id !== id));
     showToast('已刪除');
   };
@@ -468,8 +469,9 @@ export default function WealthTab() {
     showToast(exists ? '帳戶已更新' : '帳戶已新增');
   };
 
-  const handleDeleteBank = (id) => {
-    if (!confirm('確定刪除此帳戶？')) return;
+  const handleDeleteBank = async (id) => {
+    const a = wealthBankAccounts.find(x => x.id === id);
+    if (!await confirmDialog({ title: '刪除帳戶', message: `確定要刪除「${a?.bankName || '此帳戶'}」嗎？`, confirmText: '刪除' })) return;
     setWealthBankAccounts(wealthBankAccounts.filter(a => a.id !== id));
     showToast('已刪除');
   };

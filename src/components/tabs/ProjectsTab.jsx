@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { showToast, formatAmount, autoFocusDesktop } from '../../lib/utils';
+import { showToast, formatAmount, autoFocusDesktop, confirmDialog } from '../../lib/utils';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -134,7 +134,7 @@ function ProjectDetailModal({ project, projectExpenses, projectCategories, onClo
                     </div>
                     <div className="item-cost" style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ color: 'var(--danger-color)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>NT$ {(Number(e.amount) || 0).toLocaleString()}</span>
-                      <button className="icon-btn delete" onClick={() => { if (confirm('確定刪除？')) { if (navigator.vibrate) navigator.vibrate(50); onDeleteExp(e.id); } }} title="刪除">
+                      <button className="icon-btn delete" onClick={async () => { if (await confirmDialog({ title: '刪除明細', message: '確定要刪除這筆支出嗎？', confirmText: '刪除' })) { if (navigator.vibrate) navigator.vibrate(50); onDeleteExp(e.id); } }} title="刪除">
                         <i className="fa-solid fa-trash-can"></i>
                       </button>
                     </div>
@@ -195,8 +195,8 @@ export default function ProjectsTab() {
     setProjModal(null);
   };
 
-  const handleDeleteProject = (id) => {
-    if (!confirm('確定要刪除此專案嗎？相關的支出明細也會一併刪除。')) return;
+  const handleDeleteProject = async (id) => {
+    if (!await confirmDialog({ title: '刪除專案', message: '確定要刪除此專案嗎？\n相關的支出明細也會一併刪除，此動作無法復原。', confirmText: '刪除' })) return;
     if (navigator.vibrate) navigator.vibrate(50);
     setProjects(projects.filter(p => p.id !== id));
     setProjectExpenses(projectExpenses.filter(e => e.projectId !== id));

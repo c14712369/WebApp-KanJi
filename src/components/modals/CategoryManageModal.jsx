@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
 import IconRenderer, { AVAILABLE_ICONS } from '../../lib/IconRenderer';
-import { showToast } from '../../lib/utils';
+import { showToast, confirmDialog } from '../../lib/utils';
 
 export default function CategoryManageModal({ categories, onSave, onClose, type = 'expense' }) {
   const [editingId, setEditingId] = useState(null);
@@ -55,8 +55,8 @@ export default function CategoryManageModal({ categories, onSave, onClose, type 
     onSave(catsToSave);
   };
 
-  const handleDelete = (id) => {
-    if (!confirm('確定刪除此分類？\n注意：這可能會影響已使用此分類的記錄。')) return;
+  const handleDelete = async (id) => {
+    if (!await confirmDialog({ title: '刪除分類', message: '確定要刪除此分類嗎？\n這可能會影響已使用此分類的紀錄。', confirmText: '刪除' })) return;
     const newCategories = categories.filter(c => c.id !== id);
     if (editingId === id) resetForm();
     onSave(newCategories);

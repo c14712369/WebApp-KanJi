@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { getCycleLabel, toMonthlyAmount, fetchWithCache, showToast, autoFocusDesktop } from '../../lib/utils';
+import { getCycleLabel, toMonthlyAmount, fetchWithCache, showToast, autoFocusDesktop, confirmDialog } from '../../lib/utils';
 import { DEFAULT_CATS } from '../../lib/constants';
 import IconRenderer from '../../lib/IconRenderer';
 import CategoryManageModal from '../modals/CategoryManageModal';
@@ -247,8 +247,9 @@ export default function FixedTab() {
     setModalItem(null);
   };
 
-  const handleDelete = (id) => {
-    if (!confirm('確定刪除？')) return;
+  const handleDelete = async (id) => {
+    const item = items.find(i => i.id === id);
+    if (!await confirmDialog({ title: '刪除項目', message: `確定要刪除「${item?.name || '此項目'}」嗎？此動作無法復原。`, confirmText: '刪除' })) return;
     if (navigator.vibrate) navigator.vibrate(50);
     deleteItem(id);
     showToast('刪除成功');

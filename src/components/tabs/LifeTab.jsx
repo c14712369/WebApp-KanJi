@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly } from '../../lib/utils';
+import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly, confirmDialog } from '../../lib/utils';
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import CategoryManageModal from '../modals/CategoryManageModal';
@@ -86,8 +86,8 @@ function SalaryModal({ lifeIncomeCategories, onClose }) {
     localStorage.setItem(SALARY_DEFAULT_KEY, JSON.stringify({ amount: Number(amount), catId, day: parseInt(day) }));
     showToast('預設薪資已儲存'); onClose();
   };
-  const handleClear = () => {
-    if (!confirm('確定清除預設薪資設定？')) return;
+  const handleClear = async () => {
+    if (!await confirmDialog({ title: '清除預設薪資', message: '確定要清除預設薪資設定嗎？', confirmText: '清除' })) return;
     localStorage.removeItem(SALARY_DEFAULT_KEY);
     showToast('已清除'); onClose();
   };
@@ -446,8 +446,8 @@ export default function LifeTab() {
     }
     setExpModal(null);
   };
-  const handleDelete = (id) => {
-    if (!confirm('確定刪除？')) return;
+  const handleDelete = async (id) => {
+    if (!await confirmDialog({ title: '刪除明細', message: '確定要刪除這筆紀錄嗎？此動作無法復原。', confirmText: '刪除' })) return;
     if (navigator.vibrate) navigator.vibrate(50);
     deleteLifeExpense(id);
     showToast('已刪除');

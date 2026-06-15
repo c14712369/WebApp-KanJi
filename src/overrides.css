@@ -3,6 +3,12 @@
    to work correctly with the React component tree.
    ─────────────────────────────────────────────────────────────────────────── */
 
+/* 固定捲軸槽：各分頁都預留捲軸空間，避免切到較長分頁（如固定支出）時
+   垂直捲軸出現/消失，導致置中內容左右位移、右側「多一條線」閃動。 */
+html {
+  scrollbar-gutter: stable;
+}
+
 /* React controls tab visibility directly — disable CSS default hide */
 .tab-content {
   display: block !important;
@@ -255,6 +261,111 @@ body.scrolling-down .fab {
   font-weight: 500;
   color: var(--text-muted);
 }
+
+/* ── 分頁載入骨架屏 (TabSkeleton) ── */
+.skel-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.skel-row:last-child { border-bottom: none; }
+
+.skel-shimmer {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--border-color) 55%, transparent) 25%,
+    color-mix(in srgb, var(--border-color) 90%, transparent) 37%,
+    color-mix(in srgb, var(--border-color) 55%, transparent) 63%
+  );
+  background-size: 400% 100%;
+  animation: skelShimmer 1.4s ease infinite;
+}
+
+@keyframes skelShimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* ── 自製確認對話框 (confirmDialog) ── */
+.confirm-modal {
+  text-align: center;
+  padding: 28px 24px 22px;
+}
+
+.confirm-modal-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
+}
+
+.confirm-modal-icon.danger {
+  background: color-mix(in srgb, var(--danger-color) 12%, transparent);
+  color: var(--danger-color);
+}
+
+.confirm-modal-title {
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0 0 8px;
+}
+
+.confirm-modal-message {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  white-space: pre-line;
+  margin: 0 0 22px;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.confirm-modal-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.confirm-btn-cancel {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+.confirm-btn-cancel:hover {
+  border-color: var(--text-muted);
+}
+
+.confirm-btn-ok {
+  background: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  color: #fff;
+  font-weight: 600;
+}
+.confirm-btn-ok.danger {
+  background: var(--danger-color);
+  border-color: var(--danger-color);
+}
+.confirm-btn-ok:hover { filter: brightness(1.06); }
+.confirm-btn-ok:active { transform: scale(0.97); }
 
 /* ── Improved empty state ── */
 .empty-state {

@@ -114,6 +114,77 @@ export function showToast(message, type = 'success') {
   setTimeout(() => { toast.style.opacity = 0; setTimeout(() => toast.remove(), 200); }, 2500);
 }
 
+// 自製確認對話框（取代瀏覽器原生 confirm）。回傳 Promise<boolean>。
+// 沿用 app 既有的 .modal-overlay / .modal 樣式，視覺與其他彈窗一致。
+export function confirmDialog({
+  title = '確認',
+  message = '',
+  confirmText = '確定',
+  cancelText = '取消',
+  danger = true,
+} = {}) {
+  return new Promise(resolve => {
+    document.getElementById('_confirmOverlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = '_confirmOverlay';
+    overlay.className = 'modal-overlay active';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal confirm-modal';
+    modal.style.maxWidth = '360px';
+
+    const icon = document.createElement('div');
+    icon.className = `confirm-modal-icon${danger ? ' danger' : ''}`;
+    icon.innerHTML = `<i class="fa-solid ${danger ? 'fa-triangle-exclamation' : 'fa-circle-question'}"></i>`;
+
+    const h3 = document.createElement('h3');
+    h3.className = 'confirm-modal-title';
+    h3.textContent = title;
+
+    const p = document.createElement('p');
+    p.className = 'confirm-modal-message';
+    p.textContent = message; // textContent 防注入；換行交給 CSS white-space
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'confirm-modal-actions';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn confirm-btn-cancel';
+    cancelBtn.textContent = cancelText;
+
+    const okBtn = document.createElement('button');
+    okBtn.className = `btn confirm-btn-ok${danger ? ' danger' : ''}`;
+    okBtn.textContent = confirmText;
+
+    btnRow.append(okBtn, cancelBtn);
+    modal.append(icon, h3, p, btnRow);
+    overlay.append(modal);
+    document.body.append(overlay);
+
+    let done = false;
+    const close = (result) => {
+      if (done) return;
+      done = true;
+      document.removeEventListener('keydown', onKey);
+      overlay.classList.remove('active');
+      setTimeout(() => overlay.remove(), 200);
+      resolve(result);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close(false);
+      else if (e.key === 'Enter') close(true);
+    };
+
+    cancelBtn.addEventListener('click', () => close(false));
+    okBtn.addEventListener('click', () => close(true));
+    overlay.addEventListener('pointerdown', (e) => { if (e.target === overlay) close(false); });
+    document.addEventListener('keydown', onKey);
+
+    requestAnimationFrame(() => okBtn.focus());
+  });
+}
+
 // ─── FX Rate Helpers ─────────────────────────────────────────────────────────
 
 const _fxRateCache = {};

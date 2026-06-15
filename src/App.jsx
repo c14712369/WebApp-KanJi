@@ -1,15 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useAppStore } from './store/appStore';
 import { useSync } from './hooks/useSync';
 import Header from './components/layout/Header';
 import BottomNav from './components/layout/BottomNav';
 import SyncOverlay from './components/layout/SyncOverlay';
-import LifeTab     from './components/tabs/LifeTab';
-import FixedTab    from './components/tabs/FixedTab';
-import AnalysisTab from './components/tabs/AnalysisTab';
-import AnnualTab   from './components/tabs/AnnualTab';
-import WealthTab   from './components/tabs/WealthTab';
-import ProjectsTab from './components/tabs/ProjectsTab';
+import TabSkeleton from './components/layout/TabSkeleton';
 import { TABS } from './lib/constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -18,13 +13,21 @@ import '../css/main.css';
 // React-specific overrides (patch Vanilla JS CSS assumptions)
 import './overrides.css';
 
+// 分頁懶載入：首屏只載入當前分頁，chart.js / 股票清單等重物按需切出獨立 chunk
+const LifeTab     = lazy(() => import('./components/tabs/LifeTab'));
+const FixedTab    = lazy(() => import('./components/tabs/FixedTab'));
+const AnalysisTab = lazy(() => import('./components/tabs/AnalysisTab'));
+const AnnualTab   = lazy(() => import('./components/tabs/AnnualTab'));
+const WealthTab   = lazy(() => import('./components/tabs/WealthTab'));
+const ProjectsTab = lazy(() => import('./components/tabs/ProjectsTab'));
+
 const TAB_MAP = {
-  life:     <LifeTab />,
-  fixed:    <FixedTab />,
-  analysis: <AnalysisTab />,
-  annual:   <AnnualTab />,
-  wealth:   <WealthTab />,
-  projects: <ProjectsTab />,
+  life:     LifeTab,
+  fixed:    FixedTab,
+  analysis: AnalysisTab,
+  annual:   AnnualTab,
+  wealth:   WealthTab,
+  projects: ProjectsTab,
 };
 
 const swipeConfidenceThreshold = 10000;
@@ -60,6 +63,7 @@ export default function App() {
   }, [activeTab]);
 
   const activeIndex = TABS.findIndex(t => t.id === activeTab);
+  const ActiveTab = TAB_MAP[activeTab];
 
   const variants = {
     enter: (direction) => ({
@@ -121,7 +125,9 @@ export default function App() {
             onDragEnd={handleDragEnd}
             dragDirectionLock
           >
-            {TAB_MAP[activeTab]}
+            <Suspense fallback={<TabSkeleton />}>
+              <ActiveTab />
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>
