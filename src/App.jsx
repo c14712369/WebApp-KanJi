@@ -3,6 +3,7 @@ import { useAppStore } from './store/appStore';
 import { useSync } from './hooks/useSync';
 import Header from './components/layout/Header';
 import BottomNav from './components/layout/BottomNav';
+import SyncOverlay from './components/layout/SyncOverlay';
 import LifeTab     from './components/tabs/LifeTab';
 import FixedTab    from './components/tabs/FixedTab';
 import AnalysisTab from './components/tabs/AnalysisTab';
@@ -103,6 +104,7 @@ export default function App() {
 
   return (
     <div className="container" style={{ overflowX: 'hidden', position: 'relative' }}>
+      <SyncOverlay />
       <Header />
       <main style={{ position: 'relative', minHeight: '80vh', paddingBottom: '0' }}>
         <AnimatePresence initial={false} custom={direction}>

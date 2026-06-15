@@ -23,7 +23,7 @@ const EMPTY_FORM = {
   id: '', name: '', categoryId: '', currency: 'TWD',
   originalAmount: '', exchangeRate: 1, amount: 0,
   cycle: 'monthly', startDate: new Date().toISOString().split('T')[0],
-  endDate: '', note: '',
+  endDate: '', note: '', paymentMethod: 'credit',
 };
 
 // ── Item Modal ──────────────────────────────────────────────────────────────
@@ -61,6 +61,7 @@ function ItemModal({ categories, onClose, onSave, initial }) {
       originalAmount: parseFloat(form.originalAmount),
       exchangeRate:   parseFloat(form.exchangeRate) || 1,
       amount:         twdAmount,
+      paymentMethod:  form.paymentMethod === 'cash' ? 'cash' : 'credit',
     });
   };
 
@@ -121,6 +122,24 @@ function ItemModal({ categories, onClose, onSave, initial }) {
             <label className="form-label">備註（選填）</label>
             <input className="form-input" value={form.note} onChange={e => set('note', e.target.value)} placeholder="備註…" />
           </div>
+          <div className="form-group">
+            <label className="form-label">付款方式</label>
+            <div className="pay-method-toggle">
+              <button type="button" className={`pay-method-btn${form.paymentMethod === 'credit' ? ' active' : ''}`} onClick={() => set('paymentMethod', 'credit')}>
+                <i className="fa-solid fa-credit-card"></i> 信用卡
+              </button>
+              <button type="button" className={`pay-method-btn${form.paymentMethod === 'cash' ? ' active' : ''}`} onClick={() => set('paymentMethod', 'cash')}>
+                <i className="fa-solid fa-money-bill-wave"></i> 現金
+              </button>
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>
+              {form.paymentMethod === 'credit'
+                ? '信用卡帳款由 Gmail 記帳自動匯入明細，不另外計入結餘。'
+                : (form.cycle === 'monthly'
+                    ? '現金每月支出將自動計入生活費結餘（獨立顯示，無需手動記帳）。'
+                    : '提醒：僅「每月」週期的現金項目會自動計入生活費結餘。')}
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
             <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>取消</button>
             <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
@@ -142,6 +161,7 @@ export default function FixedTab() {
   } = useAppStore();
 
   const [statusFilter, setStatus]   = useState('all');
+  const [payFilter, setPayFilter]   = useState('all');  // all | credit | cash
   const [modalItem, setModalItem]   = useState(null);   // null=closed, {}=new, item=edit
   const [showCatModal, setCatModal] = useState(false);
   const [page, setPage]             = useState(1);
@@ -153,11 +173,18 @@ export default function FixedTab() {
   const now = new Date(); now.setHours(0, 0, 0, 0);
 
   // ── Filter + Sort ──
+  const matchPay = (item) => {
+    if (payFilter === 'all') return true;
+    const pm = item.paymentMethod === 'cash' ? 'cash' : 'credit';
+    return pm === payFilter;
+  };
+
   const filtered = items
     .filter(item => {
       const ended = item.endDate && new Date(item.endDate) < now;
       if (statusFilter === 'active' && ended) return false;
       if (statusFilter === 'ended'  && !ended) return false;
+      if (!matchPay(item)) return false;
       return true;
     })
     .sort((a, b) => {
@@ -175,7 +202,7 @@ export default function FixedTab() {
   const pageItems  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // 搜尋/篩選/排序變動時回到第一頁
-  useEffect(() => { setPage(1); }, [statusFilter, fixedSortMode]);
+  useEffect(() => { setPage(1); }, [statusFilter, payFilter, fixedSortMode]);
 
   // 鎖住完整一頁的高度，防止切換頁面時容器跳動
   useEffect(() => {
@@ -188,7 +215,7 @@ export default function FixedTab() {
   });
 
   // ── Totals ──
-  const activeItems = items.filter(i => !(i.endDate && new Date(i.endDate) < now));
+  const activeItems = items.filter(i => !(i.endDate && new Date(i.endDate) < now) && matchPay(i));
   const totalMonthly = activeItems.reduce((s, i) => s + toMonthlyAmount(i), 0);
 
   // ── Summary by category ──
@@ -249,6 +276,7 @@ export default function FixedTab() {
       startDate: item.startDate,
       endDate: item.endDate || '',
       note: item.note || '',
+      paymentMethod: item.paymentMethod === 'cash' ? 'cash' : 'credit',
     });
   };
 
@@ -289,7 +317,31 @@ export default function FixedTab() {
           </button>
         </div>
 
-        {/* 第二層：排序選項 */}
+        {/* 第二層：付款方式篩選 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '2px', marginBottom: '10px' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: 600 }}>
+            <i className="fa-solid fa-wallet" style={{ marginRight: '4px' }}></i>付款：
+          </span>
+          <div className="sort-chips" style={{ display: 'flex', gap: '6px' }}>
+            <button className={`sort-chip${payFilter === 'all' ? ' active' : ''}`}
+              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+              onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setPayFilter('all'); }}>
+              全部
+            </button>
+            <button className={`sort-chip${payFilter === 'credit' ? ' active' : ''}`}
+              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+              onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setPayFilter('credit'); }}>
+              <i className="fa-solid fa-credit-card"></i> 信用卡
+            </button>
+            <button className={`sort-chip${payFilter === 'cash' ? ' active' : ''}`}
+              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+              onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setPayFilter('cash'); }}>
+              <i className="fa-solid fa-money-bill-wave"></i> 現金
+            </button>
+          </div>
+        </div>
+
+        {/* 第三層：排序選項 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}>
           <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: 600 }}>
             <i className="fa-solid fa-arrow-down-wide-short" style={{ marginRight: '4px' }}></i>排序：
@@ -364,6 +416,11 @@ export default function FixedTab() {
                           {cat.name}
                         </span>
                         <span className="item-row-cycle">{getCycleLabel(item.cycle)}</span>
+                        {item.paymentMethod === 'cash' && item.cycle === 'monthly' && (
+                          <span className="item-row-cycle" style={{ background: 'color-mix(in srgb, var(--primary-color) 12%, transparent)', color: 'var(--primary-color)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <i className="fa-solid fa-money-bill-wave" style={{ fontSize: '0.7em' }}></i> 現金·計入生活費
+                          </span>
+                        )}
                       </div>
                       <div className="item-row-date">
                         <i className="fa-regular fa-calendar" style={{ marginRight: 3 }}></i>{dateRange}

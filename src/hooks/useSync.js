@@ -35,7 +35,7 @@ function exportState(store) {
 
 export function useSync() {
   const store = useAppStore();
-  const { setCurrentUser, setIsSyncing, loadFromCloud, lastLocalUpdate } = store;
+  const { setCurrentUser, setIsSyncing, setBootstrapping, loadFromCloud, lastLocalUpdate } = store;
   const isFetching = useRef(false);
   const syncTimer  = useRef(null);
   const lastSync   = useRef(0);
@@ -157,8 +157,9 @@ export function useSync() {
       isFetching.current = false;
       window._appInitializing = false;
       setIsSyncing(false);
+      setBootstrapping(false); // 首次拉取結束 → 收起開場遮罩
     }
-  }, [loadFromCloud, pushToCloud, setIsSyncing]);
+  }, [loadFromCloud, pushToCloud, setIsSyncing, setBootstrapping]);
 
   // ── auth listener ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -168,8 +169,8 @@ export function useSync() {
       const user = session?.user || null;
       setCurrentUser(user);
       if (user) pullFromCloud();
-      else { window._appInitializing = false; }
-    }).catch(() => { window._appInitializing = false; });
+      else { window._appInitializing = false; setBootstrapping(false); }
+    }).catch(() => { window._appInitializing = false; setBootstrapping(false); });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const user = session?.user || null;

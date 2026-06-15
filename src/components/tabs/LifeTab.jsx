@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { lifeMonthLabel, formatAmount, showToast } from '../../lib/utils';
+import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly } from '../../lib/utils';
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import CategoryManageModal from '../modals/CategoryManageModal';
@@ -314,6 +314,7 @@ function ExpenseModal({ lifeCategories, lifeIncomeCategories, paymentMethods, cu
 // ── Main LifeTab ─────────────────────────────────────────────────────────────
 export default function LifeTab() {
   const {
+    items,
     lifeExpenses, lifeCategories, lifeIncomeCategories,
     lifeBudgets, lifeCurrentMonth, paymentMethods,
     lifePendingCatId,
@@ -384,8 +385,11 @@ export default function LifeTab() {
   // ── Computed stats ──
   const tInc   = lifeExpenses.filter(e => e.type === 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const tExp   = lifeExpenses.filter(e => e.type !== 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const remain = tInc - tExp;
-  const pct    = tInc > 0 ? Math.min(Math.round((tExp / tInc) * 100), 100) : 0;
+  // 每月現金固定支出（信用卡項目已由 Gmail 記帳匯入明細、計在 tExp，不重複加）
+  const fixedMonthly = Math.round(getFixedLifeMonthly(items, ym));
+  const totalSpent   = tExp + fixedMonthly;
+  const remain = tInc - totalSpent;
+  const pct    = tInc > 0 ? Math.min(Math.round((totalSpent / tInc) * 100), 100) : 0;
 
   // ── Category summary ──
   const catSummary = lifeCategories.map(cat => {
@@ -492,6 +496,12 @@ export default function LifeTab() {
             <div className="detail-label"><i className="fa-solid fa-leaf"></i> 本月生活支出</div>
             <div className="detail-value stat-negative" id="lifeMonthSpent">NT$ <AnimatedNumber value={Math.round(tExp)} effect="scroll" /></div>
           </div>
+          {fixedMonthly > 0 && (
+            <div className="hero-detail-item">
+              <div className="detail-label"><i className="fa-solid fa-money-bill-wave"></i> 本月固定支出</div>
+              <div className="detail-value stat-fixed" id="lifeMonthFixed">NT$ <AnimatedNumber value={fixedMonthly} effect="scroll" /></div>
+            </div>
+          )}
         </div>
       </div>
 

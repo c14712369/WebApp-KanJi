@@ -12,6 +12,18 @@ import {
 const load  = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
 const save  = (key, val) => localStorage.setItem(key, JSON.stringify(val));
 
+// 同步偵測是否已有 Supabase 登入 session（key 形如 sb-<ref>-auth-token）。
+// 用來決定初始是否顯示開場同步遮罩，避免未登入者也閃一下遮罩。
+const hasStoredSupabaseSession = () => {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) return true;
+    }
+  } catch {}
+  return false;
+};
+
 // ─── initial state from localStorage ──────────────────────────────────────
 const initState = {
   // Sync
@@ -50,6 +62,8 @@ const initState = {
   // Auth
   currentUser: null,
   isSyncing:   false,
+  // 開場：偵測登入 + 首次拉取雲端資料期間顯示全螢幕遮罩
+  isBootstrapping: hasStoredSupabaseSession(),
 
   // UI
   activeTab: 'life',
@@ -134,6 +148,7 @@ export const useAppStore = create((set, get) => {
     // ── Auth ──
     setCurrentUser: (user) => set({ currentUser: user }),
     setIsSyncing:   (v)    => set({ isSyncing: v }),
+    setBootstrapping: (v)  => set({ isBootstrapping: v }),
 
     // ── Bulk load (用於雲端同步下載後覆寫) ──
     loadFromCloud: (data) => {

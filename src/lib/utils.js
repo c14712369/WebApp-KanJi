@@ -42,6 +42,24 @@ export function toMonthlyAmount(item) {
   }
 }
 
+// 計算某月 (ym = "YYYY-MM") 應計入生活費結餘的固定支出總額。
+// 僅納入：付款方式為「現金」、週期為每月、且該月落在項目有效期間內的項目。
+// 信用卡項目會透過 Gmail 記帳自動匯入明細（已含在生活支出），故不在此重複計入。
+export function getFixedLifeMonthly(items, ym) {
+  if (!ym || !Array.isArray(items)) return 0;
+  const [y, m] = ym.split('-').map(Number);
+  const monthStart = new Date(y, m - 1, 1);
+  const monthEnd   = new Date(y, m, 0); // 該月最後一天
+  return items.reduce((sum, item) => {
+    if (item.paymentMethod !== 'cash' || item.cycle !== 'monthly') return sum;
+    const start = item.startDate ? new Date(item.startDate) : null;
+    if (start && start > monthEnd) return sum;            // 尚未開始
+    const end = item.endDate ? new Date(item.endDate) : null;
+    if (end && end < monthStart) return sum;              // 已結束
+    return sum + toMonthlyAmount(item);
+  }, 0);
+}
+
 export function getBillingDateForMonth(item, year, month) {
   if (!item.startDate) return null;
   const startDay = parseInt(item.startDate.split('-')[2], 10);

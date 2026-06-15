@@ -582,7 +582,7 @@ export default function WealthTab() {
         <div className="wealth-panel-header">
           <div>
             <h3 className="wealth-panel-title"><i className="fa-solid fa-chart-line"></i> 投資持股</h3>
-            <div className="wealth-panel-total">總市值：<strong id="holdingsTotalValue">NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong></div>
+            <div className="wealth-panel-total">總市值：<strong id="holdingsTotalValue">NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>{wealthHoldings.length > 0 && <span className="wealth-count-badge">{wealthHoldings.length} 檔</span>}</div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => handleRefreshAll()} title="全部更新股價">
@@ -593,7 +593,7 @@ export default function WealthTab() {
             </button>
           </div>
         </div>
-        <div id="holdingsList">
+        <div id="holdingsList" className="wealth-scroll-list">
           {wealthHoldings.length === 0
             ? <div className="wealth-empty" style={{ padding: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>尚未新增持股，點擊「＋ 新增」開始</div>
             : wealthHoldings.map(h => {
@@ -641,10 +641,10 @@ export default function WealthTab() {
                 <i className="fa-solid fa-plus"></i> 新增
               </button>
             </div>
-            <div className="wealth-panel-total" style={{ marginTop: 4 }}>現金合計：<strong id="bankTotalValue">NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong></div>
+            <div className="wealth-panel-total" style={{ marginTop: 4 }}>現金合計：<strong id="bankTotalValue">NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>{wealthBankAccounts.length > 0 && <span className="wealth-count-badge">{wealthBankAccounts.length} 個帳戶</span>}</div>
           </div>
         </div>
-        <div id="bankAccountsList">
+        <div id="bankAccountsList" className="wealth-scroll-list">
           {wealthBankAccounts.length === 0
             ? <div className="wealth-empty" style={{ padding: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>尚未新增帳戶，點擊「＋ 新增」開始</div>
             : wealthBankAccounts.map(a => (

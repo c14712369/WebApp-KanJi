@@ -120,6 +120,142 @@ body.scrolling-down .fab {
   font-weight: 600;
 }
 
+/* ── 開場同步遮罩 (SyncOverlay) ── */
+.sync-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background: color-mix(in srgb, var(--bg-color) 82%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(10px) saturate(120%);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.sync-overlay-spinner {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--primary-color) 22%, transparent);
+  border-top-color: var(--primary-color);
+  animation: syncSpin 0.8s linear infinite;
+}
+
+.sync-overlay-icon {
+  position: absolute;
+  font-size: 1.05rem;
+  color: var(--primary-color);
+}
+
+.sync-overlay-spinner-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sync-overlay-text {
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-main);
+  letter-spacing: 0.3px;
+}
+
+.sync-overlay-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: -12px;
+}
+
+@keyframes syncSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 付款方式分段控制 (FixedTab) ── */
+.pay-method-toggle {
+  display: flex;
+  gap: 6px;
+  padding: 3px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.pay-method-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pay-method-btn:hover { color: var(--text-main); }
+.pay-method-btn:active { transform: scale(0.97); }
+
+.pay-method-btn.active {
+  background: var(--card-bg);
+  color: var(--primary-color);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* 固定支出在生活分頁的 hero 細項 */
+.detail-value.stat-fixed {
+  color: var(--accent-color, #c17b2e);
+}
+
+/* ── 資產清單捲動容器（持股 / 銀行現金，倉位多時不撐長版面）── */
+.wealth-scroll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;            /* 約 6~7 列，超過則內部捲動 */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;           /* 讓捲軸不壓到內容 */
+  margin-right: -4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.wealth-scroll-list::-webkit-scrollbar {
+  width: 6px;
+}
+.wealth-scroll-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.wealth-scroll-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 999px;
+}
+.wealth-scroll-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.wealth-count-badge {
+  margin-left: 8px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
 /* ── Improved empty state ── */
 .empty-state {
   padding: 56px 24px;
