@@ -331,10 +331,18 @@ export default function LifeTab() {
   const [newType,       setNewType]       = useState('expense');
   const [showSalary,    setShowSalary]    = useState(false);
   const [showCatManage, setShowCatManage] = useState(false);
+  const [filterType,    setFilterType]    = useState('all'); // 'all' | 'expense' | 'income'
   const ym = lifeCurrentMonth;
 
-  // Reset page when month or filter changes
-  useEffect(() => { setPage(1); }, [ym, selectedCatId]);
+  // Reset page when month, category filter, or type filter changes
+  useEffect(() => { setPage(1); }, [ym, selectedCatId, filterType]);
+
+  // When category filter is selected, automatically align type filter to expense
+  useEffect(() => {
+    if (selectedCatId !== null) {
+      setFilterType('expense');
+    }
+  }, [selectedCatId]);
 
   // Apply cross-tab category filter (from AnalysisTab click)
   useEffect(() => {
@@ -413,6 +421,7 @@ export default function LifeTab() {
       if (!(e.date || '').startsWith(ym)) return false;
       if (e.type === 'income' && e._linkedExpenseId) return false;
       if (selectedCatId !== null) return e.categoryId === selectedCatId;
+      if (filterType !== 'all') return e.type === filterType;
       return true;
     })
     .sort((a, b) =>
@@ -526,24 +535,102 @@ export default function LifeTab() {
               className="life-view-content active"
             >
               <div className="life-detail-panel" style={{ width: '100%' }}>
-                <div className="life-detail-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px' }}>
-                  <h3 id="lifeDetailTitle" style={{ margin: 0 }}>
-                    <i className="fa-solid fa-book"></i>{' '}
-                    {selectedCatId ? (lifeCategories.find(c => c.id === selectedCatId)?.name || '全部明細') : '全部明細'}
-                  </h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button className="icon-btn" id="lifeExpSortBtn"
-                      title={sortMode === 'date-desc' ? '新到舊' : '舊到新'}
-                      onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSortMode(s => s === 'date-desc' ? 'date-asc' : 'date-desc'); setPage(1); }}>
-                      <i className={`fa-solid ${sortMode === 'date-desc' ? 'fa-arrow-down-short-wide' : 'fa-arrow-up-short-wide'}`}></i>
-                    </button>
-                    {selectedCatId !== null && (
+                {selectedCatId !== null && (
+                  <div className="life-detail-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 8px 16px', background: 'transparent', border: 'none' }}>
+                    <h3 id="lifeDetailTitle" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)', letterSpacing: '0.3px' }}>
+                      {lifeCategories.find(c => c.id === selectedCatId)?.name || '分類明細'}
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button className="icon-btn" id="lifeExpSortBtn"
+                        title={sortMode === 'date-desc' ? '新到舊' : '舊到新'}
+                        onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSortMode(s => s === 'date-desc' ? 'date-asc' : 'date-desc'); setPage(1); }}>
+                        <i className={`fa-solid ${sortMode === 'date-desc' ? 'fa-arrow-down-short-wide' : 'fa-arrow-up-short-wide'}`}></i>
+                      </button>
                       <button className="icon-btn" id="lifeClearFilter" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(null); setPage(1); }} title="清除篩選">
                         <i className="fa-solid fa-xmark"></i>
                       </button>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {selectedCatId === null && (() => {
+                  const getOptIcon = (key, isActive) => {
+                    if (key === 'all') {
+                      if (!isActive) return 'fa-asterisk';
+                      return sortMode === 'date-desc' ? 'fa-arrow-down-wide-short' : 'fa-arrow-up-short-wide';
+                    }
+                    if (key === 'expense') {
+                      if (!isActive) return 'fa-arrow-down-long';
+                      return sortMode === 'date-desc' ? 'fa-arrow-down-long' : 'fa-arrow-up-long';
+                    }
+                    if (key === 'income') {
+                      if (!isActive) return 'fa-arrow-up-long';
+                      return sortMode === 'date-desc' ? 'fa-arrow-down-long' : 'fa-arrow-up-long';
+                    }
+                  };
+
+                  return (
+                    <div style={{
+                      display: 'flex',
+                      background: 'var(--bg-color)',
+                      borderRadius: '9999px',
+                      padding: '5px',
+                      margin: '0 16px 14px 16px',
+                      border: '1px solid var(--border-color)',
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)',
+                      gap: '6px'
+                    }}>
+                      {[
+                        { key: 'all', label: '全部' },
+                        { key: 'expense', label: '支出' },
+                        { key: 'income', label: '收入' }
+                      ].map(opt => {
+                        const isActive = filterType === opt.key;
+                        const iconClass = getOptIcon(opt.key, isActive);
+                        
+                        return (
+                          <motion.button
+                            key={opt.key}
+                            whileTap={{ scale: 0.96 }}
+                            style={{
+                              flex: 1,
+                              padding: '8px 0',
+                              border: 'none',
+                              borderRadius: '9999px',
+                              background: isActive ? 'var(--card-bg)' : 'transparent',
+                              color: isActive 
+                                ? (opt.key === 'expense' ? 'var(--danger-color)' : opt.key === 'income' ? 'var(--success-color)' : 'var(--primary-color)') 
+                                : 'var(--text-muted)',
+                              boxShadow: isActive ? '0 1px 3px rgba(0, 0, 0, 0.08), var(--shadow-sm)' : 'none',
+                              fontWeight: isActive ? 600 : 500,
+                              transition: 'background-color 0.2s, color 0.2s, box-shadow 0.2s',
+                              fontSize: '0.9rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6,
+                              cursor: 'pointer',
+                              outline: 'none',
+                              WebkitTapHighlightColor: 'transparent'
+                            }}
+                            onClick={() => {
+                              if (navigator.vibrate) navigator.vibrate(20);
+                              if (filterType === opt.key) {
+                                setSortMode(s => s === 'date-desc' ? 'date-asc' : 'date-desc');
+                              } else {
+                                setFilterType(opt.key);
+                                setSortMode('date-desc');
+                              }
+                            }}
+                          >
+                            <i className={`fa-solid ${iconClass}`} style={{ fontSize: '0.8rem' }}></i>
+                            {opt.label}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
                 <div id="lifeExpList" style={{ height: 450, overflowY: 'auto', paddingRight: 4 }}>
                   {pageItems.length === 0 ? (
