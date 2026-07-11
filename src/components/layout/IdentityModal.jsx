@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { showToast } from '../../lib/utils';
 import { APP_IDENTITY_KEY } from '../../lib/constants';
+import { supabase } from '../../lib/supabaseClient';
 
 const DEFAULT_COLOR = '#C17B2E';
 
@@ -80,7 +81,87 @@ export function applyStoredIdentity() {
 }
 
 export default function IdentityModal({ onClose }) {
-  const { triggerSync } = useAppStore();
+  const { 
+    triggerSync, 
+    currentUser, 
+    lastLocalUpdate, 
+    lifeExpenses, 
+    items, 
+    projects,
+    loadFromCloud,
+    setIsSyncing 
+  } = useAppStore();
+
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [checking, setChecking] = useState(false);
+
+  const runDiagnostics = async () => {
+    if (!currentUser) return;
+    setChecking(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_backups')
+        .select('updated_at, app_data')
+        .eq('user_id', currentUser.id)
+        .single();
+      if (error) {
+        if (error.code === 'PGRST116') {
+          setDiagnostics({ error: '雲端尚無此使用者的任何備份記錄' });
+        } else {
+          setDiagnostics({ error: error.message });
+        }
+      } else if (data) {
+        const cloudData = data.app_data || {};
+        const cloudCount = (cloudData.items?.length || 0) + (cloudData.lifeExpenses?.length || 0) + (cloudData.projects?.length || 0);
+        setDiagnostics({
+          cloudUpdatedAt: new Date(data.updated_at).toLocaleString(),
+          cloudCount,
+          cloudLifeCount: cloudData.lifeExpenses?.length || 0,
+          cloudFixedCount: cloudData.items?.length || 0,
+        });
+      } else {
+        setDiagnostics({ error: '無雲端備份記錄' });
+      }
+    } catch (e) {
+      setDiagnostics({ error: e.message });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleForcePull = async () => {
+    if (!currentUser) return;
+    if (!window.confirm('確定要從雲端強制還原嗎？這會以雲端資料完全覆蓋本機目前的資料！')) return;
+    
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_backups')
+        .select('app_data')
+        .eq('user_id', currentUser.id)
+        .single();
+      
+      if (error) {
+        showToast('強制還原失敗：' + error.message, 'error');
+      } else if (data?.app_data) {
+        loadFromCloud(data.app_data);
+        showToast('已成功強制從雲端下載並還原帳本！', 'success');
+        onClose();
+      } else {
+        showToast('雲端無備份資料可供還原', 'error');
+      }
+    } catch (e) {
+      showToast('發生錯誤：' + e.message, 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      runDiagnostics();
+    }
+  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stored = (() => {
     try { return JSON.parse(localStorage.getItem(APP_IDENTITY_KEY)) || {}; } catch { return {}; }
@@ -159,6 +240,57 @@ export default function IdentityModal({ onClose }) {
               💡 <strong>小提示：</strong> 更改圖示後，建議重新啟動或重新整理網頁。
             </p>
           </div>
+
+          {currentUser && (
+            <div className="form-group" style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 20 }}>
+              <label className="form-label"><i className="fa-solid fa-cloud-arrow-down" style={{ marginRight: 6 }}></i>雲端同步診斷與強制還原</label>
+              <div style={{ background: 'var(--bg-color)', padding: 12, borderRadius: 8, fontSize: '0.82rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>本地統計:</span>
+                  <span style={{ fontWeight: 600 }}>生活費 {lifeExpenses.length} 筆 / 固定 {items.length} 筆</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>本地最後更新:</span>
+                  <span style={{ fontWeight: 600 }}>{lastLocalUpdate > 0 ? new Date(lastLocalUpdate).toLocaleString() : '無記錄'}</span>
+                </div>
+                
+                {checking ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 10 }}>
+                    <i className="fa-solid fa-rotate fa-spin"></i> 正在獲取雲端備份狀態…
+                  </div>
+                ) : diagnostics ? (
+                  <>
+                    {diagnostics.error ? (
+                      <div style={{ color: 'var(--error-color)', marginTop: 10, fontWeight: 600 }}>
+                        ⚠️ 診斷提示：{diagnostics.error}
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px dashed var(--border-color)' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>雲端統計:</span>
+                          <span style={{ fontWeight: 600, color: 'var(--primary-color)' }}>生活費 {diagnostics.cloudLifeCount} 筆 / 固定 {diagnostics.cloudFixedCount} 筆</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>雲端最後更新:</span>
+                          <span style={{ fontWeight: 600 }}>{diagnostics.cloudUpdatedAt}</span>
+                        </div>
+                        
+                        {diagnostics.cloudCount > 0 && (
+                          <button 
+                            className="btn btn-outline btn-sm" 
+                            onClick={handleForcePull}
+                            style={{ width: '100%', marginTop: 12, borderColor: 'var(--primary-color)', color: 'var(--primary-color)' }}
+                          >
+                            <i className="fa-solid fa-cloud-arrow-down"></i> 強制從雲端覆寫還原至地端
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
 
           <button className="btn btn-primary" style={{ width: '100%', marginTop: 25 }} onClick={handleSave}>
             <i className="fa-solid fa-check"></i> 儲存並套用系統設置

@@ -30,7 +30,10 @@ export default function Header() {
         <div className="header-controls">
           <div className="header-controls-top">
             {currentUser && (
-              <span id="authUserEmail" style={{ display: 'inline' }}>{currentUser.email}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: '0.85rem' }}>
+                <span id="authUserEmail" style={{ fontWeight: 600 }}>{currentUser.email}</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }} id="authUserUid">UID: {currentUser.id}</span>
+              </div>
             )}
             <div className="header-icons">
               {isSyncing && <i className="fa-solid fa-rotate fa-spin" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}></i>}
