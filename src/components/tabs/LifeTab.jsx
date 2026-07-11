@@ -496,6 +496,31 @@ export default function LifeTab() {
           }} 
         />
         <button className="icon-btn" onClick={() => changeMonth(1)}><i className="fa-solid fa-chevron-right"></i></button>
+        <button 
+          className="btn btn-outline btn-sm" 
+          onClick={() => {
+            const thisMonth = new Date().toISOString().slice(0, 7);
+            setLifeCurrentMonth(thisMonth);
+            setSelectedCatId(null);
+          }}
+          style={{ 
+            height: '36px', 
+            padding: '0 12px', 
+            fontSize: '0.85rem', 
+            fontWeight: 500,
+            borderColor: 'var(--border-color)',
+            color: 'var(--text-main)',
+            borderRadius: 'var(--radius-sm)',
+            whiteSpace: 'nowrap',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+          title="回到本月"
+        >
+          <i className="fa-solid fa-calendar-day"></i> 本月
+        </button>
       </div>
 
       {/* Life Hero Card */}

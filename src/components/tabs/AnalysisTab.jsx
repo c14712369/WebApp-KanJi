@@ -332,10 +332,34 @@ export default function AnalysisTab() {
           <h2><i className="fa-solid fa-chart-pie" style={{ color: 'var(--primary-color)', marginRight: 8 }}></i>收支分析</h2>
           <div className="analysis-subtitle">月度固定支出、生活費與預算追蹤</div>
         </div>
-        <div className="analysis-month-nav">
+        <div className="analysis-month-nav" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button className="icon-btn" onClick={() => changeMonth(-1)}><i className="fa-solid fa-chevron-left"></i></button>
           <input type="month" className="form-input" id="analysisGlobalMonth" value={ym} onChange={e => setYm(e.target.value)} />
           <button className="icon-btn" onClick={() => changeMonth(1)}><i className="fa-solid fa-chevron-right"></i></button>
+          <button 
+            className="btn btn-outline btn-sm" 
+            onClick={() => {
+              const thisMonth = new Date().toISOString().slice(0, 7);
+              setYm(thisMonth);
+            }}
+            style={{ 
+              height: '36px', 
+              padding: '0 12px', 
+              fontSize: '0.85rem', 
+              fontWeight: 500,
+              borderColor: 'var(--border-color)',
+              color: 'var(--text-main)',
+              borderRadius: 'var(--radius-sm)',
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title="回到本月"
+          >
+            <i className="fa-solid fa-calendar-day"></i> 本月
+          </button>
         </div>
         {/* 月對月趨勢比較（固定高度，不影響下方容器） */}
         <div style={{ minHeight: '1.6rem', marginTop: 6 }}>
