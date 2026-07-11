@@ -47,8 +47,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'SubItemManager 收支管理系統',
-        short_name: '收支管理',
+        name: 'Kanji',
+        short_name: 'Kanji',
         description: '記錄每一筆固定支出與日常生活費的財務管理工具',
         theme_color: '#C17B2E',
         background_color: '#F0EDE8',

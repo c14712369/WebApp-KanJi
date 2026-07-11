@@ -22,7 +22,7 @@ export default function Header() {
         <div className="header-title">
           <h1>
             <i className="fa-solid fa-vault title-icon"></i>
-            <span id="appDisplayName">收支管理系統</span>
+            <span id="appDisplayName">Kanji</span>
           </h1>
           <span className="subtitle">記錄每一筆固定支出與日常生活費</span>
         </div>

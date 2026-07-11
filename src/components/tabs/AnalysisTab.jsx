@@ -56,6 +56,21 @@ function buildChartYears(items) {
   return years;
 }
 
+function getUniqueYears(items, lifeExpenses, projects) {
+  const years = new Set([new Date().getFullYear()]);
+  items.forEach(i => {
+    if (i.startDate) years.add(new Date(i.startDate).getFullYear());
+    if (i.endDate) years.add(new Date(i.endDate).getFullYear());
+  });
+  lifeExpenses.forEach(e => {
+    if (e.date) years.add(new Date(e.date).getFullYear());
+  });
+  if (projects) {
+    projects.forEach(p => (p.expenses || []).forEach(e => { if (e.date) years.add(new Date(e.date).getFullYear()); }));
+  }
+  return Array.from(years).sort();
+}
+
 // ── Chart hook ───────────────────────────────────────────────────────────────
 function useChart(ref) {
   const inst = useRef(null);
@@ -74,6 +89,7 @@ export default function AnalysisTab() {
   const {
     items, categories, lifeExpenses, lifeCategories,
     setActiveTab, setLifeCurrentMonth, setLifePendingCatId,
+    projects
   } = useAppStore();
 
   const now    = new Date();
@@ -87,11 +103,14 @@ export default function AnalysisTab() {
   const expChartRef  = useRef(null);
   const lifeCatRef   = useRef(null);
   const trendRef     = useRef(null);
+  const annualCompareRef = useRef(null);
   const expChart     = useChart(expChartRef);
   const lifeCatChart = useChart(lifeCatRef);
   const trendChart   = useChart(trendRef);
+  const annualCompareChart = useChart(annualCompareRef);
 
   const chartYears = useMemo(() => buildChartYears(items), [items]);
+  const uniqueYears = useMemo(() => getUniqueYears(items, lifeExpenses, projects), [items, lifeExpenses, projects]);
 
   const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
   const tc = () => isDark() ? '#F0EDE8' : '#1A1A1A';
@@ -226,6 +245,85 @@ export default function AnalysisTab() {
 
   useEffect(() => { buildTrendChart(); }, [buildTrendChart]);
 
+  const buildAnnualCompareChart = useCallback(async () => {
+    if (!uniqueYears.length) { annualCompareChart.destroy(); return; }
+
+    const pairs = [];
+    uniqueYears.forEach(y => {
+      for (let m = 1; m <= 12; m++) pairs.push([y, m]);
+    });
+    await prefetchFXRates(items, pairs);
+
+    const fixedData = [];
+    const lifeData = [];
+    const projectData = [];
+
+    uniqueYears.forEach(year => {
+      let annualFixed = 0;
+      for (let m = 1; m <= 12; m++) {
+        for (const item of items) {
+          annualFixed += calculateExpenseForMonth(item, year, m);
+        }
+      }
+      fixedData.push(Math.round(annualFixed));
+
+      const annualLife = lifeExpenses
+        .filter(e => e.type !== 'income' && e.date && e.date.startsWith(String(year)))
+        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      lifeData.push(annualLife);
+
+      let annualProject = 0;
+      if (projects) {
+        projects.forEach(p => {
+          (p.expenses || []).forEach(e => {
+            if (e.date && e.date.startsWith(String(year))) {
+              annualProject += Number(e.amount) || 0;
+            }
+          });
+        });
+      }
+      projectData.push(annualProject);
+    });
+
+    const labels = uniqueYears.map(y => `${y} 年`);
+
+    annualCompareChart.create({
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: '固定支出', data: fixedData,   backgroundColor: '#2A6475CC', borderColor: '#2A6475', borderWidth: 1, borderRadius: 4 },
+          { label: '生活費',   data: lifeData,    backgroundColor: '#C17B2ECC', borderColor: '#C17B2E', borderWidth: 1, borderRadius: 4 },
+          { label: '專案支出', data: projectData, backgroundColor: '#8B5CF6CC', borderColor: '#8B5CF6', borderWidth: 1, borderRadius: 4 },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: tc() } },
+          title: { display: true, text: '年度消費總額對比', color: tc(), font: { size: 15 } },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: NT$ ${Math.round(ctx.raw).toLocaleString()}`,
+              footer: tooltipItems => {
+                let sum = 0;
+                tooltipItems.forEach(x => { sum += x.raw; });
+                return '總消費: NT$ ' + sum.toLocaleString();
+              }
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: tc() }, grid: { display: false } },
+          y: { stacked: true, ticks: { color: tc(), callback: v => 'NT$' + v.toLocaleString() }, grid: { color: gc() } }
+        }
+      }
+    });
+  }, [uniqueYears, items, lifeExpenses, projects]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { buildAnnualCompareChart(); }, [buildAnnualCompareChart]);
+
   return (
     <div className="tab-content">
       {/* Header with title + month nav */}
@@ -330,6 +428,61 @@ export default function AnalysisTab() {
           </select>
         </div>
         <div className="chart-container" style={{ height: 260 }}><canvas ref={trendRef}></canvas></div>
+      </div>
+
+      {/* Annual Compare chart */}
+      <div className="chart-section" style={{ marginTop: 24 }}>
+        <div className="chart-header">
+          <h3><i className="fa-solid fa-chart-bar"></i> 年度消費對比</h3>
+        </div>
+        <div className="chart-container" style={{ height: 280 }}><canvas ref={annualCompareRef}></canvas></div>
+        <div style={{ marginTop: 20, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', color: 'var(--text-main)' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                <th style={{ padding: '10px 8px', fontWeight: 600 }}>年份</th>
+                <th style={{ padding: '10px 8px', fontWeight: 600 }}>固定支出</th>
+                <th style={{ padding: '10px 8px', fontWeight: 600 }}>生活費</th>
+                <th style={{ padding: '10px 8px', fontWeight: 600 }}>專案支出</th>
+                <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>總消費</th>
+              </tr>
+            </thead>
+            <tbody>
+              {uniqueYears.map((year) => {
+                let annualFixed = 0;
+                for (let m = 1; m <= 12; m++) {
+                  for (const item of items) {
+                    annualFixed += calculateExpenseForMonth(item, year, m);
+                  }
+                }
+                const annualLife = lifeExpenses
+                  .filter(e => e.type !== 'income' && e.date && e.date.startsWith(String(year)))
+                  .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+                
+                let annualProject = 0;
+                if (projects) {
+                  projects.forEach(p => {
+                    (p.expenses || []).forEach(e => {
+                      if (e.date && e.date.startsWith(String(year))) {
+                        annualProject += Number(e.amount) || 0;
+                      }
+                    });
+                  });
+                }
+                const total = annualFixed + annualLife + annualProject;
+                return (
+                  <tr key={year} style={{ borderBottom: '1px solid var(--border-color)', opacity: 0.9 }}>
+                    <td style={{ padding: '10px 8px', fontWeight: 600 }}>{year} 年</td>
+                    <td style={{ padding: '10px 8px' }}>NT$ {Math.round(annualFixed).toLocaleString()}</td>
+                    <td style={{ padding: '10px 8px' }}>NT$ {Math.round(annualLife).toLocaleString()}</td>
+                    <td style={{ padding: '10px 8px' }}>NT$ {Math.round(annualProject).toLocaleString()}</td>
+                    <td style={{ padding: '10px 8px', fontWeight: 700, textAlign: 'right', color: 'var(--primary-color)' }}>NT$ {Math.round(total).toLocaleString()}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

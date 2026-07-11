@@ -467,9 +467,34 @@ export default function LifeTab() {
   return (
     <div className="tab-content">
       {/* Month nav */}
-      <div className="month-nav">
+      <div className="month-nav" style={{ gap: '8px' }}>
         <button className="icon-btn" onClick={() => changeMonth(-1)}><i className="fa-solid fa-chevron-left"></i></button>
-        <span className="month-nav-label" id="lifeMonthDisplay">{lifeMonthLabel(ym)}</span>
+        <input 
+          type="month" 
+          className="form-input" 
+          id="lifeMonthDisplay" 
+          value={ym} 
+          onChange={e => {
+            if (e.target.value) {
+              setLifeCurrentMonth(e.target.value);
+              setSelectedCatId(null);
+            }
+          }} 
+          style={{ 
+            width: 'auto', 
+            height: '36px', 
+            minWidth: '130px', 
+            padding: '0 8px', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: 'var(--radius-sm)', 
+            background: 'var(--input-bg)',
+            color: 'var(--text-main)',
+            fontFamily: 'var(--font-serif)',
+            fontWeight: 700,
+            textAlign: 'center',
+            cursor: 'pointer'
+          }} 
+        />
         <button className="icon-btn" onClick={() => changeMonth(1)}><i className="fa-solid fa-chevron-right"></i></button>
       </div>
 

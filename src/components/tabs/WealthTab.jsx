@@ -17,6 +17,17 @@ const STOCK_LIST = [
   { symbol: '2357', name: '華碩', suffix: '.TW' },
   { symbol: '2382', name: '廣達', suffix: '.TW' },
   { symbol: '2303', name: '聯電', suffix: '.TW' },
+  { symbol: '2408', name: '南亞科', suffix: '.TW' },
+  { symbol: '2301', name: '光寶科', suffix: '.TW' },
+  { symbol: '2324', name: '仁寶', suffix: '.TW' },
+  { symbol: '2353', name: '宏碁', suffix: '.TW' },
+  { symbol: '2356', name: '英業達', suffix: '.TW' },
+  { symbol: '2603', name: '長榮', suffix: '.TW' },
+  { symbol: '2609', name: '陽明', suffix: '.TW' },
+  { symbol: '2615', name: '萬海', suffix: '.TW' },
+  { symbol: '2618', name: '長榮航', suffix: '.TW' },
+  { symbol: '2610', name: '華航', suffix: '.TW' },
+  { symbol: '2002', name: '中鋼', suffix: '.TW' },
   { symbol: '6488', name: '環球晶', suffix: '.TWO' },
   { symbol: '2886', name: '兆豐金', suffix: '.TW' },
   { symbol: '2884', name: '玉山金', suffix: '.TW' },
@@ -25,6 +36,12 @@ const STOCK_LIST = [
   { symbol: '2892', name: '第一金', suffix: '.TW' },
   { symbol: '2880', name: '華南金', suffix: '.TW' },
   { symbol: '2881', name: '富邦金', suffix: '.TW' },
+  { symbol: '2883', name: '凱基金', suffix: '.TW' },
+  { symbol: '2885', name: '元大金', suffix: '.TW' },
+  { symbol: '2887', name: '台新金', suffix: '.TW' },
+  { symbol: '2888', name: '新光金', suffix: '.TW' },
+  { symbol: '2890', name: '永豐金', suffix: '.TW' },
+  { symbol: '5880', name: '合庫金', suffix: '.TW' },
   { symbol: '0050',   name: '元大台灣50',       suffix: '.TW' },
   { symbol: '0056',   name: '元大高股息',        suffix: '.TW' },
   { symbol: '006208', name: '富邦台50',          suffix: '.TW' },
@@ -34,6 +51,7 @@ const STOCK_LIST = [
   { symbol: '00878',  name: '國泰永續高股息',      suffix: '.TW' },
   { symbol: '00919',  name: '群益台灣精選高息',    suffix: '.TW' },
   { symbol: '00929',  name: '復華台灣科技優息',    suffix: '.TW' },
+  { symbol: '00939',  name: '統一台灣高息動能',    suffix: '.TW' },
   { symbol: '00940',  name: '元大台灣價值高息',    suffix: '.TW' },
   { symbol: '00981A', name: '主動統一台股增長',    suffix: '.TW' },
   { symbol: '00679B', name: '元大美債20年',       suffix: '.TW' },
@@ -114,13 +132,31 @@ function HoldingModal({ initial, onClose, onSave }) {
     setSearch(q);
     if (!q) { setDropdown([]); return; }
     const lower = q.toLowerCase();
-    setDropdown(STOCK_LIST.filter(s => s.symbol.toLowerCase().startsWith(lower) || s.name.toLowerCase().includes(lower)).slice(0, 8));
+    let filtered = STOCK_LIST.filter(s => s.symbol.toLowerCase().startsWith(lower) || s.name.toLowerCase().includes(lower));
+
+    const trimmed = q.trim().toUpperCase();
+    if (trimmed && !filtered.some(s => s.symbol.toUpperCase() === trimmed)) {
+      const isNum = /^\d+$/.test(trimmed);
+      filtered = [
+        ...filtered,
+        {
+          symbol: trimmed,
+          name: `線上搜尋「${trimmed}」...`,
+          suffix: isNum ? '.TW' : '',
+          isDynamic: true
+        }
+      ];
+    }
+    setDropdown(filtered.slice(0, 8));
   };
 
   const selectStock = async (stock) => {
     const fullSymbol = stock.symbol + (stock.suffix || '');
-    setSymbol(fullSymbol); setName(stock.name);
-    setSearch(`${stock.symbol} ${stock.name}`); setDropdown([]);
+    setSymbol(fullSymbol); 
+    const displayName = stock.isDynamic ? stock.symbol : stock.name;
+    setName(displayName);
+    setSearch(`${stock.symbol} ${displayName}`); 
+    setDropdown([]);
     setLoading(true); setPrice(null);
     const p = await fetchStockPrice(fullSymbol);
     setPrice(p); setLoading(false);
@@ -130,7 +166,16 @@ function HoldingModal({ initial, onClose, onSave }) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     const raw = search.trim().toUpperCase();
-    if (raw) { setSymbol(raw); setDropdown([]); setLoading(true); setPrice(null); const p = await fetchStockPrice(raw); setPrice(p); setLoading(false); }
+    if (raw) { 
+      const isNum = /^\d+$/.test(raw);
+      const fullSymbol = raw + (isNum ? '.TW' : '');
+      setSymbol(fullSymbol); 
+      setName(raw);
+      setDropdown([]); 
+      setLoading(true); setPrice(null); 
+      const p = await fetchStockPrice(fullSymbol); 
+      setPrice(p); setLoading(false); 
+    }
   };
 
   const handleSave = () => {
@@ -166,6 +211,10 @@ function HoldingModal({ initial, onClose, onSave }) {
               ))}
             </div>
           )}
+        </div>
+        <div className="form-group">
+          <label className="form-label">股票/標的名稱</label>
+          <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="例如：台積電、南亞科、標普500..." />
         </div>
         {(price !== null || loading) && (
           <div id="holdingSelectedInfo" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12 }}>
