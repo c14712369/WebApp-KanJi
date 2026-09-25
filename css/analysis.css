@@ -233,8 +233,6 @@
     background: currentColor;
 }
 
-.pace-ok    { color: var(--success-color); background: color-mix(in srgb, var(--success-color) 12%, transparent); }
-.pace-tight { color: var(--accent-color);  background: color-mix(in srgb, var(--accent-color)  14%, transparent); }
 .pace-over  { color: var(--danger-color);  background: color-mix(in srgb, var(--danger-color)  12%, transparent); }
 
 .pace-daily {
@@ -279,3 +277,7 @@
     color: var(--text-muted);
     font-style: normal;
 }
+
+/* hero 金額的盈虧色：.hero-amount 基底色在本檔較晚載入，會蓋掉通用 .stat-*，需提高權重 */
+.hero-amount.stat-positive { color: var(--success-color); }
+.hero-amount.stat-negative { color: var(--danger-color); }

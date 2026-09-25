@@ -405,7 +405,6 @@ export default function LifeTab() {
   const remain   = pace.remain;
   const pct      = tInc > 0 ? Math.min(Math.round((totalSpent / tInc) * 100), 100) : 0;
   const timePct  = pace.isCurrentMonth ? Math.round((now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 100) : null;
-  const PACE_LABEL = { ok: '步調穩定', tight: '花太快了', over: '已超支' };
 
   // ── Category summary ──
   const catSummary = lifeCategories.map(cat => {
@@ -542,17 +541,21 @@ export default function LifeTab() {
       {/* Life Hero Card */}
       <div className="life-hero-card">
         <div className="hero-main">
-          <div className="hero-label">{pace.isCurrentMonth ? '本月還能花' : '生活費結餘'}</div>
+          <div className="hero-label">
+            {pace.isCurrentMonth ? '本月還能花' : '生活費結餘'}
+          </div>
           <div className={`hero-amount${remain < 0 ? ' stat-negative' : ' stat-positive'}`} id="lifeMonthRemain">
-            NT$ <AnimatedNumber value={Math.abs(Math.round(remain))} format={v => formatAmount(v, 'income')} effect="scroll" />{remain < 0 ? ' (超支)' : ''}
+            {remain < 0 ? '−' : ''}NT$ <AnimatedNumber value={Math.abs(Math.round(remain))} format={v => formatAmount(v, 'income')} effect="scroll" />
           </div>
           {pace.isCurrentMonth && pace.status !== 'none' && (
             <div className="hero-pace">
-              <span className={`pace-chip pace-${pace.status}`}>{PACE_LABEL[pace.status]}</span>
-              <span className="pace-daily">
-                每天還能花 <strong>NT$ {formatAmount(pace.dailyAllowance, 'income')}</strong>
-                <span className="pace-days">・剩 {pace.daysLeft} 天</span>
-              </span>
+              {pace.status === 'over' && <span className="pace-chip pace-over">已超支</span>}
+              {pace.status !== 'over' && (
+                <span className="pace-daily">
+                  每天還能花 <strong>NT$ {formatAmount(pace.dailyAllowance, 'income')}</strong>
+                  <span className="pace-days">・剩 {pace.daysLeft} 天</span>
+                </span>
+              )}
             </div>
           )}
           <div className="progress-wrap-hero">
