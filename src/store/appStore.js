@@ -4,9 +4,11 @@ import {
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
   INCOME_KEY, WEALTH_PARAMS_KEY, WEALTH_HOLDINGS_KEY, WEALTH_BANKS_KEY,
   SALARY_DEFAULT_KEY, DAILY_EXP_KEY, PAYMENT_KEY, FIXED_SORT_KEY, THEME_KEY,
+  MERCHANT_RULES_KEY,
   DEFAULT_CATS, DEFAULT_LIFE_CATS, DEFAULT_LIFE_INC_CATS,
   DEFAULT_PROJECT_CATS, DEFAULT_PAYMENT_METHODS,
 } from '../lib/constants';
+import { learnCategory } from '../lib/merchantRules';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 const load  = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
@@ -38,6 +40,7 @@ const initState = {
   lifeCategories:       load(LIFE_CAT_KEY,     DEFAULT_LIFE_CATS.map(c => ({ ...c }))),
   lifeIncomeCategories: load(LIFE_INC_CAT_KEY, DEFAULT_LIFE_INC_CATS.map(c => ({ ...c }))),
   lifeBudgets:          load(LIFE_BDG_KEY,     {}),
+  merchantRules:        load(MERCHANT_RULES_KEY, {}),   // { merchantKey: categoryId }，GAS 匯入時套用
   lifeCurrentMonth: new Date().toISOString().slice(0, 7),
 
   // Projects
@@ -131,6 +134,22 @@ export const useAppStore = create((set, get) => {
     setLifeBudgets:          (b) => { save(LIFE_BDG_KEY,     b); stamp(); set({ lifeBudgets: b }); },
     setLifeCurrentMonth:     (m) => set({ lifeCurrentMonth: m }),
 
+    /** 改匯入列分類並學習規則（同店其他「其他」一起改）；回傳一起改到的筆數 */
+    learnLifeCategory: (id, catId) => {
+      const { lifeExpenses, merchantRules, lifeCategories } = get();
+      const other = (lifeCategories.find(c => c.name === '其他') || {}).id || 'lc_other';
+      const { rows, rules, affected } = learnCategory(lifeExpenses, merchantRules, id, catId, other);
+      save(LIFE_EXP_KEY, rows); save(MERCHANT_RULES_KEY, rules); stamp();
+      set({ lifeExpenses: rows, merchantRules: rules });
+      return affected;
+    },
+
+    /** 推送前與雲端合併的結果寫回本地（不蓋時間戳，避免觸發再次推送） */
+    applyCloudMerge: ({ lifeExpenses, merchantRules }) => {
+      save(LIFE_EXP_KEY, lifeExpenses); save(MERCHANT_RULES_KEY, merchantRules);
+      set({ lifeExpenses, merchantRules });
+    },
+
     // ── Projects ──
     setProjects:          (p) => { save(PROJECTS_KEY,    p); stamp(); set({ projects: p }); },
     setProjectExpenses:   (p) => { save(PROJECT_EXP_KEY, p); stamp(); set({ projectExpenses: p }); },
@@ -158,6 +177,7 @@ export const useAppStore = create((set, get) => {
       if (data.lifeCategories)       save(LIFE_CAT_KEY,       data.lifeCategories);
       if (data.lifeIncomeCategories) save(LIFE_INC_CAT_KEY,   data.lifeIncomeCategories);
       if (data.lifeBudgets)          save(LIFE_BDG_KEY,       data.lifeBudgets);
+      if (data.merchantRules)        save(MERCHANT_RULES_KEY, data.merchantRules);
       if (data.projects)             save(PROJECTS_KEY,       data.projects);
       if (data.projectExpenses)      save(PROJECT_EXP_KEY,    data.projectExpenses);
       if (data.projectCategories)    save(PROJECT_CAT_KEY,    data.projectCategories);
@@ -178,6 +198,7 @@ export const useAppStore = create((set, get) => {
         lifeCategories:       data.lifeCategories       ?? get().lifeCategories,
         lifeIncomeCategories: data.lifeIncomeCategories ?? get().lifeIncomeCategories,
         lifeBudgets:          data.lifeBudgets          ?? get().lifeBudgets,
+        merchantRules:        data.merchantRules        ?? get().merchantRules,
         projects:             data.projects             ?? get().projects,
         projectExpenses:      data.projectExpenses      ?? get().projectExpenses,
         projectCategories:    data.projectCategories    ?? get().projectCategories,

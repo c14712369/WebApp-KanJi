@@ -203,3 +203,79 @@
         justify-content: space-between;
     }
 }
+
+/* ── 本月還能花：步調燈號、每日可花、時間進度刻度 ── */
+.hero-pace {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: -4px 0 16px;
+}
+
+.pace-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    line-height: 1.4;
+}
+
+.pace-chip::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.pace-ok    { color: var(--success-color); background: color-mix(in srgb, var(--success-color) 12%, transparent); }
+.pace-tight { color: var(--accent-color);  background: color-mix(in srgb, var(--accent-color)  14%, transparent); }
+.pace-over  { color: var(--danger-color);  background: color-mix(in srgb, var(--danger-color)  12%, transparent); }
+
+.pace-daily {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.pace-daily strong {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+
+.pace-days {
+    white-space: nowrap;
+}
+
+.progress-bar.hero-progress {
+    position: relative;
+    overflow: visible;
+}
+
+.progress-bar.hero-progress .progress-fill {
+    border-radius: 3px;
+}
+
+/* 時間進度刻度：支出條超過這條線 = 花得比時間快 */
+.time-marker {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--text-main);
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.detail-value.stat-estimate {
+    color: var(--text-muted);
+    font-style: normal;
+}

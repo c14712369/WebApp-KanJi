@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAppStore } from '../store/appStore';
-import { mergeLifeExpenses, purgePreAprilManualExpenses } from '../lib/syncMerge';
+import { mergeLifeExpenses, mergeMerchantRules, purgePreAprilManualExpenses } from '../lib/syncMerge';
 import {
   STORAGE_KEY, CAT_KEY, LIFE_EXP_KEY, LIFE_CAT_KEY, LIFE_INC_CAT_KEY,
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
@@ -17,6 +17,7 @@ function exportState(store) {
     lifeCategories:       store.lifeCategories,
     lifeIncomeCategories: store.lifeIncomeCategories,
     lifeBudgets:          store.lifeBudgets,
+    merchantRules:        store.merchantRules,
     projects:             store.projects,
     projectExpenses:      store.projectExpenses,
     projectCategories:    store.projectCategories,
@@ -49,6 +50,21 @@ export function useSync() {
     lastSync.current = now;
 
     try {
+      // 推送前先讀雲端，把 GAS 剛寫入的匯入列（如捷徑即時記帳）與學習規則合併進來，
+      // 否則 App 開著時用舊的本地資料整份覆蓋，會把它們洗掉。讀取失敗就不推送。
+      const { data: cloud, error: readErr } = await supabase
+        .from('user_backups').select('app_data').eq('user_id', user.id).maybeSingle();
+      if (readErr) { console.error('推送前讀取雲端失敗，暫停推送:', readErr.message); return; }
+      if (cloud?.app_data) {
+        const s = useAppStore.getState();
+        const lifeExpenses  = mergeLifeExpenses(s.lifeExpenses, cloud.app_data.lifeExpenses);
+        const merchantRules = mergeMerchantRules(s.merchantRules, cloud.app_data.merchantRules);
+        const sig = arr => arr.map(e => e.id + ':' + e.categoryId + ':' + e.amount).sort().join('|');
+        if (sig(lifeExpenses) !== sig(s.lifeExpenses) || JSON.stringify(merchantRules) !== JSON.stringify(s.merchantRules)) {
+          useAppStore.getState().applyCloudMerge({ lifeExpenses, merchantRules });
+        }
+      }
+
       const { error } = await supabase.from('user_backups').upsert({
         user_id:    user.id,
         app_data:   exportState(useAppStore.getState()),
@@ -111,6 +127,7 @@ export function useSync() {
         const mergedLife = purgePreAprilManualExpenses(
           mergeLifeExpenses(s.lifeExpenses, cloudData.lifeExpenses)
         );
+        const mergedRules = mergeMerchantRules(s.merchantRules, cloudData.merchantRules);
 
         // 核心安全邏輯：計算資料筆數
         const localCount = (s.items?.length || 0) + (s.lifeExpenses?.length || 0) + (s.projects?.length || 0);
@@ -136,7 +153,7 @@ export function useSync() {
 
         if (localCount > 0 && localTs > cloudTs) {
           // 本地較新 -> 推上去；但先把雲端的 gmail_ 匯入列合併進本地，避免把 GAS 寫入蓋掉。
-          useAppStore.getState().setLifeExpenses(mergedLife);
+          useAppStore.getState().applyCloudMerge({ lifeExpenses: mergedLife, merchantRules: mergedRules });
           isFetching.current = false;
           window._appInitializing = false;
           await pushToCloud(true);
@@ -144,7 +161,7 @@ export function useSync() {
         }
 
         // 否則，載入雲端（lifeExpenses 用合併版，保留本地手動列）
-        loadFromCloud({ ...cloudData, lifeExpenses: mergedLife });
+        loadFromCloud({ ...cloudData, lifeExpenses: mergedLife, merchantRules: mergedRules });
       } else {
         // 雲端無資料 -> 推送本地
         isFetching.current = false;
@@ -181,9 +198,20 @@ export function useSync() {
     const handleOnline = () => { if (useAppStore.getState().currentUser) pullFromCloud(); };
     window.addEventListener('online', handleOnline);
 
+    // PWA 從背景切回前景 → 拉一次雲端，剛用 Apple Pay 記的即時帳才看得到（最多每 30 秒一次）
+    let lastVisiblePull = 0;
+    const handleVisible = () => {
+      if (document.visibilityState !== 'visible' || !useAppStore.getState().currentUser) return;
+      if (Date.now() - lastVisiblePull < 30000) return;
+      lastVisiblePull = Date.now();
+      pullFromCloud();
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+
     return () => {
       subscription.unsubscribe();
       window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisible);
     };
   }, []);
 

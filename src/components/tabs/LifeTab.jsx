@@ -7,6 +7,8 @@ import CategoryManageModal from '../modals/CategoryManageModal';
 import IconRenderer from '../../lib/IconRenderer';
 import { groupEntriesByDay, paginateGroups } from '../../lib/lifeGrouping';
 import { motion, AnimatePresence } from 'framer-motion';
+import { isImportedId } from '../../lib/syncMerge';
+import { computeSpendPace } from '../../lib/spendPace';
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -320,7 +322,7 @@ export default function LifeTab() {
     lifePendingCatId,
     addLifeExpense, updateLifeExpense, deleteLifeExpense, setLifeCurrentMonth,
     setLifePendingCatId,
-    setLifeCategories,
+    setLifeCategories, learnLifeCategory,
   } = useAppStore();
 
   const [selectedCatId, setSelectedCatId] = useState(null);
@@ -395,9 +397,15 @@ export default function LifeTab() {
   const tExp   = lifeExpenses.filter(e => e.type !== 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
   // 每月現金固定支出（信用卡項目已由 Gmail 記帳匯入明細、計在 tExp，不重複加）
   const fixedMonthly = Math.round(getFixedLifeMonthly(items, ym));
-  const totalSpent   = tExp + fixedMonthly;
-  const remain = tInc - totalSpent;
-  const pct    = tInc > 0 ? Math.min(Math.round((totalSpent / tInc) * 100), 100) : 0;
+  // 本月：信用卡帳單月底才來 → 用歷史刷卡日均估「未入帳」，結餘與每日可花都扣掉它
+  const now      = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const pace     = computeSpendPace({ rows: lifeExpenses, ym, today: todayIso, income: tInc, spent: tExp, fixed: fixedMonthly });
+  const totalSpent = tExp + fixedMonthly + pace.unbilledEstimate;
+  const remain   = pace.remain;
+  const pct      = tInc > 0 ? Math.min(Math.round((totalSpent / tInc) * 100), 100) : 0;
+  const timePct  = pace.isCurrentMonth ? Math.round((now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 100) : null;
+  const PACE_LABEL = { ok: '步調穩定', tight: '花太快了', over: '已超支' };
 
   // ── Category summary ──
   const catSummary = lifeCategories.map(cat => {
@@ -446,9 +454,17 @@ export default function LifeTab() {
 
   // ── CRUD handlers ──
   const handleSaveExp = (entry) => {
-    if (entry.id && lifeExpenses.find(e => e.id === entry.id)) {
+    const prev = entry.id && lifeExpenses.find(e => e.id === entry.id);
+    if (prev) {
       updateLifeExpense(entry.id, entry);
-      showToast('已更新');
+      // 刷卡匯入列改分類 → 記住這家店，同店其他「其他」一起改，之後匯入自動套用
+      if (isImportedId(prev.id) && entry.type !== 'income' && prev.categoryId !== entry.categoryId) {
+        const n = learnLifeCategory(entry.id, entry.categoryId);
+        const catName = lifeCategories.find(c => c.id === entry.categoryId)?.name || '';
+        showToast(n > 0 ? `已更新，同店另外 ${n} 筆也改成「${catName}」` : `已更新，之後這家店自動歸「${catName}」`);
+      } else {
+        showToast('已更新');
+      }
     } else {
       addLifeExpense(entry);
       showToast('已儲存');
@@ -526,17 +542,27 @@ export default function LifeTab() {
       {/* Life Hero Card */}
       <div className="life-hero-card">
         <div className="hero-main">
-          <div className="hero-label">生活費結餘</div>
+          <div className="hero-label">{pace.isCurrentMonth ? '本月還能花' : '生活費結餘'}</div>
           <div className={`hero-amount${remain < 0 ? ' stat-negative' : ' stat-positive'}`} id="lifeMonthRemain">
             NT$ <AnimatedNumber value={Math.abs(Math.round(remain))} format={v => formatAmount(v, 'income')} effect="scroll" />{remain < 0 ? ' (超支)' : ''}
           </div>
+          {pace.isCurrentMonth && pace.status !== 'none' && (
+            <div className="hero-pace">
+              <span className={`pace-chip pace-${pace.status}`}>{PACE_LABEL[pace.status]}</span>
+              <span className="pace-daily">
+                每天還能花 <strong>NT$ {formatAmount(pace.dailyAllowance, 'income')}</strong>
+                <span className="pace-days">・剩 {pace.daysLeft} 天</span>
+              </span>
+            </div>
+          )}
           <div className="progress-wrap-hero">
-            <div className="progress-bar">
+            <div className="progress-bar hero-progress">
               <BarFill
                 id="lifeOverallProgress"
                 className={`progress-fill ${pct >= 100 ? 'over-budget' : pct >= 80 ? 'high' : pct >= 60 ? 'medium' : 'low'}`}
                 value={Math.min(pct, 100)}
               />
+              {timePct !== null && <span className="time-marker" style={{ left: `${timePct}%` }} title={`本月已過 ${timePct}%`} />}
             </div>
             <span className={`progress-pct ${pct >= 100 ? 'over-budget' : pct >= 80 ? 'high' : ''}`} id="lifeOverallPct">支出 {pct}%</span>
           </div>
@@ -559,6 +585,12 @@ export default function LifeTab() {
             <div className="hero-detail-item">
               <div className="detail-label"><i className="fa-solid fa-money-bill-wave"></i> 本月固定支出</div>
               <div className="detail-value stat-fixed" id="lifeMonthFixed">NT$ <AnimatedNumber value={fixedMonthly} effect="scroll" /></div>
+            </div>
+          )}
+          {pace.unbilledEstimate > 0 && (
+            <div className="hero-detail-item" title="信用卡帳單月底才寄來。這是依前幾個月的刷卡日均，估算本月到今天還沒入帳的金額；帳單或 Apple Pay 即時記帳進來後會自動變小。">
+              <div className="detail-label"><i className="fa-regular fa-clock"></i> 預估未入帳</div>
+              <div className="detail-value stat-estimate">≈ NT$ <AnimatedNumber value={pace.unbilledEstimate} effect="scroll" /></div>
             </div>
           )}
         </div>

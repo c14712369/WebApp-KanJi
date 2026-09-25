@@ -32,7 +32,6 @@ export default function Header() {
             {currentUser && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: '0.85rem' }}>
                 <span id="authUserEmail" style={{ fontWeight: 600 }}>{currentUser.email}</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }} id="authUserUid">UID: {currentUser.id}</span>
               </div>
             )}
             <div className="header-icons">

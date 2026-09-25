@@ -8,9 +8,9 @@
  * 改用「依 id 合併」：gmail_ 列以雲端為準（含新增與刪除），手動列以本地為準。
  */
 
-/** id 是否為 GAS 匯入列 */
+/** id 是否為 GAS 匯入列（gmail_ 帳單／收據、live_ 捷徑即時記帳） */
 export function isImportedId(id) {
-  return typeof id === 'string' && id.indexOf('gmail_') === 0;
+  return typeof id === 'string' && (id.indexOf('gmail_') === 0 || id.indexOf('live_') === 0);
 }
 
 /**
@@ -25,13 +25,26 @@ export function mergeLifeExpenses(local = [], cloud = []) {
   const localArr = Array.isArray(local) ? local : [];
   const cloudArr = Array.isArray(cloud) ? cloud : [];
 
-  const cloudImported = cloudArr.filter(e => isImportedId(e && e.id));
+  // 使用者在前端改過分類的匯入列（_catLocked）→ 保留本地分類，其餘欄位以雲端為準
+  const lockedLocal = {};
+  localArr.forEach(e => { if (e && isImportedId(e.id) && e._catLocked) lockedLocal[e.id] = e; });
+  const cloudImported = cloudArr.filter(e => isImportedId(e && e.id)).map(e => {
+    const l = lockedLocal[e.id];
+    return l ? { ...e, categoryId: l.categoryId, _catLocked: true } : e;
+  });
 
   const manualById = {};
   cloudArr.filter(e => !isImportedId(e && e.id)).forEach(e => { manualById[e.id] = e; });
   localArr.filter(e => !isImportedId(e && e.id)).forEach(e => { manualById[e.id] = e; }); // 本地覆蓋
 
   return [...Object.values(manualById), ...cloudImported];
+}
+
+/**
+ * 合併商家分類學習規則：聯集，同 key 以本地為準（使用者剛改的優先）。
+ */
+export function mergeMerchantRules(local, cloud) {
+  return { ...(cloud || {}), ...(local || {}) };
 }
 
 /**
