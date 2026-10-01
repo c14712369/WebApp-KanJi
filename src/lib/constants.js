@@ -20,6 +20,7 @@ export const FIXED_SORT_KEY     = 'sub_mgr_fixed_sort';
 export const WEALTH_HOLDINGS_KEY = 'wealthHoldings_v1';
 export const WEALTH_BANKS_KEY   = 'wealthBanks_v1';
 export const MERCHANT_RULES_KEY = 'sub_mgr_merchant_rules';
+export const DELETED_IMPORT_KEY = 'sub_mgr_deleted_import_ids';
 
 // Default data
 export const DEFAULT_CATS = [

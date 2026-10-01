@@ -4,11 +4,12 @@ import {
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
   INCOME_KEY, WEALTH_PARAMS_KEY, WEALTH_HOLDINGS_KEY, WEALTH_BANKS_KEY,
   SALARY_DEFAULT_KEY, DAILY_EXP_KEY, PAYMENT_KEY, FIXED_SORT_KEY, THEME_KEY,
-  MERCHANT_RULES_KEY,
+  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY,
   DEFAULT_CATS, DEFAULT_LIFE_CATS, DEFAULT_LIFE_INC_CATS,
   DEFAULT_PROJECT_CATS, DEFAULT_PAYMENT_METHODS,
 } from '../lib/constants';
 import { learnCategory } from '../lib/merchantRules';
+import { isImportedId } from '../lib/syncMerge';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 const load  = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
@@ -41,6 +42,7 @@ const initState = {
   lifeIncomeCategories: load(LIFE_INC_CAT_KEY, DEFAULT_LIFE_INC_CATS.map(c => ({ ...c }))),
   lifeBudgets:          load(LIFE_BDG_KEY,     {}),
   merchantRules:        load(MERCHANT_RULES_KEY, {}),   // { merchantKey: categoryId }，GAS 匯入時套用
+  deletedImportIds:     load(DELETED_IMPORT_KEY, []),   // 使用者刪掉的匯入列墓碑，避免同步/重新匯入讓它復活
   lifeCurrentMonth: new Date().toISOString().slice(0, 7),
 
   // Projects
@@ -122,11 +124,17 @@ export const useAppStore = create((set, get) => {
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
     updateLifeExpense: (id, data) => {
-      const next = get().lifeExpenses.map(e => e.id === id ? { ...e, ...data } : e);
+      // 匯入列被編輯過要蓋時間戳，雲端/GAS 重新匯入時才會保留使用者的版本
+      const edited = isImportedId(id) ? { _editedAt: Date.now() } : {};
+      const next = get().lifeExpenses.map(e => e.id === id ? { ...e, ...data, ...edited } : e);
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
     deleteLifeExpense: (id) => {
       const next = get().lifeExpenses.filter(e => e.id !== id && e._linkedExpenseId !== id);
+      if (isImportedId(id)) {
+        const tomb = [...new Set([...get().deletedImportIds, id])];
+        save(DELETED_IMPORT_KEY, tomb); set({ deletedImportIds: tomb });
+      }
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
     setLifeCategories:       (c) => { save(LIFE_CAT_KEY,     c); stamp(); set({ lifeCategories: c }); },
@@ -145,9 +153,9 @@ export const useAppStore = create((set, get) => {
     },
 
     /** 推送前與雲端合併的結果寫回本地（不蓋時間戳，避免觸發再次推送） */
-    applyCloudMerge: ({ lifeExpenses, merchantRules }) => {
-      save(LIFE_EXP_KEY, lifeExpenses); save(MERCHANT_RULES_KEY, merchantRules);
-      set({ lifeExpenses, merchantRules });
+    applyCloudMerge: ({ lifeExpenses, merchantRules, deletedImportIds = get().deletedImportIds }) => {
+      save(LIFE_EXP_KEY, lifeExpenses); save(MERCHANT_RULES_KEY, merchantRules); save(DELETED_IMPORT_KEY, deletedImportIds);
+      set({ lifeExpenses, merchantRules, deletedImportIds });
     },
 
     // ── Projects ──
@@ -174,6 +182,7 @@ export const useAppStore = create((set, get) => {
       if (data.items)                save(STORAGE_KEY,        data.items);
       if (data.categories)           save(CAT_KEY,            data.categories);
       if (data.lifeExpenses)         save(LIFE_EXP_KEY,       data.lifeExpenses);
+      if (data.deletedImportIds)     save(DELETED_IMPORT_KEY, data.deletedImportIds);
       if (data.lifeCategories)       save(LIFE_CAT_KEY,       data.lifeCategories);
       if (data.lifeIncomeCategories) save(LIFE_INC_CAT_KEY,   data.lifeIncomeCategories);
       if (data.lifeBudgets)          save(LIFE_BDG_KEY,       data.lifeBudgets);
@@ -195,6 +204,7 @@ export const useAppStore = create((set, get) => {
         items:                data.items                ?? get().items,
         categories:           data.categories           ?? get().categories,
         lifeExpenses:         data.lifeExpenses         ?? get().lifeExpenses,
+        deletedImportIds:     data.deletedImportIds     ?? get().deletedImportIds,
         lifeCategories:       data.lifeCategories       ?? get().lifeCategories,
         lifeIncomeCategories: data.lifeIncomeCategories ?? get().lifeIncomeCategories,
         lifeBudgets:          data.lifeBudgets          ?? get().lifeBudgets,

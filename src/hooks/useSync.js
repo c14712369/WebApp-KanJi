@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAppStore } from '../store/appStore';
-import { mergeLifeExpenses, mergeMerchantRules, purgePreAprilManualExpenses } from '../lib/syncMerge';
+import { mergeLifeExpenses, mergeMerchantRules, mergeDeletedIds, purgePreAprilManualExpenses } from '../lib/syncMerge';
 import {
   STORAGE_KEY, CAT_KEY, LIFE_EXP_KEY, LIFE_CAT_KEY, LIFE_INC_CAT_KEY,
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
@@ -14,6 +14,7 @@ function exportState(store) {
     items:                store.items,
     categories:           store.categories,
     lifeExpenses:         store.lifeExpenses,
+    deletedImportIds:     store.deletedImportIds,
     lifeCategories:       store.lifeCategories,
     lifeIncomeCategories: store.lifeIncomeCategories,
     lifeBudgets:          store.lifeBudgets,
@@ -57,11 +58,13 @@ export function useSync() {
       if (readErr) { console.error('推送前讀取雲端失敗，暫停推送:', readErr.message); return; }
       if (cloud?.app_data) {
         const s = useAppStore.getState();
-        const lifeExpenses  = mergeLifeExpenses(s.lifeExpenses, cloud.app_data.lifeExpenses);
+        const deletedImportIds = mergeDeletedIds(s.deletedImportIds, cloud.app_data.deletedImportIds);
+        const lifeExpenses  = mergeLifeExpenses(s.lifeExpenses, cloud.app_data.lifeExpenses, deletedImportIds);
         const merchantRules = mergeMerchantRules(s.merchantRules, cloud.app_data.merchantRules);
         const sig = arr => arr.map(e => e.id + ':' + e.categoryId + ':' + e.amount).sort().join('|');
-        if (sig(lifeExpenses) !== sig(s.lifeExpenses) || JSON.stringify(merchantRules) !== JSON.stringify(s.merchantRules)) {
-          useAppStore.getState().applyCloudMerge({ lifeExpenses, merchantRules });
+        if (sig(lifeExpenses) !== sig(s.lifeExpenses) || JSON.stringify(merchantRules) !== JSON.stringify(s.merchantRules)
+            || deletedImportIds.length !== s.deletedImportIds.length) {
+          useAppStore.getState().applyCloudMerge({ lifeExpenses, merchantRules, deletedImportIds });
         }
       }
 
@@ -124,8 +127,10 @@ export function useSync() {
         // 不受下方時間戳方向影響，避免 GAS 匯入被前端推送蓋掉（重整後看不到帳單明細的根因）。
         // 再施加一次性資料政策：移除 4/1 前的手動支出（保留收入/薪資與刷卡匯入），
         // 因合併採聯集，需在每次合併後過濾才能讓雲端/本地兩端都洗淨且自我修復。
+        // 使用者刪掉的匯入列（墓碑）兩端取聯集，合併時一律排除，GAS 重新匯入也不會讓它復活。
+        const deletedIds = mergeDeletedIds(s.deletedImportIds, cloudData.deletedImportIds);
         const mergedLife = purgePreAprilManualExpenses(
-          mergeLifeExpenses(s.lifeExpenses, cloudData.lifeExpenses)
+          mergeLifeExpenses(s.lifeExpenses, cloudData.lifeExpenses, deletedIds)
         );
         const mergedRules = mergeMerchantRules(s.merchantRules, cloudData.merchantRules);
 
@@ -153,7 +158,7 @@ export function useSync() {
 
         if (localCount > 0 && localTs > cloudTs) {
           // 本地較新 -> 推上去；但先把雲端的 gmail_ 匯入列合併進本地，避免把 GAS 寫入蓋掉。
-          useAppStore.getState().applyCloudMerge({ lifeExpenses: mergedLife, merchantRules: mergedRules });
+          useAppStore.getState().applyCloudMerge({ lifeExpenses: mergedLife, merchantRules: mergedRules, deletedImportIds: deletedIds });
           isFetching.current = false;
           window._appInitializing = false;
           await pushToCloud(true);
@@ -161,7 +166,7 @@ export function useSync() {
         }
 
         // 否則，載入雲端（lifeExpenses 用合併版，保留本地手動列）
-        loadFromCloud({ ...cloudData, lifeExpenses: mergedLife, merchantRules: mergedRules });
+        loadFromCloud({ ...cloudData, lifeExpenses: mergedLife, merchantRules: mergedRules, deletedImportIds: deletedIds });
       } else {
         // 雲端無資料 -> 推送本地
         isFetching.current = false;

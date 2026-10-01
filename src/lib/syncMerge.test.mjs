@@ -3,7 +3,7 @@
  * 驗證雲端/本地合併邏輯——GAS 匯入列（gmail_）以雲端為準，手動列以本地為準。
  */
 import assert from 'node:assert';
-import { isImportedId, mergeLifeExpenses, purgePreAprilManualExpenses } from './syncMerge.js';
+import { isImportedId, mergeLifeExpenses, purgePreAprilManualExpenses, mergeDeletedIds } from './syncMerge.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -75,6 +75,34 @@ test('混合情境：只濾掉 4 月前手動支出，其餘全留', () => {
     { id: 'm_new', date: '2026-04-15', amount: 100 },              // 留(4月後)
   ]);
   assert.deepEqual(out.map(e => e.id).sort(), ['gmail_old', 'm_new', 's_old']);
+});
+
+console.log('\n[刪除墓碑 / 編輯保留]');
+test('本地刪掉的 gmail_ 列，雲端還在也不會回來', () => {
+  const cloud = [{ id: 'gmail_s_x', amount: 16091 }, { id: 'gmail_s_y', amount: 241 }];
+  const merged = mergeLifeExpenses([], cloud, ['gmail_s_x']);
+  assert.deepEqual(ids(merged), ['gmail_s_y']);
+});
+test('刪掉的 live_ 列，雲端還在也不會回來', () => {
+  const merged = mergeLifeExpenses([], [{ id: 'live_a', amount: 85 }], ['live_a']);
+  assert.deepEqual(merged, []);
+});
+test('本地編輯過的 gmail_ 列優先於雲端未編輯版', () => {
+  const local = [{ id: 'gmail_s_x', amount: 16091, categoryId: 'lc_travel', _editedAt: 100 }];
+  const cloud = [{ id: 'gmail_s_x', amount: 16091, categoryId: 'lc_other' }];
+  assert.equal(mergeLifeExpenses(local, cloud)[0].categoryId, 'lc_travel');
+});
+test('雲端較新的編輯優先於本地較舊的編輯', () => {
+  const local = [{ id: 'gmail_s_x', note: 'old', _editedAt: 100 }];
+  const cloud = [{ id: 'gmail_s_x', note: 'new', _editedAt: 200 }];
+  assert.equal(mergeLifeExpenses(local, cloud)[0].note, 'new');
+});
+test('雲端已移除的 gmail_ 列，本地編輯過也不復活（存在與否仍以雲端為準）', () => {
+  assert.deepEqual(mergeLifeExpenses([{ id: 'gmail_s_x', _editedAt: 100 }], []), []);
+});
+test('墓碑清單取聯集去重', () => {
+  assert.deepEqual(mergeDeletedIds(['a', 'b'], ['b', 'c']).sort(), ['a', 'b', 'c']);
+  assert.deepEqual(mergeDeletedIds(undefined, null), []);
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);

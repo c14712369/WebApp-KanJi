@@ -15,29 +15,39 @@ export function isImportedId(id) {
 
 /**
  * 合併本地與雲端的 lifeExpenses。
- * - gmail_ 匯入列：完全採用雲端集合（雲端有才有、雲端刪了本地也移除）。
+ * - gmail_ 匯入列：存在與否以雲端為準；同 id 若有一方被使用者編輯過（_editedAt），取較新的編輯。
  * - 手動列：本地與雲端聯集，同 id 以本地為準（使用者剛編輯的優先）。
+ * - deletedIds（使用者刪掉的匯入列墓碑）：一律排除，避免 GAS 重新匯入或雲端舊資料讓它復活。
  * @param {Array} local
  * @param {Array} cloud
+ * @param {Array<string>} deletedIds
  * @returns {Array}
  */
-export function mergeLifeExpenses(local = [], cloud = []) {
+export function mergeLifeExpenses(local = [], cloud = [], deletedIds = []) {
   const localArr = Array.isArray(local) ? local : [];
   const cloudArr = Array.isArray(cloud) ? cloud : [];
+  const deleted = new Set(Array.isArray(deletedIds) ? deletedIds : []);
 
-  // 使用者在前端改過分類的匯入列（_catLocked）→ 保留本地分類，其餘欄位以雲端為準
-  const lockedLocal = {};
-  localArr.forEach(e => { if (e && isImportedId(e.id) && e._catLocked) lockedLocal[e.id] = e; });
+  // 匯入列存在與否以雲端為準；同 id 本地編輯較新（_editedAt）→ 用本地版，
+  // 只改過分類（_catLocked）→ 保留本地分類，其餘欄位以雲端為準
+  const localImported = {};
+  localArr.forEach(e => { if (e && isImportedId(e.id)) localImported[e.id] = e; });
   const cloudImported = cloudArr.filter(e => isImportedId(e && e.id)).map(e => {
-    const l = lockedLocal[e.id];
-    return l ? { ...e, categoryId: l.categoryId, _catLocked: true } : e;
+    const l = localImported[e.id];
+    if (l && (l._editedAt || 0) > (e._editedAt || 0)) return l;
+    return l && l._catLocked ? { ...e, categoryId: l.categoryId, _catLocked: true } : e;
   });
 
   const manualById = {};
   cloudArr.filter(e => !isImportedId(e && e.id)).forEach(e => { manualById[e.id] = e; });
   localArr.filter(e => !isImportedId(e && e.id)).forEach(e => { manualById[e.id] = e; }); // 本地覆蓋
 
-  return [...Object.values(manualById), ...cloudImported];
+  return [...Object.values(manualById), ...cloudImported].filter(e => !deleted.has(e && e.id));
+}
+
+/** 本地與雲端的刪除墓碑取聯集 */
+export function mergeDeletedIds(local, cloud) {
+  return [...new Set([...(Array.isArray(local) ? local : []), ...(Array.isArray(cloud) ? cloud : [])])];
 }
 
 /**
