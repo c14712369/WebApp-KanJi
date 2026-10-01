@@ -42,7 +42,7 @@ const initState = {
   lifeIncomeCategories: load(LIFE_INC_CAT_KEY, DEFAULT_LIFE_INC_CATS.map(c => ({ ...c }))),
   lifeBudgets:          load(LIFE_BDG_KEY,     {}),
   merchantRules:        load(MERCHANT_RULES_KEY, {}),   // { merchantKey: categoryId }，GAS 匯入時套用
-  deletedImportIds:     load(DELETED_IMPORT_KEY, []),   // 使用者刪掉的匯入列墓碑，避免同步/重新匯入讓它復活
+  deletedImportIds:     load(DELETED_IMPORT_KEY, []),   // 使用者刪掉的明細墓碑（手動＋匯入），避免同步/重新匯入讓它復活
   lifeCurrentMonth: new Date().toISOString().slice(0, 7),
 
   // Projects
@@ -130,11 +130,11 @@ export const useAppStore = create((set, get) => {
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
     deleteLifeExpense: (id) => {
+      const removed = get().lifeExpenses.filter(e => e.id === id || e._linkedExpenseId === id).map(e => e.id);
       const next = get().lifeExpenses.filter(e => e.id !== id && e._linkedExpenseId !== id);
-      if (isImportedId(id)) {
-        const tomb = [...new Set([...get().deletedImportIds, id])];
-        save(DELETED_IMPORT_KEY, tomb); set({ deletedImportIds: tomb });
-      }
+      // 每筆刪除都留墓碑：推送前與雲端合併時，手動列取聯集、匯入列以雲端為準，沒墓碑都會被救回
+      const tomb = [...new Set([...get().deletedImportIds, id, ...removed])];
+      save(DELETED_IMPORT_KEY, tomb); set({ deletedImportIds: tomb });
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
     setLifeCategories:       (c) => { save(LIFE_CAT_KEY,     c); stamp(); set({ lifeCategories: c }); },

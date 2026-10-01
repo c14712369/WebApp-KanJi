@@ -100,6 +100,14 @@ test('雲端較新的編輯優先於本地較舊的編輯', () => {
 test('雲端已移除的 gmail_ 列，本地編輯過也不復活（存在與否仍以雲端為準）', () => {
   assert.deepEqual(mergeLifeExpenses([{ id: 'gmail_s_x', _editedAt: 100 }], []), []);
 });
+test('本地刪掉的手動列，沒墓碑時會被雲端聯集救回（重現 bug）', () => {
+  const merged = mergeLifeExpenses([], [{ id: 'm695', amount: 695 }]);
+  assert.deepEqual(ids(merged), ['m695']);
+});
+test('本地刪掉的手動列有墓碑 → 雲端還在也不會回來', () => {
+  const merged = mergeLifeExpenses([], [{ id: 'm695', amount: 695 }, { id: 'm798', amount: 798 }], ['m695']);
+  assert.deepEqual(ids(merged), ['m798']);
+});
 test('墓碑清單取聯集去重', () => {
   assert.deepEqual(mergeDeletedIds(['a', 'b'], ['b', 'c']).sort(), ['a', 'b', 'c']);
   assert.deepEqual(mergeDeletedIds(undefined, null), []);
