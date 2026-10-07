@@ -86,6 +86,11 @@
     z-index: 901 !important;
 }
 
+/* 保險：iOS Safari 上上面那條不一定生效，彈窗開啟時直接收起底部導覽列（body.modal-open 由 App.jsx 設定） */
+body.modal-open .bottom-nav {
+    visibility: hidden;
+}
+
 .modal {
     background: var(--card-bg);
     width: 92%;

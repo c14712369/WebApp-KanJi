@@ -68,6 +68,16 @@ export default function App() {
     return () => document.body.classList.remove('life-page-active');
   }, [activeTab]);
 
+  // 有彈窗開著時在 body 標記 modal-open，CSS 據此收起手機底部導覽列。
+  // 不靠 z-index / :has()：iOS Safari 上分頁動畫層的 stacking context 會讓導覽列壓在彈窗上。
+  useEffect(() => {
+    const sync = () => document.body.classList.toggle('modal-open', !!document.querySelector('.modal-overlay.active'));
+    const observer = new MutationObserver(sync);
+    observer.observe(document.getElementById('root'), { childList: true, subtree: true });
+    sync();
+    return () => { observer.disconnect(); document.body.classList.remove('modal-open'); };
+  }, []);
+
   const activeIndex = TABS.findIndex(t => t.id === activeTab);
   const ActiveTab = TAB_MAP[activeTab];
 
