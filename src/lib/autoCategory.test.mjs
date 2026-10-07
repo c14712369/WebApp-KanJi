@@ -1,11 +1,12 @@
 /**
  * 零依賴測試：node src/lib/autoCategory.test.mjs
- * 驗證：即時列同步合併、分類學習規則、本月花費速度估算。
+ * 驗證：即時列同步合併、分類學習規則、本月花費速度。
  */
 import assert from 'node:assert';
 import { isImportedId, mergeLifeExpenses, mergeMerchantRules } from './syncMerge.js';
 import { merchantKey, learnCategory } from './merchantRules.js';
 import { computeSpendPace } from './spendPace.js';
+import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from './salarySchedule.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -60,39 +61,87 @@ test('learnCategory：手動列不產生規則', () => {
 
 console.log('\n[本月花費速度]');
 // 基準月 2026-09，今天 9/10（第 10 天，共 30 天）
-const hist = [];
-for (const ym of ['2026-05', '2026-06', '2026-07']) {                    // m-2..m-4 平均：每月刷卡 3000
-  hist.push({ id: 'gmail_' + ym, date: ym + '-15', amount: 3000, type: 'expense' });
-}
-hist.push({ id: 'gmail_aug', date: '2026-08-15', amount: 99999, type: 'expense' }); // m-1 可能不完整，不採用
-test('預估未入帳 = 歷史日均刷卡 × 已過天數 − 本月已入帳刷卡', () => {
-  const rows = [...hist, { id: 'live_1', date: '2026-09-03', amount: 400, type: 'expense' }, { id: 'm1', date: '2026-09-02', amount: 200, type: 'expense' }];
-  const p = computeSpendPace({ rows, ym: '2026-09', today: '2026-09-10', income: 30000, spent: 600, fixed: 5000 });
+test('結餘與每日可花只扣實際支出及固定支出', () => {
+  const p = computeSpendPace({ ym: '2026-09', today: '2026-09-10', income: 30000, spent: 600, fixed: 5000 });
   assert.equal(p.isCurrentMonth, true);
-  assert.equal(p.unbilledEstimate, 600);   // 3000/30*10 = 1000 − 400
+  assert.equal('unbilledEstimate' in p, false);
   assert.equal(p.daysLeft, 21);            // 含今天
-  assert.equal(p.remain, 30000 - 600 - 5000 - 600);
+  assert.equal(p.remain, 30000 - 600 - 5000);
   assert.equal(p.dailyAllowance, Math.floor(p.remain / 21));
 });
 test('燈號：花費比例遠超時間進度 → tight / over', () => {
-  const ok = computeSpendPace({ rows: [], ym: '2026-09', today: '2026-09-15', income: 30000, spent: 12000, fixed: 0 });
+  const ok = computeSpendPace({ ym: '2026-09', today: '2026-09-15', income: 30000, spent: 12000, fixed: 0 });
   assert.equal(ok.status, 'ok');
-  const tight = computeSpendPace({ rows: [], ym: '2026-09', today: '2026-09-10', income: 30000, spent: 18000, fixed: 0 });
+  const tight = computeSpendPace({ ym: '2026-09', today: '2026-09-10', income: 30000, spent: 18000, fixed: 0 });
   assert.equal(tight.status, 'tight');
-  const over = computeSpendPace({ rows: [], ym: '2026-09', today: '2026-09-10', income: 30000, spent: 31000, fixed: 0 });
+  const over = computeSpendPace({ ym: '2026-09', today: '2026-09-10', income: 30000, spent: 31000, fixed: 0 });
   assert.equal(over.status, 'over');
   assert.equal(over.dailyAllowance, 0);
 });
-test('非本月：不估未入帳、不算每日可花', () => {
-  const p = computeSpendPace({ rows: hist, ym: '2026-08', today: '2026-09-10', income: 30000, spent: 1000, fixed: 0 });
+test('非本月：不算每日可花', () => {
+  const p = computeSpendPace({ ym: '2026-08', today: '2026-09-10', income: 30000, spent: 1000, fixed: 0 });
   assert.equal(p.isCurrentMonth, false);
-  assert.equal(p.unbilledEstimate, 0);
   assert.equal(p.dailyAllowance, null);
 });
-test('沒有歷史刷卡資料 → 估算 0，不報錯', () => {
-  const p = computeSpendPace({ rows: [], ym: '2026-09', today: '2026-09-10', income: 0, spent: 0, fixed: 0 });
-  assert.equal(p.unbilledEstimate, 0);
+test('沒有收入時狀態為 none', () => {
+  const p = computeSpendPace({ ym: '2026-09', today: '2026-09-10', income: 0, spent: 0, fixed: 0 });
   assert.equal(p.status, 'none');
+});
+
+console.log('\n[薪資生效月份]');
+test('舊薪資設定只從目前月份開始，不回補過往月份', () => {
+  const config = normalizeSalaryConfig({ amount: 52000, catId: 'lc_inc_salary', day: 5 }, '2026-10');
+  assert.equal(config.effectiveFrom, '2026-10');
+  assert.equal(shouldApplySalaryToMonth(config, '2026-09', '2026-10'), false);
+  assert.equal(shouldApplySalaryToMonth(config, '2026-10', '2026-10'), true);
+});
+test('有生效月份的薪資設定只套用該月與未來月份', () => {
+  const config = { amount: 52000, catId: 'lc_inc_salary', day: 5, effectiveFrom: '2026-08' };
+  assert.equal(shouldApplySalaryToMonth(config, '2026-07', '2026-10'), false);
+  assert.equal(shouldApplySalaryToMonth(config, '2026-08', '2026-10'), true);
+  assert.equal(shouldApplySalaryToMonth(config, '2026-11', '2026-10'), true);
+});
+test('入帳日遇週末提前到週五', () => {
+  assert.equal(salaryDateForMonth('2026-10', 5), '2026-10-05');   // 週一
+  assert.equal(salaryDateForMonth('2026-09', 5), '2026-09-04');   // 9/5 週六 → 週五
+  assert.equal(salaryDateForMonth('2026-07', 5), '2026-07-03');   // 7/5 週日 → 週五
+});
+test('改薪資只更新當月與之後的自動薪資，過往月份不動', () => {
+  const prev = { amount: 50000, catId: 'lc_inc_salary', day: 5 };
+  const next = { amount: 52000, catId: 'lc_inc_salary', day: 5 };
+  const expenses = [
+    { id: 'a', date: '2026-09-04', amount: 50000, categoryId: 'lc_inc_salary', _autoSalary: true },
+    { id: 'b', date: '2026-10-05', amount: 50000, categoryId: 'lc_inc_salary', _autoSalary: true },
+    { id: 'c', date: '2026-11-05', amount: 50000, categoryId: 'lc_inc_salary', _autoSalary: true },
+  ];
+  const plan = planSalaryUpdates(expenses, prev, next, '2026-10');
+  assert.deepEqual(plan.map(p => p.id), ['b', 'c']);
+  assert.deepEqual(plan[0].patch, { amount: 52000, categoryId: 'lc_inc_salary', date: '2026-10-05' });
+});
+test('使用者手動改過的自動薪資（_salaryManual）與一般收入不被覆蓋', () => {
+  const prev = { amount: 50000, catId: 'lc_inc_salary', day: 5 };
+  const next = { amount: 52000, catId: 'lc_inc_salary', day: 5 };
+  const expenses = [
+    { id: 'b', date: '2026-10-05', amount: 61000, categoryId: 'lc_inc_salary', _autoSalary: true, _salaryManual: true },
+    { id: 'm', date: '2026-10-05', amount: 50000, categoryId: 'lc_inc_salary' },
+  ];
+  assert.deepEqual(planSalaryUpdates(expenses, prev, next, '2026-10'), []);
+});
+test('設定與當月自動薪資金額早已不一致時，儲存仍會更新當月', () => {
+  // 修正前存過設定：設定已是 52000，當月明細卻停在 50000
+  const prev = { amount: 52000, catId: 'lc_inc_salary', day: 5 };
+  const next = { amount: 55000, catId: 'lc_inc_salary', day: 5 };
+  const expenses = [
+    { id: 'b', date: '2026-10-05', amount: 50000, categoryId: 'lc_inc_salary', _autoSalary: true },
+  ];
+  assert.deepEqual(planSalaryUpdates(expenses, prev, next, '2026-10').map(p => p.id), ['b']);
+});
+test('第一次設定薪資（沒有舊設定）也會更新當月既有的自動薪資', () => {
+  const next = { amount: 55000, catId: 'lc_inc_salary', day: 5 };
+  const expenses = [
+    { id: 'b', date: '2026-10-05', amount: 50000, categoryId: 'lc_inc_salary', _autoSalary: true },
+  ];
+  assert.deepEqual(planSalaryUpdates(expenses, null, next, '2026-10').map(p => p.id), ['b']);
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);

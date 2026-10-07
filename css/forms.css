@@ -81,6 +81,11 @@
     opacity: 1;
 }
 
+/* Framer Motion 會讓目前分頁形成低層級 stacking context；彈窗開啟時需高於手機底部導覽列。 */
+.tab-motion-layer:has(.modal-overlay.active) {
+    z-index: 901 !important;
+}
+
 .modal {
     background: var(--card-bg);
     width: 92%;
@@ -88,7 +93,8 @@
     padding: 28px;
     border-radius: var(--radius);
     transform: translateY(16px) translateZ(0);
-    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.35s;
+    opacity: 1;
+    transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.18s cubic-bezier(0.23, 1, 0.32, 1), background-color 0.35s;
     border: 1px solid var(--border-color);
     max-height: 90vh;
     overflow-y: auto;
@@ -98,6 +104,18 @@
 
 .modal-overlay.active .modal {
     transform: translateY(0) translateZ(0);
+}
+
+/* React 掛載時彈窗已是 active；提供起始影格，讓進場 transition 能真正執行。 */
+@starting-style {
+    .modal-overlay.active {
+        opacity: 0;
+    }
+
+    .modal-overlay.active .modal {
+        opacity: 0;
+        transform: translateY(16px) translateZ(0);
+    }
 }
 
 .modal-header {
@@ -174,6 +192,27 @@
 
     .modal-overlay.active .modal {
         transform: translateY(0);
+    }
+
+    @starting-style {
+        .modal-overlay.active .modal {
+            opacity: 0;
+            transform: translateY(40px);
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-overlay,
+    .modal {
+        transition: opacity 0.12s ease;
+    }
+
+    @starting-style {
+        .modal-overlay.active .modal {
+            opacity: 0;
+            transform: none;
+        }
     }
 }
 

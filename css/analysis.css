@@ -129,6 +129,36 @@
     color: var(--text-main);
 }
 
+/* 生活費總覽的標籤、設定按鈕與金額共用同一條視覺中線。 */
+.life-hero-card .detail-label,
+.life-hero-card .detail-value {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    line-height: 1;
+}
+
+.life-hero-card .detail-label > i {
+    display: grid;
+    place-items: center;
+    flex: 0 0 14px;
+    line-height: 1;
+}
+
+.life-hero-card .salary-settings-btn {
+    display: grid;
+    place-items: center;
+    flex: 0 0 28px;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    margin-left: 0;
+    padding: 0;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+
 /* Mobile Analysis Adjustments */
 @media (max-width: 768px) {
     .analysis-header {
@@ -235,29 +265,56 @@
 
 .pace-over  { color: var(--danger-color);  background: color-mix(in srgb, var(--danger-color)  12%, transparent); }
 
-.pace-daily {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-}
-
-.pace-daily strong {
-    font-family: var(--font-serif);
-    font-weight: 700;
-    color: var(--text-main);
-    font-variant-numeric: tabular-nums;
-}
-
-.pace-days {
-    white-space: nowrap;
-}
-
 .progress-bar.hero-progress {
     position: relative;
     overflow: visible;
+    outline: 1.5px solid transparent;
+    outline-offset: 2px;
+    transition: outline-color 0.4s ease;
 }
 
-.progress-bar.hero-progress .progress-fill {
-    border-radius: 3px;
+/* 分類色保留，用外框環提示接近／超過收入 */
+.progress-bar.hero-progress.is-high { outline-color: color-mix(in srgb, #d97706 55%, transparent); }
+.progress-bar.hero-progress.is-over { outline-color: var(--danger-color); }
+
+.expense-progress-stack {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+    border-radius: inherit;
+}
+
+.expense-progress-segment {
+    display: block;
+    height: 100%;
+    min-width: 0;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+
+.expense-progress-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 10px;
+    max-width: 280px;
+    margin-top: 8px;
+}
+
+.expense-progress-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.expense-progress-legend-item > i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: 0 0 auto;
 }
 
 /* 時間進度刻度：支出條超過這條線 = 花得比時間快 */
@@ -273,11 +330,117 @@
     pointer-events: none;
 }
 
-.detail-value.stat-estimate {
-    color: var(--text-muted);
-    font-style: normal;
+@keyframes life-panel-enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.life-hero-card:not([aria-hidden="true"]),
+.life-shared-container:not([aria-hidden="true"]) {
+    animation: life-panel-enter 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .expense-progress-stack,
+    .life-section-indicator {
+        transition: none !important;
+    }
+
+    .life-hero-card,
+    .life-shared-container {
+        animation: none !important;
+    }
 }
 
 /* hero 金額的盈虧色：.hero-amount 基底色在本檔較晚載入，會蓋掉通用 .stat-*，需提高權重 */
 .hero-amount.stat-positive { color: var(--success-color); }
 .hero-amount.stat-negative { color: var(--danger-color); }
+
+/* 手機生活費概覽：內容緊密成組，不把摘要與明細拉到卡片兩端。 */
+@media (max-width: 768px) {
+    body.life-page-active .life-hero-card {
+        flex: 0 1 auto;
+        width: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        padding: 18px;
+        gap: 18px;
+        align-items: stretch;
+        justify-content: flex-start;
+    }
+
+    body.life-page-active .life-hero-card .hero-main,
+    body.life-page-active .life-hero-card .hero-details {
+        flex: 0 0 auto;
+    }
+
+    /* hero.css 手機版給 .hero-main 的 24px 底部留白會疊上卡片 gap，這張卡由 gap 統一控制 */
+    body.life-page-active .life-hero-card .hero-main {
+        padding-bottom: 0;
+    }
+
+    body.life-page-active .life-hero-card .hero-label {
+        margin-bottom: 5px;
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: none;
+    }
+
+    body.life-page-active .life-hero-card .hero-amount {
+        margin-bottom: 13px;
+        font-size: 2rem;
+        line-height: 1.15;
+    }
+
+    body.life-page-active .life-hero-card .hero-pace {
+        margin: 0 0 13px;
+    }
+
+    body.life-page-active .life-hero-card .progress-wrap-hero {
+        width: 100%;
+        max-width: none;
+        gap: 10px;
+        padding-top: 10px;
+    }
+
+    body.life-page-active .life-hero-card .progress-wrap-hero .progress-bar {
+        height: 7px;
+    }
+
+    body.life-page-active .life-hero-card .expense-progress-legend {
+        width: 100%;
+        max-width: none;
+        margin-top: 9px;
+        gap: 6px 12px;
+    }
+
+    body.life-page-active .life-hero-card .expense-progress-legend-item {
+        gap: 5px;
+        font-size: 0.72rem;
+    }
+
+    body.life-page-active .life-hero-card .expense-progress-legend-item > i {
+        width: 8px;
+        height: 8px;
+    }
+
+    body.life-page-active .life-hero-card .hero-details {
+        gap: 10px;
+        padding-top: 16px;
+        border-top: 1px dashed var(--border-color);
+    }
+
+    body.life-page-active .life-hero-card .hero-detail-item {
+        min-height: 28px;
+    }
+
+    body.life-page-active .life-hero-card .detail-label {
+        gap: 7px;
+        font-size: 0.84rem;
+    }
+
+    body.life-page-active .life-hero-card .detail-value {
+        font-size: 1.05rem;
+        font-variant-numeric: tabular-nums;
+    }
+}

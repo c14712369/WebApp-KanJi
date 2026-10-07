@@ -62,6 +62,12 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [activeTab]);
 
+  // 手機版生活費頁固定在視窗內，將垂直捲動交給明細／分類內容區。
+  useEffect(() => {
+    document.body.classList.toggle('life-page-active', activeTab === 'life');
+    return () => document.body.classList.remove('life-page-active');
+  }, [activeTab]);
+
   const activeIndex = TABS.findIndex(t => t.id === activeTab);
   const ActiveTab = TAB_MAP[activeTab];
 
@@ -107,12 +113,13 @@ export default function App() {
   };
 
   return (
-    <div className="container" style={{ overflowX: 'hidden', position: 'relative' }}>
+    <div className={`container app-shell${activeTab === 'life' ? ' life-page-shell' : ''}`} style={{ overflowX: 'hidden', position: 'relative' }}>
       <SyncOverlay />
       <Header />
-      <main style={{ position: 'relative', minHeight: '80vh', paddingBottom: '0' }}>
+      <main className="app-main" style={{ position: 'relative', minHeight: '80vh', paddingBottom: '0' }}>
         <AnimatePresence initial={false} custom={direction}>
           <motion.div
+            className="tab-motion-layer"
             key={activeTab}
             custom={direction}
             variants={variants}

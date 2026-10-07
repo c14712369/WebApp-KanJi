@@ -17,6 +17,311 @@
     min-height: 620px;
 }
 
+.life-section-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    max-width: 800px;
+    margin: 0 auto 16px;
+    padding: 4px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+}
+
+.life-section-btn {
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.92rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 18px auto;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.life-section-btn:hover {
+    background: var(--bg-color);
+    color: var(--text-main);
+}
+
+.life-section-btn:active {
+    transform: scale(0.97);
+}
+
+.life-section-btn:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.life-section-btn.active {
+    background: transparent;
+    color: #fff;
+}
+
+.life-section-indicator {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--primary-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.life-section-icon {
+    width: 18px;
+    display: inline-grid;
+    place-items: center;
+    line-height: 1;
+}
+
+.life-section-label {
+    line-height: 1;
+    text-align: left;
+}
+
+@media (max-width: 600px) {
+    .life-section-nav {
+        width: 100%;
+        margin-bottom: 12px;
+        border-radius: 14px;
+    }
+
+    .life-section-btn {
+        padding: 8px 6px;
+        font-size: 0.82rem;
+        gap: 6px;
+    }
+}
+
+/* 手機版生活費頁：外層固定於視窗，只讓目前內容區垂直捲動。 */
+@media (max-width: 768px) {
+    body.life-page-active {
+        height: 100dvh;
+        min-height: 0;
+        padding-bottom: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+    }
+
+    body.life-page-active #root {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    body.life-page-active .container.life-page-shell {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        min-height: 0;
+        max-height: 100dvh;
+        padding-top: max(8px, env(safe-area-inset-top));
+        padding-bottom: 64px;
+        overflow: hidden !important;
+    }
+
+    /* 所有分頁頁首與生活費頁同高 */
+    body .container.app-shell {
+        padding-top: max(8px, env(safe-area-inset-top));
+    }
+
+    /* 手機精簡頁首（所有分頁共用）：品牌與圖示同一列，副標題在下 */
+    body .app-shell .mobile-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "brand controls"
+            "subtitle subtitle";
+        align-items: center;
+        flex: 0 0 auto;
+        column-gap: 8px;
+        row-gap: 1px;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+    }
+
+    body .app-shell .mobile-header .header-title {
+        display: contents;
+        min-width: 0;
+    }
+
+    body .app-shell .mobile-header h1 {
+        grid-area: brand;
+        gap: 7px;
+        font-size: 1.35rem;
+        line-height: 1.25;
+    }
+
+    body .app-shell .mobile-header h1 .title-icon {
+        font-size: 1rem;
+        transform: translateY(2px);
+    }
+
+    body .app-shell .mobile-header .subtitle {
+        grid-area: subtitle;
+        font-size: 0.68rem;
+        line-height: 1.4;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+    }
+
+    body .app-shell .mobile-header .header-controls {
+        grid-area: controls;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+        width: auto;
+        gap: 0;
+    }
+
+    body .app-shell .mobile-header .header-controls-top {
+        flex: 0 0 auto;
+        width: auto;
+        gap: 0;
+    }
+
+    body .app-shell .mobile-header .header-icons {
+        align-items: center;
+        gap: 0;
+    }
+
+    body .app-shell .mobile-header .header-icons i,
+    body .app-shell .mobile-header #authLoginBtn i {
+        display: grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+        font-size: 0.9rem;
+        line-height: 1;
+        transform: translateY(3px);
+    }
+
+    body .app-shell .mobile-header .icon-btn,
+    body .app-shell .mobile-header #authLoginBtn {
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        padding: 0;
+        justify-content: center;
+    }
+
+    body .app-shell .mobile-header #authLoginBtn {
+        gap: 0;
+        border: 0;
+        font-size: 0;
+    }
+
+    /* 精簡頁首只留一列：Email 已在桌面側欄顯示，手機收起 */
+    body .app-shell .mobile-header #authUserEmail {
+        display: none;
+    }
+
+    body.life-page-active .app-main {
+        flex: 1 1 auto;
+        min-height: 0 !important;
+        overflow: hidden;
+    }
+
+    body.life-page-active .app-main > .tab-motion-layer,
+    body.life-page-active .life-tab-content {
+        height: 100%;
+        min-height: 0;
+    }
+
+    body.life-page-active .life-tab-content {
+        display: flex !important;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    body.life-page-active .life-tab-content > .month-nav,
+    body.life-page-active .life-tab-content > .life-section-nav {
+        flex: 0 0 auto;
+    }
+
+    body.life-page-active .life-tab-content > .month-nav {
+        margin-bottom: 10px;
+    }
+
+    body.life-page-active .life-section-nav {
+        margin-bottom: 10px;
+    }
+
+    body.life-page-active .life-shared-container,
+    body.life-page-active .life-hero-card {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin-bottom: 0;
+        overflow: hidden;
+    }
+
+    body.life-page-active .life-shared-container {
+        width: 100%;
+        padding: 10px;
+    }
+
+    body.life-page-active .life-shared-container.life-shared-cat {
+        flex: 0 1 auto;
+    }
+
+    body.life-page-active .life-shared-cat .life-view-content,
+    body.life-page-active .life-shared-cat .life-sidebar {
+        height: auto;
+    }
+
+    body.life-page-active .life-shared-cat .life-cat-list {
+        flex: 0 1 auto;
+        max-height: calc(100dvh - 300px);
+    }
+
+    body.life-page-active .life-view-content,
+    body.life-page-active .life-detail-panel,
+    body.life-page-active .life-sidebar {
+        height: 100%;
+        min-height: 0;
+    }
+
+    body.life-page-active .life-view-content,
+    body.life-page-active .life-detail-panel,
+    body.life-page-active .life-sidebar {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    body.life-page-active #lifeExpList,
+    body.life-page-active .life-cat-list {
+        flex: 1 1 auto;
+        height: auto !important;
+        min-height: 0;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.life-page-active .life-hero-card {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
 .life-tabs-header {
     display: flex;
     gap: 8px;
@@ -203,7 +508,7 @@
     height: 100%;
     background: var(--primary-color);
     border-radius: 2px;
-    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.4s ease;
+    transition: background-color 0.4s ease;
 }
 
 .life-cat-mini-fill.over    { background: var(--danger-color); }
@@ -259,7 +564,6 @@
     height: 100%;
     background: var(--primary-color);
     border-radius: 2px;
-    transition: width 0.3s ease;
 }
 
 .cat-budget-fill.over {
@@ -339,6 +643,19 @@
     overscroll-behavior: contain;
     touch-action: pan-y;
     position: relative;
+}
+
+/* 桌面版依視窗高度增加可視筆數，避免高螢幕留下大片空白。 */
+@media (min-width: 769px) {
+    .life-shared-container {
+        min-height: 0;
+    }
+
+    #lifeExpList,
+    .life-cat-list {
+        height: clamp(280px, calc(100vh - 292px), 760px) !important;
+        height: clamp(280px, calc(100dvh - 292px), 760px) !important;
+    }
 }
 
 /* Mobile: stack vertically */

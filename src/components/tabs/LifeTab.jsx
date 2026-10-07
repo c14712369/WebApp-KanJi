@@ -6,9 +6,15 @@ import AnimatedNumber from '../../lib/AnimatedNumber';
 import CategoryManageModal from '../modals/CategoryManageModal';
 import IconRenderer from '../../lib/IconRenderer';
 import { groupEntriesByDay, paginateGroups } from '../../lib/lifeGrouping';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { isImportedId } from '../../lib/syncMerge';
 import { computeSpendPace } from '../../lib/spendPace';
+import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
+
+const localYm = () => {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+};
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -22,7 +28,53 @@ function BarFill({ value, className, id }) {
   return <div id={id} className={className} style={{ width: `${w}%` }} />;
 }
 
+function StackedExpenseBar({ value, segments, id }) {
+  const [width, setWidth] = useState(0);
+  const total = segments.reduce((sum, segment) => sum + segment.amount, 0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setWidth(value), 60);
+    return () => clearTimeout(t);
+  }, [value]);
+
+  const summary = segments
+    .map(segment => `${segment.label} ${Math.round((segment.amount / total) * 100)}%`)
+    .join('、');
+
+  return (
+    <div
+      id={id}
+      className="expense-progress-stack"
+      style={{ width: `${width}%` }}
+      role="progressbar"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow={Math.round(value)}
+      aria-label={`總支出 ${Math.round(value)}%；${summary}`}
+    >
+      {segments.map(segment => {
+        const share = total > 0 ? (segment.amount / total) * 100 : 0;
+        return (
+          <span
+            key={segment.id}
+            className="expense-progress-segment"
+            style={{ flexBasis: `${share}%`, backgroundColor: segment.color }}
+            title={`${segment.label}：NT$ ${Math.round(segment.amount).toLocaleString()}（占支出 ${Math.round(share)}%）`}
+            aria-hidden="true"
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 const PAGE_SIZE = 20;
+
+const LIFE_SECTIONS = [
+  { id: 'overview', label: '本月總覽', icon: 'fa-gauge-high' },
+  { id: 'exp', label: '收支明細', icon: 'fa-list-ul' },
+  { id: 'cat', label: '收支分類', icon: 'fa-shapes' },
+];
 
 
 // ── Calculator hook ──────────────────────────────────────────────────────────
@@ -77,7 +129,7 @@ function useCalc(initialVal = '0') {
 }
 
 // ── Salary Modal ─────────────────────────────────────────────────────────────
-function SalaryModal({ lifeIncomeCategories, onClose }) {
+function SalaryModal({ lifeIncomeCategories, lifeExpenses, updateLifeExpense, onSaved, onClose }) {
   const saved = (() => { try { return JSON.parse(localStorage.getItem(SALARY_DEFAULT_KEY)); } catch { return null; } })();
   const [amount, setAmount] = useState(saved?.amount || '');
   const [catId,  setCatId]  = useState(saved?.catId  || lifeIncomeCategories[0]?.id || '');
@@ -85,8 +137,15 @@ function SalaryModal({ lifeIncomeCategories, onClose }) {
 
   const handleSave = () => {
     if (!amount || Number(amount) <= 0) { showToast('請輸入薪資金額', 'error'); return; }
-    localStorage.setItem(SALARY_DEFAULT_KEY, JSON.stringify({ amount: Number(amount), catId, day: parseInt(day) }));
-    showToast('預設薪資已儲存'); onClose();
+    // 新設定從儲存當月起生效：過往月份的薪資保持原樣，當月與之後的自動薪資逐筆更新
+    const currentYm = localYm();
+    const next = { amount: Number(amount), catId, day: parseInt(day), effectiveFrom: currentYm };
+    const plan = planSalaryUpdates(lifeExpenses, saved, next, currentYm);
+    localStorage.setItem(SALARY_DEFAULT_KEY, JSON.stringify(next));
+    if (plan.length) console.log(`薪資設定更新 ${plan.length} 筆自動薪資（${currentYm} 起）:`, plan.map(p => p.id));
+    plan.forEach(p => updateLifeExpense(p.id, p.patch));
+    showToast(plan.length ? `預設薪資已儲存，已更新 ${plan.length} 筆` : '預設薪資已儲存');
+    onSaved(); onClose();
   };
   const handleClear = async () => {
     if (!await confirmDialog({ title: '清除預設薪資', message: '確定要清除預設薪資設定嗎？', confirmText: '清除' })) return;
@@ -116,10 +175,10 @@ function SalaryModal({ lifeIncomeCategories, onClose }) {
           <input className="form-input" type="number" inputMode="numeric" min="1" max="28" value={day} onChange={e => setDay(e.target.value)} />
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={handleClear}>清除設定</button>
           <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleSave}>
             <i className="fa-solid fa-check"></i> 儲存
           </button>
+          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={handleClear}>清除設定</button>
         </div>
       </div>
     </div>
@@ -332,8 +391,10 @@ export default function LifeTab() {
   const [expModal,      setExpModal]      = useState(null);
   const [newType,       setNewType]       = useState('expense');
   const [showSalary,    setShowSalary]    = useState(false);
+  const [salaryVersion, setSalaryVersion] = useState(0); // 儲存薪資設定後重跑自動入帳
   const [showCatManage, setShowCatManage] = useState(false);
   const [filterType,    setFilterType]    = useState('all'); // 'all' | 'expense' | 'income'
+  const prefersReducedMotion = useReducedMotion();
   const ym = lifeCurrentMonth;
 
   // Reset page when month, category filter, or type filter changes
@@ -357,24 +418,25 @@ export default function LifeTab() {
   // ── Auto-apply salary ──
   useEffect(() => {
     try {
-      const s = JSON.parse(localStorage.getItem(SALARY_DEFAULT_KEY));
-      if (!s) return;
+      const raw = JSON.parse(localStorage.getItem(SALARY_DEFAULT_KEY));
+      if (!raw) return;
+      const currentYm = localYm();
+      const s = normalizeSalaryConfig(raw, currentYm);
+      // 舊設定補上生效月份後寫回，之後月份前進時才不會一直往後推
+      if (s !== raw) localStorage.setItem(SALARY_DEFAULT_KEY, JSON.stringify(s));
+      if (!shouldApplySalaryToMonth(s, ym, currentYm)) return;
       const alreadyApplied = lifeExpenses.some(e =>
-        (e.date || '').startsWith(ym) && (e._autoSalary || e._salaryDefault) && e.categoryId === s.catId
+        (e.date || '').startsWith(ym) && (e._autoSalary || e._salaryDefault)
       );
       if (alreadyApplied) return;
-      const d = new Date(ym + '-' + String(s.day).padStart(2, '0'));
-      const dow = d.getDay();
-      if (dow === 0) d.setDate(d.getDate() - 2);
-      else if (dow === 6) d.setDate(d.getDate() - 1);
       addLifeExpense({
         id: crypto.randomUUID(), type: 'income',
         categoryId: s.catId, amount: s.amount,
-        date: d.toISOString().split('T')[0],
+        date: salaryDateForMonth(ym, s.day),
         note: '薪資 (自動)', _autoSalary: true,
       });
     } catch {}
-  }, [ym]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ym, salaryVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-apply daily expenses ──
   useEffect(() => {
@@ -397,11 +459,10 @@ export default function LifeTab() {
   const tExp   = lifeExpenses.filter(e => e.type !== 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
   // 每月現金固定支出（信用卡項目已由 Gmail 記帳匯入明細、計在 tExp，不重複加）
   const fixedMonthly = Math.round(getFixedLifeMonthly(items, ym));
-  // 本月：信用卡帳單月底才來 → 用歷史刷卡日均估「未入帳」，結餘與每日可花都扣掉它
   const now      = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const pace     = computeSpendPace({ rows: lifeExpenses, ym, today: todayIso, income: tInc, spent: tExp, fixed: fixedMonthly });
-  const totalSpent = tExp + fixedMonthly + pace.unbilledEstimate;
+  const pace     = computeSpendPace({ ym, today: todayIso, income: tInc, spent: tExp, fixed: fixedMonthly });
+  const totalSpent = tExp + fixedMonthly;
   const remain   = pace.remain;
   const pct      = tInc > 0 ? Math.min(Math.round((totalSpent / tInc) * 100), 100) : 0;
   const timePct  = pace.isCurrentMonth ? Math.round((now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 100) : null;
@@ -412,6 +473,14 @@ export default function LifeTab() {
     const budget = lifeBudgets[cat.id + '|' + ym] || 0;
     return { ...cat, spent, budget, isOver: budget > 0 && spent > budget };
   }).filter(c => c.spent > 0);
+
+  const categorizedSpent = catSummary.reduce((sum, cat) => sum + cat.spent, 0);
+  const uncategorizedSpent = Math.max(0, tExp - categorizedSpent);
+  const expenseSegments = [
+    ...catSummary.map(cat => ({ id: cat.id, label: cat.name, color: cat.color, amount: cat.spent })),
+    ...(uncategorizedSpent > 0 ? [{ id: 'uncategorized', label: '未分類', color: '#8A8A8A', amount: uncategorizedSpent }] : []),
+    ...(fixedMonthly > 0 ? [{ id: 'fixed', label: '固定支出', color: '#64748B', amount: fixedMonthly }] : []),
+  ];
 
   // ── Reward map ──
   const rewardMap = {};
@@ -455,7 +524,11 @@ export default function LifeTab() {
   const handleSaveExp = (entry) => {
     const prev = entry.id && lifeExpenses.find(e => e.id === entry.id);
     if (prev) {
-      updateLifeExpense(entry.id, entry);
+      // 手動改過金額/分類的自動薪資做記號，之後改薪資設定時不覆蓋
+      const salaryManual = (prev._autoSalary || prev._salaryDefault)
+        && (Number(entry.amount) !== Number(prev.amount) || entry.categoryId !== prev.categoryId)
+        ? { _salaryManual: true } : {};
+      updateLifeExpense(entry.id, { ...entry, ...salaryManual });
       // 刷卡匯入列改分類 → 記住這家店，同店其他「其他」一起改，之後匯入自動套用
       if (isImportedId(prev.id) && entry.type !== 'income' && prev.categoryId !== entry.categoryId) {
         const n = learnLifeCategory(entry.id, entry.categoryId);
@@ -480,7 +553,7 @@ export default function LifeTab() {
   const openNew  = (type)  => { if (navigator.vibrate) navigator.vibrate(50); setNewType(type); setExpModal({}); };
 
   return (
-    <div className="tab-content">
+    <div className="tab-content life-tab-content">
       {/* Month nav */}
       <div className="month-nav" style={{ gap: '8px' }}>
         <button className="icon-btn" onClick={() => changeMonth(-1)}><i className="fa-solid fa-chevron-left"></i></button>
@@ -538,8 +611,34 @@ export default function LifeTab() {
         </button>
       </div>
 
+      <div className="life-section-nav" role="tablist" aria-label="生活費檢視">
+        {LIFE_SECTIONS.map(section => {
+          const active = lifeView === section.id;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className={`life-section-btn${active ? ' active' : ''}`}
+              onClick={() => { if (navigator.vibrate) navigator.vibrate(20); setLifeView(section.id); }}
+            >
+              {active && (
+                <motion.span
+                  layoutId="life-section-indicator"
+                  className="life-section-indicator"
+                  transition={prefersReducedMotion ? { duration: 0 } : { type: 'tween', duration: 0.2, ease: [0.2, 0, 0, 1] }}
+                />
+              )}
+              <span className="life-section-icon" aria-hidden="true"><i className={`fa-solid ${section.icon}`}></i></span>
+              <span className="life-section-label">{section.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Life Hero Card */}
-      <div className="life-hero-card">
+      <div className="life-hero-card" style={{ display: lifeView === 'overview' ? undefined : 'none' }} aria-hidden={lifeView !== 'overview'}>
         <div className="hero-main">
           <div className="hero-label">
             {pace.isCurrentMonth ? '本月還能花' : '生活費結餘'}
@@ -547,34 +646,41 @@ export default function LifeTab() {
           <div className={`hero-amount${remain < 0 ? ' stat-negative' : ' stat-positive'}`} id="lifeMonthRemain">
             {remain < 0 ? '−' : ''}NT$ <AnimatedNumber value={Math.abs(Math.round(remain))} format={v => formatAmount(v, 'income')} effect="scroll" />
           </div>
-          {pace.isCurrentMonth && pace.status !== 'none' && (
+          {pace.isCurrentMonth && pace.status === 'over' && (
             <div className="hero-pace">
-              {pace.status === 'over' && <span className="pace-chip pace-over">已超支</span>}
-              {pace.status !== 'over' && (
-                <span className="pace-daily">
-                  每天還能花 <strong>NT$ {formatAmount(pace.dailyAllowance, 'income')}</strong>
-                  <span className="pace-days">・剩 {pace.daysLeft} 天</span>
-                </span>
-              )}
+              <span className="pace-chip pace-over">已超支</span>
             </div>
           )}
           <div className="progress-wrap-hero">
-            <div className="progress-bar hero-progress">
-              <BarFill
+            <div className={`progress-bar hero-progress${pct >= 100 ? ' is-over' : pct >= 80 ? ' is-high' : ''}`}>
+              <StackedExpenseBar
                 id="lifeOverallProgress"
-                className={`progress-fill ${pct >= 100 ? 'over-budget' : pct >= 80 ? 'high' : pct >= 60 ? 'medium' : 'low'}`}
                 value={Math.min(pct, 100)}
+                segments={expenseSegments}
               />
               {timePct !== null && <span className="time-marker" style={{ left: `${timePct}%` }} title={`本月已過 ${timePct}%`} />}
             </div>
             <span className={`progress-pct ${pct >= 100 ? 'over-budget' : pct >= 80 ? 'high' : ''}`} id="lifeOverallPct">支出 {pct}%</span>
           </div>
+          {expenseSegments.length > 0 && (
+            <div className="expense-progress-legend" aria-label="支出分類占比">
+              {expenseSegments.map(segment => {
+                const share = totalSpent > 0 ? Math.round((segment.amount / totalSpent) * 100) : 0;
+                return (
+                  <span className="expense-progress-legend-item" key={segment.id} title={`NT$ ${Math.round(segment.amount).toLocaleString()}`}>
+                    <i style={{ backgroundColor: segment.color }} />
+                    <span>{segment.label} {share}%</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="hero-details">
           <div className="hero-detail-item">
             <div className="detail-label">
               <i className="fa-solid fa-hand-holding-dollar"></i> 本月實際收入
-              <button className="icon-btn" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setShowSalary(true); }} title="設定預設薪資" style={{ fontSize: '0.8rem', padding: '2px 4px', marginLeft: 4 }}>
+              <button className="icon-btn salary-settings-btn" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setShowSalary(true); }} title="設定預設薪資">
                 <i className="fa-solid fa-gear"></i>
               </button>
             </div>
@@ -590,33 +696,19 @@ export default function LifeTab() {
               <div className="detail-value stat-fixed" id="lifeMonthFixed">NT$ <AnimatedNumber value={fixedMonthly} effect="scroll" /></div>
             </div>
           )}
-          {pace.unbilledEstimate > 0 && (
-            <div className="hero-detail-item" title="信用卡帳單月底才寄來。這是依前幾個月的刷卡日均，估算本月到今天還沒入帳的金額；帳單或 Apple Pay 即時記帳進來後會自動變小。">
-              <div className="detail-label"><i className="fa-regular fa-clock"></i> 預估未入帳</div>
-              <div className="detail-value stat-estimate">≈ NT$ <AnimatedNumber value={pace.unbilledEstimate} effect="scroll" /></div>
-            </div>
-          )}
         </div>
       </div>
 
       {/* Shared container: 收支明細 / 預算分類 */}
-      <div className="life-shared-container">
-        <div className="life-tabs-header">
-          <button className={`life-subtab-btn${lifeView === 'exp' ? ' active' : ''}`} onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setLifeView('exp'); }}>
-            <i className="fa-solid fa-list-ul"></i> 收支明細
-          </button>
-          <button className={`life-subtab-btn${lifeView === 'cat' ? ' active' : ''}`} onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setLifeView('cat'); }}>
-            <i className="fa-solid fa-shapes"></i> 預算分類
-          </button>
-        </div>
-
+      <div className={`life-shared-container life-shared-${lifeView}`} style={{ display: lifeView === 'overview' ? 'none' : undefined }} aria-hidden={lifeView === 'overview'}>
         <AnimatePresence mode="wait">
           {lifeView === 'exp' ? (
             <motion.div
               key="exp-view"
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.2, ease: [0.2, 0, 0, 1] }}
               className="life-view-content active"
             >
               <div className="life-detail-panel" style={{ width: '100%' }}>
@@ -811,7 +903,8 @@ export default function LifeTab() {
               key="cat-view"
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.2, ease: [0.2, 0, 0, 1] }}
               className="life-view-content active"
             >
               <div className="life-sidebar" style={{ width: '100%' }}>
@@ -886,7 +979,7 @@ export default function LifeTab() {
           onSave={handleSaveExp}
         />
       )}
-      {showSalary && <SalaryModal lifeIncomeCategories={lifeIncomeCategories} onClose={() => setShowSalary(false)} />}
+      {showSalary && <SalaryModal lifeIncomeCategories={lifeIncomeCategories} lifeExpenses={lifeExpenses} updateLifeExpense={updateLifeExpense} onSaved={() => setSalaryVersion(v => v + 1)} onClose={() => setShowSalary(false)} />}
       {showCatManage && (
         <CategoryManageModal
           categories={lifeCategories}
