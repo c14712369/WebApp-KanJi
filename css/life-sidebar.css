@@ -132,7 +132,7 @@
         min-height: 0;
         max-height: 100dvh;
         padding-top: max(8px, env(safe-area-inset-top));
-        padding-bottom: 64px;
+        padding-bottom: calc(64px + 12px); /* 底部導覽 64px + 與卡片的間距 */
         overflow: hidden !important;
     }
 
