@@ -333,7 +333,7 @@
 }
 
 #lifeExpList {
-    padding: 8px 0;
+    padding: 0 0 8px;
     /* 改善手機版滾動體驗，防止與外層頁面滾動衝突 */
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
