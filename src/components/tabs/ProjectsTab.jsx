@@ -4,7 +4,9 @@ import { showToast, formatAmount, autoFocusDesktop, confirmDialog } from '../../
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// ── Project Modal ─────────────────────────────────────────────────────────────
+const vibrate = () => { if (navigator.vibrate) navigator.vibrate(50); };
+
+// ── Project Modal（底部面板：名稱整寬；預算＋狀態、兩個日期各併一列）──────────────
 function ProjectModal({ initial, onClose, onSave }) {
   const [name,      setName]      = useState(initial?.name      || '');
   const [budget,    setBudget]    = useState(initial?.budget    || '');
@@ -13,47 +15,59 @@ function ProjectModal({ initial, onClose, onSave }) {
   const [status,    setStatus]    = useState(initial?.status    || 'active');
   const isEdit = !!initial?.id;
 
-  const handleSave = () => {
+  const handleSave = (e) => {
+    e?.preventDefault();
     if (!name.trim()) { showToast('請填寫專案名稱', 'error'); return; }
     onSave({ id: initial?.id || crypto.randomUUID(), name: name.trim(), budget: parseFloat(budget) || 0, startDate, endDate, status, createdAt: initial?.createdAt || new Date().toISOString() });
   };
 
   return (
-    <div className="modal-overlay active" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 400 }} onPointerDown={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3 id="projectModalTitle">{isEdit ? '編輯企劃專案' : '新增企劃專案'}</h3>
-          <button className="icon-btn" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+    <div className="modal-overlay active settings-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal fx-item-modal pj-modal" role="dialog" aria-modal="true" aria-labelledby="projectModalTitle" onPointerDown={e => e.stopPropagation()}>
+        <div className="fx-item-head">
+          <div className="settings-grabber" aria-hidden="true"></div>
+          <div className="fx-item-head-row">
+            <h3 id="projectModalTitle">{isEdit ? '編輯企劃專案' : '新增企劃專案'}</h3>
+            <button type="button" className="icon-btn" onClick={onClose} aria-label="關閉"><i className="fa-solid fa-xmark"></i></button>
+          </div>
         </div>
-        <div className="form-group">
-          <label className="form-label">專案名稱</label>
-          <input className="form-input" autoFocus={autoFocusDesktop} value={name} onChange={e => setName(e.target.value)} placeholder="旅遊、活動…" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">預算（NT$）</label>
-          <input className="form-input" type="number" inputMode="decimal" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">出發 / 目標日期</label>
-          <input className="form-input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">結束日期（選填）</label>
-          <input className="form-input" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">狀態</label>
-          <select className="form-select" value={status} onChange={e => setStatus(e.target.value)}>
-            <option value="active">進行中</option>
-            <option value="ended">已結束</option>
-          </select>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>取消</button>
-          <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleSave}>
-            <i className="fa-solid fa-check"></i> {isEdit ? '儲存' : '建立'}
-          </button>
-        </div>
+        <form className="fx-item-form" onSubmit={handleSave} noValidate>
+          <div className="fx-item-body">
+            <div className="form-group">
+              <label className="form-label" htmlFor="pjName">專案名稱</label>
+              <input id="pjName" className="form-input" autoFocus={autoFocusDesktop} value={name} onChange={e => setName(e.target.value)} placeholder="旅遊、活動…" />
+            </div>
+            <div className="fx-grid-2">
+              <div className="form-group">
+                <label className="form-label" htmlFor="pjBudget">預算（NT$）</label>
+                <input id="pjBudget" className="form-input" type="number" inputMode="decimal" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="pjStatus">狀態</label>
+                <select id="pjStatus" className="form-select" value={status} onChange={e => setStatus(e.target.value)}>
+                  <option value="active">進行中</option>
+                  <option value="ended">已結束</option>
+                </select>
+              </div>
+            </div>
+            <div className="fx-grid-2">
+              <div className="form-group">
+                <label className="form-label" htmlFor="pjStart">出發／目標日</label>
+                <input id="pjStart" className="form-input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="pjEnd">結束日（選填）</label>
+                <input id="pjEnd" className="form-input" type="date" value={endDate} min={startDate || undefined} onChange={e => setEndDate(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <div className="fx-item-foot">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
+            <button type="submit" className="btn btn-primary fx-submit">
+              <i className="fa-solid fa-check"></i> {isEdit ? '儲存' : '建立'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -73,80 +87,91 @@ function ProjectDetailModal({ project, projectExpenses, projectCategories, onClo
 
   const handleAddExp = () => {
     if (!expName.trim() || !(parseFloat(expAmt) > 0)) { showToast('請填寫名稱與金額', 'error'); return; }
-    if (navigator.vibrate) navigator.vibrate(50);
+    vibrate();
     onAddExp({ id: crypto.randomUUID(), projectId: project.id, categoryId: expCatId, name: expName.trim(), amount: parseFloat(expAmt), date: expDate, createdAt: new Date().toISOString() });
     setExpName(''); setExpAmt('');
   };
 
   return (
-    <div className="modal-overlay active" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 480 }} onPointerDown={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3 id="projectDetailTitle">{project.name} — 專案明細</h3>
-          <button className="icon-btn" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
-        </div>
-
-        {/* Budget summary */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: '0.9rem' }}>
-          <span>已花費：<b id="detailProjectSpent" style={{ fontFamily: 'var(--font-serif)' }}>NT$ <AnimatedNumber value={spent} /></b></span>
-          <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-serif)' }}>總預算：NT$ <AnimatedNumber value={Number(project.budget) || 0} /></span>
-        </div>
-        <div style={{ height: 6, background: 'var(--bg-secondary)', borderRadius: 3, marginBottom: 4 }}>
-          <div id="detailProjectProgress" style={{ height: '100%', borderRadius: 3, width: pct + '%', background: pct >= 100 ? 'var(--danger-color)' : 'var(--primary-color)', transition: 'width .3s' }}></div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: 16 }}>
-          <span id="detailProjectPct" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-serif)' }}>支出 <AnimatedNumber value={Math.round((spent / (project.budget || 1)) * 100)} />%</span>
-          <span id="detailProjectRemain" style={{ color: rem < 0 ? 'var(--danger-color)' : 'var(--text-color)', fontFamily: 'var(--font-serif)' }}>剩餘：NT$ <AnimatedNumber value={rem} /></span>
-        </div>
-
-        {/* Add expense form */}
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 10, padding: 12, marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 8 }}>新增明細</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 6, marginBottom: 6 }}>
-            <input className="form-input" placeholder="項目名稱…" value={expName} onChange={e => setExpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddExp()} />
-            <input className="form-input" type="number" inputMode="decimal" placeholder="金額" min="0" value={expAmt} onChange={e => setExpAmt(e.target.value)} />
+    <div className="modal-overlay active settings-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal fx-item-modal pj-modal" role="dialog" aria-modal="true" aria-labelledby="projectDetailTitle" onPointerDown={e => e.stopPropagation()}>
+        <div className="fx-item-head">
+          <div className="settings-grabber" aria-hidden="true"></div>
+          <div className="fx-item-head-row">
+            <h3 id="projectDetailTitle" className="pj-detail-title">{project.name}<span>專案明細</span></h3>
+            <button type="button" className="icon-btn" onClick={onClose} aria-label="關閉"><i className="fa-solid fa-xmark"></i></button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6 }}>
-            <select className="form-select" id="projectExpCat" value={expCatId} onChange={e => setExpCatId(e.target.value)}>
-              {projectCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <input className="form-input" type="date" id="projectExpDate" value={expDate} onChange={e => setExpDate(e.target.value)} />
-            <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={handleAddExp}>
-              <i className="fa-solid fa-plus"></i>
+        </div>
+
+        <div className="fx-item-body">
+          {/* Budget summary */}
+          <div className="pj-sum">
+            <div className="pj-sum-row">
+              <span className="pj-sum-label">已花費</span>
+              <span className="pj-sum-label">總預算 NT$ <AnimatedNumber value={Number(project.budget) || 0} /></span>
+            </div>
+            <div className="pj-sum-amt" id="detailProjectSpent">NT$ <AnimatedNumber value={spent} /></div>
+            <div className="pj-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+              <span id="detailProjectProgress" className={pct >= 100 ? 'is-over' : ''} style={{ width: pct + '%' }}></span>
+            </div>
+            <div className="pj-sum-row">
+              <span id="detailProjectPct" className="pj-sum-label">支出 <AnimatedNumber value={Math.round((spent / (project.budget || 1)) * 100)} />%</span>
+              <span id="detailProjectRemain" className={`pj-remain${rem < 0 ? ' is-over' : ''}`}>剩餘 NT$ <AnimatedNumber value={rem} /></span>
+            </div>
+          </div>
+
+          {/* Add expense form */}
+          <div className="pj-add">
+            <div className="pj-add-title">新增明細</div>
+            <div className="pj-add-grid">
+              <input className="form-input pj-add-name" aria-label="項目名稱" placeholder="項目名稱…" value={expName} onChange={e => setExpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddExp()} />
+              <input className="form-input" aria-label="金額" type="number" inputMode="decimal" placeholder="金額" min="0" value={expAmt} onChange={e => setExpAmt(e.target.value)} />
+              <select className="form-select" id="projectExpCat" aria-label="分類" value={expCatId} onChange={e => setExpCatId(e.target.value)}>
+                {projectCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <input className="form-input" type="date" id="projectExpDate" aria-label="日期" value={expDate} onChange={e => setExpDate(e.target.value)} />
+            </div>
+            <button type="button" className="btn btn-primary pj-add-btn" onClick={handleAddExp}>
+              <i className="fa-solid fa-plus"></i> 加入明細
             </button>
           </div>
-        </div>
 
-        {/* Expense list */}
-        <div id="projectDetailExpList" style={{ maxHeight: 300, overflowY: 'auto' }}>
-          {exps.length === 0
-            ? <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>尚無明細支出</div>
-            : exps.map(e => {
-                const cat = projectCategories.find(c => c.id === e.categoryId);
-                return (
-                  <div key={e.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
-                    <div className="item-info">
-                      <div className="item-name" style={{ fontWeight: 500, marginBottom: 4 }}>{e.name}</div>
-                      <div className="item-tags" style={{ display: 'flex', gap: 6, fontSize: '0.78rem' }}>
-                        {cat && <span className="tag" style={{ color: cat.color }}><i className="fa-solid fa-circle" style={{ fontSize: 7, marginRight: 3 }}></i>{cat.name}</span>}
-                        <span className="tag" style={{ color: 'var(--text-muted)' }}><i className="fa-regular fa-calendar" style={{ marginRight: 3 }}></i>{e.date}</span>
+          {/* Expense list */}
+          <div id="projectDetailExpList" className="pj-exp-list">
+            {exps.length === 0
+              ? <div className="pj-exp-empty">尚無明細支出</div>
+              : exps.map(e => {
+                  const cat = projectCategories.find(c => c.id === e.categoryId);
+                  return (
+                    <div key={e.id} className="pj-exp-row">
+                      <div className="pj-exp-main">
+                        <div className="pj-exp-name">{e.name}</div>
+                        <div className="pj-exp-meta">
+                          {cat && <span style={{ color: cat.color }}><i className="fa-solid fa-circle" aria-hidden="true"></i>{cat.name}</span>}
+                          <span>{e.date}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="item-cost" style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ color: 'var(--danger-color)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>NT$ {(Number(e.amount) || 0).toLocaleString()}</span>
-                      <button className="icon-btn delete" onClick={async () => { if (await confirmDialog({ title: '刪除明細', message: '確定要刪除這筆支出嗎？', confirmText: '刪除' })) { if (navigator.vibrate) navigator.vibrate(50); onDeleteExp(e.id); } }} title="刪除">
+                      <span className="pj-exp-amt">NT$ {(Number(e.amount) || 0).toLocaleString()}</span>
+                      <button type="button" className="icon-btn delete pj-icon-btn" aria-label={`刪除 ${e.name}`} title="刪除"
+                        onClick={async () => { if (await confirmDialog({ title: '刪除明細', message: '確定要刪除這筆支出嗎？', confirmText: '刪除' })) { vibrate(); onDeleteExp(e.id); } }}>
                         <i className="fa-solid fa-trash-can"></i>
                       </button>
                     </div>
-                  </div>
-                );
-              })
-          }
+                  );
+                })
+            }
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+const STATUS_FILTERS = [
+  { value: 'all',    label: '全部' },
+  { value: 'active', label: '進行中' },
+  { value: 'ended',  label: '已結束' },
+];
 
 // ── Main ProjectsTab ──────────────────────────────────────────────────────────
 export default function ProjectsTab() {
@@ -162,6 +187,12 @@ export default function ProjectsTab() {
   const filtered = projects
     .filter(p => filter === 'all' || (p.status || 'active') === filter)
     .sort((a, b) => new Date(b.startDate || b.createdAt) - new Date(a.startDate || a.createdAt));
+
+  const counts = {
+    all: projects.length,
+    active: projects.filter(p => (p.status || 'active') === 'active').length,
+    ended: projects.filter(p => (p.status || 'active') === 'ended').length,
+  };
 
   // ── Savings recommendations ──
   const savingsItems = (() => {
@@ -182,6 +213,7 @@ export default function ProjectsTab() {
       })
       .filter(Boolean);
   })();
+  const monthlyTotal = savingsItems.reduce((s, x) => s + x.monthlySave, 0);
 
   const handleSaveProject = (data) => {
     const exists = projects.find(p => p.id === data.id);
@@ -197,7 +229,7 @@ export default function ProjectsTab() {
 
   const handleDeleteProject = async (id) => {
     if (!await confirmDialog({ title: '刪除專案', message: '確定要刪除此專案嗎？\n相關的支出明細也會一併刪除，此動作無法復原。', confirmText: '刪除' })) return;
-    if (navigator.vibrate) navigator.vibrate(50);
+    vibrate();
     setProjects(projects.filter(p => p.id !== id));
     setProjectExpenses(projectExpenses.filter(e => e.projectId !== id));
     showToast('專案已刪除');
@@ -216,107 +248,129 @@ export default function ProjectsTab() {
     showToast('已刪除');
   };
 
+  const openNew = () => { vibrate(); setProjModal({}); };
+  const openDetail = (p) => { vibrate(); setDetailProj(p); };
+
   return (
-    <div className="tab-content">
-      {/* Project Savings Recommendations */}
+    <div className="tab-content pj-page">
+      {/* 專案預備金：每月應存是主角 */}
       {savingsItems.length > 0 && (
-        <div className="chart-section" style={{ marginBottom: 28, background: 'transparent', border: 'none', padding: 0 }}>
-          <div className="chart-header" style={{ marginBottom: 16 }}>
-            <h3><i className="fa-solid fa-piggy-bank"></i> 專案預備金總覽 (每月應存)</h3>
+        <section className="fx-hero pj-hero" aria-label="專案預備金總覽">
+          <div className="fx-hero-top">
+            <div>
+              <div className="fx-hero-label">專案預備金・每月應存</div>
+              <div className="fx-hero-amount">NT$ <AnimatedNumber value={monthlyTotal} effect="scroll" /></div>
+            </div>
+            <div className="fx-hero-side">
+              <span>{savingsItems.length} 個專案待存</span>
+            </div>
           </div>
-          <div className="items-grid">
-            <AnimatePresence mode="popLayout">
-              {savingsItems.map((s, idx) => (
-                <motion.div 
-                  key={s.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2, delay: idx * 0.02 }}
-                  className="stat-card category-card" 
-                  style={{ padding: 20 }}
-                >
-                  <div className="stat-title" style={{ marginBottom: 12, fontSize: '1.1rem', fontWeight: 'bold' }}>{s.name}</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12 }}>{s.startDate} ({s.infoText})</div>
-                  <div style={{ fontSize: '0.9rem', marginBottom: 12 }}>資金缺口：<b style={{ fontFamily: 'var(--font-serif)' }}>NT$ <AnimatedNumber value={s.remain} effect="scroll" /></b></div>
-                  <div style={{ paddingTop: 12, borderTop: '1px solid var(--border-color)' }}>
-                    <span style={{ fontSize: '1.6rem', color: 'var(--primary-color)', fontWeight: 'bold', fontFamily: 'var(--font-serif)' }}>NT$ <AnimatedNumber value={s.monthlySave} effect="scroll" /></span>
-                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginLeft: 4 }}>/月</span>
+          <ul className="pj-save-list">
+            <AnimatePresence initial={false}>
+              {savingsItems.map(s => (
+                <motion.li key={s.id} layout="position"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}>
+                  <div className="pj-save-main">
+                    <span className="pj-save-name">{s.name}</span>
+                    <span className="pj-save-meta">{s.infoText}・<span className="pj-nowrap">缺口 NT$ <AnimatedNumber value={s.remain} effect="scroll" /></span></span>
                   </div>
-                </motion.div>
+                  <span className="pj-save-amt">NT$ <AnimatedNumber value={s.monthlySave} effect="scroll" /><small>／月</small></span>
+                </motion.li>
               ))}
             </AnimatePresence>
+          </ul>
+        </section>
+      )}
+
+      {/* 工具列：狀態篩選（新增改由 FAB 與空狀態 CTA 負責） */}
+      {projects.length > 0 && (
+        <div className="fx-toolbar pj-toolbar">
+          <div className="fx-seg" role="radiogroup" aria-label="專案狀態" id="projectStatusFilter">
+            {STATUS_FILTERS.map(o => (
+              <button key={o.value} type="button" role="radio" aria-checked={filter === o.value}
+                className={`fx-seg-btn${filter === o.value ? ' is-active' : ''}`} onClick={() => setFilter(o.value)}>
+                {o.label}<span className="fx-seg-count">{counts[o.value]}</span>
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 8, padding: '16px 16px 12px', alignItems: 'center' }}>
-        <select className="form-select" id="projectStatusFilter" style={{ width: 'auto' }} value={filter} onChange={e => setFilter(e.target.value)}>
-          <option value="all">全部</option>
-          <option value="active">進行中</option>
-          <option value="ended">已結束</option>
-        </select>
-        <div style={{ flex: 1 }}></div>
-        <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setProjModal({}); }}>
-          <i className="fa-solid fa-plus"></i> 新增企劃專案
-        </button>
-      </div>
-
       {/* Project grid */}
-      <div id="projectList" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, padding: '0 16px 16px' }}>
-        {filtered.length === 0 ? (
-          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-            目前沒有專案。點擊上方「新增企劃專案」開始建立。
-          </div>
-        ) : (
+      {projects.length === 0 ? (
+        <div className="fx-empty pj-empty">
+          <span className="fx-empty-icon" aria-hidden="true"><i className="fa-solid fa-plane-departure"></i></span>
+          <strong>還沒有企劃專案</strong>
+          <p>旅遊、婚禮、換手機……設好預算與日期，就會算出每月該存多少。</p>
+          <button type="button" className="btn btn-primary" onClick={openNew}><i className="fa-solid fa-plus"></i> 新增第一個專案</button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="fx-empty pj-empty">
+          <strong>這個篩選下沒有專案</strong>
+          <button type="button" className="fx-link" onClick={() => setFilter('all')}>顯示全部</button>
+        </div>
+      ) : (
+        <div id="projectList" className="pj-grid">
           <AnimatePresence mode="popLayout">
             {filtered.map((p, idx) => {
               const exps  = projectExpenses.filter(e => e.projectId === p.id);
               const spent = exps.reduce((s, e) => s + (Number(e.amount) || 0), 0);
               const rem   = (Number(p.budget) || 0) - spent;
               const pct   = p.budget > 0 ? Math.min(100, (spent / p.budget) * 100) : 0;
+              const ended = p.status === 'ended';
               return (
-                <motion.div 
+                <motion.div
                   key={p.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.2, delay: idx * 0.02 }}
-                  className="stat-card category-card" style={{ cursor: 'pointer', position: 'relative' }}
-                  onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setDetailProj(p); }}
+                  className={`pj-card${ended ? ' is-ended' : ''}`}
+                  role="button" tabIndex={0} aria-label={`${p.name}，查看明細`}
+                  onClick={() => openDetail(p)}
+                  onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDetail(p); } }}
                 >
-                  {/* Actions (stop propagation) */}
-                  <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                    <button className="icon-btn" title="編輯" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setProjModal(p); }}><i className="fa-solid fa-pen"></i></button>
-                    <button className="icon-btn delete" title="刪除" onClick={() => handleDeleteProject(p.id)}><i className="fa-solid fa-trash-can"></i></button>
+                  <div className="pj-card-head">
+                    <div className="pj-card-title">
+                      <span className="pj-card-name">{p.name}</span>
+                      <span className={`pj-badge${ended ? ' is-ended' : ''}`}>{ended ? '已結束' : '進行中'}</span>
+                    </div>
+                    <div className="pj-card-actions" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+                      <button type="button" className="icon-btn pj-icon-btn" title="編輯" aria-label={`編輯 ${p.name}`} onClick={() => { vibrate(); setProjModal(p); }}><i className="fa-solid fa-pen"></i></button>
+                      <button type="button" className="icon-btn delete pj-icon-btn" title="刪除" aria-label={`刪除 ${p.name}`} onClick={() => handleDeleteProject(p.id)}><i className="fa-solid fa-trash-can"></i></button>
+                    </div>
                   </div>
-                  <div className="stat-title" style={{ marginBottom: 8, fontSize: '1.05rem', fontWeight: 'bold', paddingRight: 60 }}>
-                    {p.name}
-                    <span className={`status-badge${p.status === 'ended' ? ' ended' : ''}`} style={{ marginLeft: 8 }}>{p.status === 'ended' ? '已結束' : '進行中'}</span>
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 10 }}>
+                  <div className="pj-card-date">
+                    <i className="fa-regular fa-calendar" aria-hidden="true"></i>
                     {p.startDate}{p.endDate ? ` ~ ${p.endDate}` : ''}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: '0.88rem' }}>
-                    <span>已花費：<b style={{ fontFamily: 'var(--font-serif)' }}>NT$ <AnimatedNumber value={spent} /></b></span>
-                    <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-serif)' }}>總預算：NT$ <AnimatedNumber value={Number(p.budget) || 0} /></span>
+                  <div className="pj-card-money">
+                    <div>
+                      <div className="pj-card-label">已花費</div>
+                      <div className="pj-card-spent">NT$ <AnimatedNumber value={spent} /></div>
+                    </div>
+                    <div className="pj-card-budget">
+                      <div className="pj-card-label">總預算</div>
+                      <div>NT$ <AnimatedNumber value={Number(p.budget) || 0} /></div>
+                    </div>
                   </div>
-                  <div style={{ height: 6, background: 'var(--bg-secondary)', borderRadius: 3, marginBottom: 4 }}>
-                    <div style={{ height: '100%', borderRadius: 3, width: pct + '%', background: pct >= 100 ? 'var(--danger-color)' : 'var(--primary-color)' }}></div>
+                  <div className="pj-bar" role="progressbar" aria-label="預算使用率" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+                    <span className={pct >= 100 ? 'is-over' : ''} style={{ width: pct + '%' }}></span>
                   </div>
-                  <div style={{ textAlign: 'right', fontSize: '0.78rem', color: rem < 0 ? 'var(--danger-color)' : 'var(--text-muted)', fontFamily: 'var(--font-serif)' }}>
-                    剩餘：NT$ <AnimatedNumber value={rem} />
+                  <div className="pj-card-foot">
+                    <span>{Math.round(pct)}%</span>
+                    <span className={`pj-remain${rem < 0 ? ' is-over' : ''}`}>剩餘 NT$ <AnimatedNumber value={rem} /></span>
                   </div>
                 </motion.div>
               );
             })}
           </AnimatePresence>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* FAB */}
-      <button className="fab" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setProjModal({}); }}>
+      {/* FAB：本頁唯一的「新增」入口（與固定支出頁一致） */}
+      <button className="fab" onClick={openNew} aria-label="新增企劃專案">
         <i className="fa-solid fa-plus"></i>
       </button>
 

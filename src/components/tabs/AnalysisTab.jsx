@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
 import { calculateExpenseForMonth, prefetchFXRates, showToast } from '../../lib/utils';
+import ChartEmpty from '../ui/ChartEmpty';
+import { sumProjectExpenses, projectExpenseYears } from '../../lib/projectSpend';
 
 Chart.register(...registerables);
 
@@ -56,7 +58,7 @@ function buildChartYears(items) {
   return years;
 }
 
-function getUniqueYears(items, lifeExpenses, projects) {
+function getUniqueYears(items, lifeExpenses, projects, projectExpenses) {
   const years = new Set([new Date().getFullYear()]);
   items.forEach(i => {
     if (i.startDate) years.add(new Date(i.startDate).getFullYear());
@@ -65,31 +67,59 @@ function getUniqueYears(items, lifeExpenses, projects) {
   lifeExpenses.forEach(e => {
     if (e.date) years.add(new Date(e.date).getFullYear());
   });
-  if (projects) {
-    projects.forEach(p => (p.expenses || []).forEach(e => { if (e.date) years.add(new Date(e.date).getFullYear()); }));
-  }
-  return Array.from(years).sort();
+  projectExpenseYears(projects, projectExpenses).forEach(y => years.add(Number(y)));
+  return Array.from(years).sort((a, b) => a - b);
 }
 
 // ── Chart hook ───────────────────────────────────────────────────────────────
+// canvas 只在有資料時才掛載；destroy 一律可重複呼叫，切換空/非空不會留殘影
 function useChart(ref) {
   const inst = useRef(null);
   const destroy = useCallback(() => { inst.current?.destroy(); inst.current = null; }, []);
   const create  = useCallback((config) => {
-    if (!ref.current) return;
     destroy();
+    if (!ref.current) return;
     inst.current = new Chart(ref.current, config);
   }, [ref, destroy]);
   useEffect(() => () => destroy(), [destroy]);
   return { create, destroy };
 }
 
+// Y 軸刻度：萬以上縮寫，避免手機上刻度擠掉繪圖區
+const fmtTick = (v) => (Math.abs(v) >= 10000 ? `${+(v / 10000).toFixed(1)}萬` : Number(v).toLocaleString());
+const fmtNT   = (v) => 'NT$ ' + Math.round(v).toLocaleString();
+
+// 小型分段控制（沿用 FixedTab 的 .fx-seg 樣式）
+function Seg({ options, value, onChange, label, className = '' }) {
+  return (
+    <div className={`fx-seg an-seg ${className}`} role="radiogroup" aria-label={label}>
+      {options.map(o => (
+        <button key={o.value} type="button" role="radio" aria-checked={value === o.value}
+          aria-label={o.aria} title={o.aria}
+          className={`fx-seg-btn${value === o.value ? ' is-active' : ''}`} onClick={() => onChange(o.value)}>
+          {o.icon ? <i className={o.icon} aria-hidden="true"></i> : o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const SHAPES = [
+  { value: 'pie', icon: 'fa-solid fa-chart-pie', aria: '圓餅圖' },
+  { value: 'bar', icon: 'fa-solid fa-chart-simple', aria: '長條圖' },
+];
+const PERIODS = [
+  { value: 'month', label: '按月' },
+  { value: 'year',  label: '按年' },
+];
+const RANGES = [3, 6, 12, 24].map(n => ({ value: n, label: `${n} 個月`, aria: `近 ${n} 個月` }));
+
 // ── Main AnalysisTab ──────────────────────────────────────────────────────────
 export default function AnalysisTab() {
   const {
     items, categories, lifeExpenses, lifeCategories,
     setActiveTab, setLifeCurrentMonth, setLifePendingCatId,
-    projects
+    projects, projectExpenses, theme
   } = useAppStore();
 
   const now    = new Date();
@@ -110,11 +140,19 @@ export default function AnalysisTab() {
   const annualCompareChart = useChart(annualCompareRef);
 
   const chartYears = useMemo(() => buildChartYears(items), [items]);
-  const uniqueYears = useMemo(() => getUniqueYears(items, lifeExpenses, projects), [items, lifeExpenses, projects]);
+  const uniqueYears = useMemo(() => getUniqueYears(items, lifeExpenses, projects, projectExpenses), [items, lifeExpenses, projects, projectExpenses]);
 
   const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
   const tc = () => isDark() ? '#F0EDE8' : '#1A1A1A';
-  const gc = () => isDark() ? '#2D2B28' : '#E8E5E0';
+  const gc = () => isDark() ? 'rgba(221,230,237,0.1)' : '#E8E5E0';
+  const teal = () => isDark() ? '#5BA3B5' : '#2A6475'; // 暗色底上原深青色對比不足
+  const yScale = (extra = {}) => ({
+    beginAtZero: true, min: 0, ...extra,
+    ticks: { color: tc(), callback: fmtTick, maxTicksLimit: 6 },
+    grid: { color: gc() },
+    border: { display: false },
+  });
+  const xScale = (extra = {}) => ({ ...extra, ticks: { color: tc() }, grid: { display: false } });
 
   // ── Month navigation ──
   const changeMonth = (delta) => {
@@ -122,10 +160,11 @@ export default function AnalysisTab() {
     const d = new Date(y, m - 1 + delta, 1);
     setYm(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
   };
+  const isThisMonth = ym === initYm;
 
-  // ── Expense Chart ──
-  const [expItemList, setExpItemList] = useState([]);
-  const buildExpChart = useCallback(async () => {
+  // ── Expense Chart：先算資料，再依資料決定畫圖或顯示空狀態 ──
+  const [expData, setExpData] = useState(null);
+  const buildExpData = useCallback(async () => {
     const dataMap = {};
     const details = [];
     if (chartType === 'year') {
@@ -156,38 +195,51 @@ export default function AnalysisTab() {
     const labels = [], data = [], colors = [];
     Object.values(dataMap).forEach(d => { labels.push(d.label); data.push(d.amount); colors.push(d.color); });
     const title = chartType === 'year' ? `${chartYear} 年度支出（${labels.length} 分類）` : `月度支出（${labels.length} 分類）`;
-    if (data.length > 0) {
-      if (chartShape === 'pie') {
-        expChart.create({ type: 'pie', data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 1 }] },
-          options: { responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom', labels: { color: tc() } }, title: { display: true, text: title, color: tc(), font: { size: 15 } } },
-          },
-        });
-      } else {
-        expChart.create({ type: 'bar', data: { labels, datasets: [{ data, backgroundColor: colors.map(c => c + 'CC'), borderColor: colors, borderWidth: 1, borderRadius: 4 }] },
-          options: { responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, title: { display: true, text: title, color: tc(), font: { size: 15 } },
-              tooltip: { callbacks: { label: ctx => 'NT$ ' + Math.round(ctx.raw).toLocaleString() } },
-            },
-            scales: { y: { ticks: { color: tc(), callback: v => 'NT$' + v.toLocaleString() }, grid: { color: gc() } }, x: { ticks: { color: tc() }, grid: { display: false } } },
-          },
-        });
-      }
-    } else {
-      expChart.destroy();
-    }
-    setExpItemList(details.sort((a, b) => b.cost - a.cost));
-  }, [chartType, chartShape, chartYear, ym, items, categories]); // eslint-disable-line react-hooks/exhaustive-deps
+    return { labels, data, colors, title, details: details.sort((a, b) => b.cost - a.cost) };
+  }, [chartType, chartYear, ym, items, categories]);
 
-  useEffect(() => { buildExpChart(); }, [buildExpChart]);
+  useEffect(() => {
+    let alive = true;
+    buildExpData().then(r => { if (alive) setExpData(r); });
+    return () => { alive = false; };
+  }, [buildExpData]);
+
+  const expEmpty = !!expData && expData.data.length === 0;
+  useEffect(() => {
+    if (!expData || expData.data.length === 0) { expChart.destroy(); return; }
+    const { labels, data, colors, title } = expData;
+    if (chartShape === 'pie') {
+      expChart.create({ type: 'pie', data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--card-bg').trim() || '#fff', borderWidth: 2 }] },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: tc(), boxWidth: 12, padding: 14 } }, title: { display: true, text: title, color: tc(), font: { size: 14 } },
+            tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtNT(ctx.raw)}` } } },
+        },
+      });
+    } else {
+      expChart.create({ type: 'bar', data: { labels, datasets: [{ data, backgroundColor: colors.map(c => c + 'CC'), borderColor: colors, borderWidth: 1, borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, title: { display: true, text: title, color: tc(), font: { size: 14 } },
+            tooltip: { callbacks: { label: ctx => fmtNT(ctx.raw) } },
+          },
+          scales: { y: yScale(), x: xScale() },
+        },
+      });
+    }
+  }, [expData, chartShape, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Life Category Chart ──
-  const buildLifeCatChart = useCallback(() => {
+  const lifeCatData = useMemo(() => {
     const labels = [], data = [], colors = [];
     lifeCategories.forEach(cat => {
       const s = lifeExpenses.filter(e => e.categoryId === cat.id && (e.date || '').startsWith(ym) && e.type !== 'income').reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
       if (s > 0) { labels.push(cat.name); data.push(s); colors.push(cat.color); }
     });
+    return { labels, data, colors };
+  }, [ym, lifeExpenses, lifeCategories]);
+  const lifeEmpty = lifeCatData.data.length === 0;
+
+  useEffect(() => {
+    const { labels, data, colors } = lifeCatData;
     if (data.length === 0) { lifeCatChart.destroy(); return; }
     lifeCatChart.create({
       type: 'bar',
@@ -197,9 +249,9 @@ export default function AnalysisTab() {
         plugins: {
           legend: { display: false },
           title: { display: false },
-          tooltip: { callbacks: { label: ctx => 'NT$ ' + ctx.raw.toLocaleString() } },
+          tooltip: { callbacks: { label: ctx => fmtNT(ctx.raw) } },
         },
-        scales: { y: { ticks: { color: tc(), callback: v => 'NT$' + v.toLocaleString() }, grid: { color: gc() } }, x: { ticks: { color: tc() }, grid: { display: false } } },
+        scales: { y: yScale(), x: xScale() },
         onClick: (_, elements) => {
           if (!elements?.length) return;
           const cat = lifeCategories.find(c => c.name === labels[elements[0].index]);
@@ -210,12 +262,11 @@ export default function AnalysisTab() {
         },
       },
     });
-  }, [ym, lifeExpenses, lifeCategories]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { buildLifeCatChart(); }, [buildLifeCatChart]);
+  }, [lifeCatData, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Trend Chart ──
-  const buildTrendChart = useCallback(async () => {
+  const [trendData, setTrendData] = useState(null);
+  const buildTrendData = useCallback(async () => {
     const months = [];
     for (let i = trendRange - 1; i >= 0; i--) {
       const t = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -226,73 +277,90 @@ export default function AnalysisTab() {
     const labels  = months.map(m => m.split('-')[1] + '月');
     const subData = months.map(m => Math.round(getMonthlyFixedTotal(items, m)));
     const lifeData = months.map(m => getLifeExpForMonth(lifeExpenses, m));
+    return { labels, subData, lifeData };
+  }, [trendRange, items, lifeExpenses]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let alive = true;
+    buildTrendData().then(r => { if (alive) setTrendData(r); });
+    return () => { alive = false; };
+  }, [buildTrendData]);
+
+  const trendEmpty = !!trendData && [...trendData.subData, ...trendData.lifeData].every(v => !v);
+  useEffect(() => {
+    if (!trendData || trendEmpty) { trendChart.destroy(); return; }
+    const { labels, subData, lifeData } = trendData;
     trendChart.create({
       type: 'line',
       data: { labels, datasets: [
-        { label: '固定支出', data: subData,  borderColor: '#2A6475', backgroundColor: '#2A647518', borderWidth: 2, pointRadius: 4, tension: 0.3, fill: true },
-        { label: '生活費',   data: lifeData, borderColor: '#C17B2E', backgroundColor: '#C17B2E18', borderWidth: 2, pointRadius: 4, tension: 0.3, fill: true },
+        { label: '固定支出', data: subData,  borderColor: teal(), backgroundColor: teal() + '18', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true },
+        { label: '生活費',   data: lifeData, borderColor: '#C17B2E', backgroundColor: '#C17B2E18', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true },
       ]},
       options: {
         responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { position: 'bottom', labels: { color: tc(), boxWidth: 12, padding: 16 } },
-          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': NT$ ' + ctx.raw.toLocaleString() } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtNT(ctx.raw) } },
         },
-        scales: { y: { ticks: { color: tc(), callback: v => 'NT$' + v.toLocaleString() }, grid: { color: gc() } }, x: { ticks: { color: tc() }, grid: { display: false } } },
+        scales: { y: yScale(), x: xScale() },
       },
     });
-  }, [trendRange, items, lifeExpenses]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trendData, trendEmpty, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { buildTrendChart(); }, [buildTrendChart]);
+  // ── Annual compare（圖表與表格共用同一套年度數字）──
+  const annualRows = useMemo(() => uniqueYears.map(year => {
+    let annualFixed = 0;
+    for (let m = 1; m <= 12; m++) {
+      for (const item of items) {
+        annualFixed += calculateExpenseForMonth(item, year, m);
+      }
+    }
+    const annualLife = lifeExpenses
+      .filter(e => e.type !== 'income' && e.date && e.date.startsWith(String(year)))
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const annualProject = sumProjectExpenses(projects, projectExpenses, year);
+    return { year, fixed: annualFixed, life: annualLife, project: annualProject, total: annualFixed + annualLife + annualProject };
+  }), [uniqueYears, items, lifeExpenses, projects, projectExpenses]);
 
-  const buildAnnualCompareChart = useCallback(async () => {
-    if (!uniqueYears.length) { annualCompareChart.destroy(); return; }
-
+  const [annualData, setAnnualData] = useState(null);
+  const buildAnnualData = useCallback(async () => {
+    if (!uniqueYears.length) return null;
     const pairs = [];
-    uniqueYears.forEach(y => {
-      for (let m = 1; m <= 12; m++) pairs.push([y, m]);
-    });
+    uniqueYears.forEach(y => { for (let m = 1; m <= 12; m++) pairs.push([y, m]); });
     await prefetchFXRates(items, pairs);
 
-    const fixedData = [];
-    const lifeData = [];
-    const projectData = [];
-
+    const fixedData = [], lifeData = [], projectData = [];
     uniqueYears.forEach(year => {
       let annualFixed = 0;
       for (let m = 1; m <= 12; m++) {
-        for (const item of items) {
-          annualFixed += calculateExpenseForMonth(item, year, m);
-        }
+        for (const item of items) annualFixed += calculateExpenseForMonth(item, year, m);
       }
       fixedData.push(Math.round(annualFixed));
-
-      const annualLife = lifeExpenses
+      lifeData.push(lifeExpenses
         .filter(e => e.type !== 'income' && e.date && e.date.startsWith(String(year)))
-        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-      lifeData.push(annualLife);
-
-      let annualProject = 0;
-      if (projects) {
-        projects.forEach(p => {
-          (p.expenses || []).forEach(e => {
-            if (e.date && e.date.startsWith(String(year))) {
-              annualProject += Number(e.amount) || 0;
-            }
-          });
-        });
-      }
-      projectData.push(annualProject);
+        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
+      projectData.push(sumProjectExpenses(projects, projectExpenses, year));
     });
+    return { labels: uniqueYears.map(y => `${y} 年`), fixedData, lifeData, projectData };
+  }, [uniqueYears, items, lifeExpenses, projects, projectExpenses]);
 
-    const labels = uniqueYears.map(y => `${y} 年`);
+  useEffect(() => {
+    let alive = true;
+    buildAnnualData().then(r => { if (alive) setAnnualData(r || { labels: [], fixedData: [], lifeData: [], projectData: [] }); });
+    return () => { alive = false; };
+  }, [buildAnnualData]);
 
+  const annualEmpty = !!annualData && [...annualData.fixedData, ...annualData.lifeData, ...annualData.projectData].every(v => !v);
+  useEffect(() => {
+    if (!annualData || annualEmpty) { annualCompareChart.destroy(); return; }
+    const { labels, fixedData, lifeData, projectData } = annualData;
     annualCompareChart.create({
       type: 'bar',
       data: {
         labels,
         datasets: [
-          { label: '固定支出', data: fixedData,   backgroundColor: '#2A6475CC', borderColor: '#2A6475', borderWidth: 1, borderRadius: 4 },
+          { label: '固定支出', data: fixedData,   backgroundColor: teal() + 'CC', borderColor: teal(), borderWidth: 1, borderRadius: 4 },
           { label: '生活費',   data: lifeData,    backgroundColor: '#C17B2ECC', borderColor: '#C17B2E', borderWidth: 1, borderRadius: 4 },
           { label: '專案支出', data: projectData, backgroundColor: '#8B5CF6CC', borderColor: '#8B5CF6', borderWidth: 1, borderRadius: 4 },
         ]
@@ -301,11 +369,10 @@ export default function AnalysisTab() {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'bottom', labels: { color: tc() } },
-          title: { display: true, text: '年度消費總額對比', color: tc(), font: { size: 15 } },
+          legend: { position: 'bottom', labels: { color: tc(), boxWidth: 12, padding: 14 } },
           tooltip: {
             callbacks: {
-              label: ctx => `${ctx.dataset.label}: NT$ ${Math.round(ctx.raw).toLocaleString()}`,
+              label: ctx => `${ctx.dataset.label}: ${fmtNT(ctx.raw)}`,
               footer: tooltipItems => {
                 let sum = 0;
                 tooltipItems.forEach(x => { sum += x.raw; });
@@ -314,200 +381,151 @@ export default function AnalysisTab() {
             }
           }
         },
-        scales: {
-          x: { stacked: true, ticks: { color: tc() }, grid: { display: false } },
-          y: { stacked: true, ticks: { color: tc(), callback: v => 'NT$' + v.toLocaleString() }, grid: { color: gc() } }
-        }
+        scales: { x: xScale({ stacked: true }), y: yScale({ stacked: true }) },
       }
     });
-  }, [uniqueYears, items, lifeExpenses, projects]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [annualData, annualEmpty, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { buildAnnualCompareChart(); }, [buildAnnualCompareChart]);
+  // 月對月：生活費較上月
+  const mom = (() => {
+    const [y, m] = ym.split('-').map(Number);
+    const prev = new Date(y, m - 2, 1);
+    const prevYm = prev.getFullYear() + '-' + String(prev.getMonth() + 1).padStart(2, '0');
+    const currLife = getLifeExpForMonth(lifeExpenses, ym);
+    const prevLife = getLifeExpForMonth(lifeExpenses, prevYm);
+    if (!prevLife) return null;
+    const delta = currLife - prevLife;
+    return { delta, pct: Math.round(Math.abs(delta / prevLife) * 100), up: delta > 0 };
+  })();
+
+  const loadingBox = (h) => <div className="an-chart-wait" style={{ height: h }} aria-hidden="true" />;
 
   return (
-    <div className="tab-content">
-      {/* Header with title + month nav */}
-      <div className="analysis-header" style={{ flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 0 }}>
-        <div className="analysis-title-group" style={{ alignItems: 'center' }}>
-          <h2><i className="fa-solid fa-chart-pie" style={{ color: 'var(--primary-color)', marginRight: 8 }}></i>收支分析</h2>
-          <div className="analysis-subtitle">月度固定支出、生活費與預算追蹤</div>
+    <div className="tab-content an-page">
+      {/* 月份切換列 */}
+      <div className="an-toolbar">
+        <div className="an-month" role="group" aria-label="選擇月份">
+          <button type="button" className="an-month-step" onClick={() => changeMonth(-1)} aria-label="上個月"><i className="fa-solid fa-chevron-left"></i></button>
+          <input type="month" className="an-month-input" id="analysisGlobalMonth" value={ym} onChange={e => e.target.value && setYm(e.target.value)} aria-label="月份" />
+          <button type="button" className="an-month-step" onClick={() => changeMonth(1)} aria-label="下個月"><i className="fa-solid fa-chevron-right"></i></button>
         </div>
-        <div className="analysis-month-nav" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <button className="icon-btn" onClick={() => changeMonth(-1)}><i className="fa-solid fa-chevron-left"></i></button>
-          <input type="month" className="form-input" id="analysisGlobalMonth" value={ym} onChange={e => setYm(e.target.value)} />
-          <button className="icon-btn" onClick={() => changeMonth(1)}><i className="fa-solid fa-chevron-right"></i></button>
-          <button 
-            className="btn btn-outline btn-sm" 
-            onClick={() => {
-              const thisMonth = new Date().toISOString().slice(0, 7);
-              setYm(thisMonth);
-            }}
-            style={{ 
-              height: '36px', 
-              padding: '0 12px', 
-              fontSize: '0.85rem', 
-              fontWeight: 500,
-              borderColor: 'var(--border-color)',
-              color: 'var(--text-main)',
-              borderRadius: 'var(--radius-sm)',
-              whiteSpace: 'nowrap',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-            title="回到本月"
-          >
-            <i className="fa-solid fa-calendar-day"></i> 本月
-          </button>
-        </div>
-        {/* 月對月趨勢比較（固定高度，不影響下方容器） */}
-        <div style={{ minHeight: '1.6rem', marginTop: 6 }}>
-          {(() => {
-            const [y, m] = ym.split('-').map(Number);
-            const prev = new Date(y, m - 2, 1);
-            const prevYm = prev.getFullYear() + '-' + String(prev.getMonth() + 1).padStart(2, '0');
-            const currLife = getLifeExpForMonth(lifeExpenses, ym);
-            const prevLife = getLifeExpForMonth(lifeExpenses, prevYm);
-            if (!prevLife) return null;
-            const delta = currLife - prevLife;
-            const pct   = Math.round(Math.abs(delta / prevLife) * 100);
-            const up    = delta > 0;
-            return (
-              <div style={{ fontSize: '0.8rem', color: up ? 'var(--danger-color)' : 'var(--success-color)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <i className={`fa-solid fa-arrow-trend-${up ? 'up' : 'down'}`}></i>
-                生活費較上月 {up ? '+' : '-'}{pct}%（{up ? '+' : '-'}NT$ {Math.abs(Math.round(delta)).toLocaleString()}）
-              </div>
-            );
-          })()}
-        </div>
+        <button type="button" className="an-today" onClick={() => setYm(initYm)} disabled={isThisMonth} title="回到本月">
+          <i className="fa-solid fa-calendar-day" aria-hidden="true"></i> 本月
+        </button>
       </div>
+      {mom && (
+        <div className={`an-mom ${mom.up ? 'is-up' : 'is-down'}`}>
+          <i className={`fa-solid fa-arrow-trend-${mom.up ? 'up' : 'down'}`} aria-hidden="true"></i>
+          生活費較上月 {mom.up ? '+' : '-'}{mom.pct}%（{mom.up ? '+' : '-'}NT$ {Math.abs(Math.round(mom.delta)).toLocaleString()}）
+        </div>
+      )}
 
-      {/* Charts row: expense + life category side by side */}
-      <div className="chart-dual">
-        {/* Expense chart */}
-        <div className="chart-section">
-          <div className="chart-header">
-            <div className="chart-header-title">
-              <h3><i className="fa-solid fa-circle-dot"></i> 訂閱分類分析</h3>
-            </div>
-            <div className="chart-controls">
-              <div className="type-toggle">
-                <button id="chartShapePieBtn" className={`type-btn${chartShape === 'pie' ? ' active' : ''}`} onClick={() => setChartShape('pie')} title="圓餅圖"><i className="fa-solid fa-chart-pie"></i></button>
-                <button id="chartShapeBarBtn" className={`type-btn${chartShape === 'bar' ? ' active' : ''}`} onClick={() => setChartShape('bar')} title="長條圖"><i className="fa-solid fa-chart-simple"></i></button>
-              </div>
-              <div style={{ width: 90, flexShrink: 0 }}>
-                {chartType === 'year' && (
-                  <select id="chartYearSelect" className="form-select chart-select" style={{ width: '100%', margin: 0 }} value={chartYear} onChange={e => setChartYear(Number(e.target.value))}>
-                    {chartYears.map(y => <option key={y} value={y}>{y} 年</option>)}
-                  </select>
-                )}
-              </div>
-              <div className="type-toggle">
-                <button id="chartTypeYearBtn" className={`type-btn${chartType === 'year'  ? ' active' : ''}`} onClick={() => setChartType('year')}>按年</button>
-                <button id="chartTypeMonthBtn" className={`type-btn${chartType === 'month' ? ' active' : ''}`} onClick={() => setChartType('month')}>按月</button>
-              </div>
+      <div className="an-dual">
+        {/* 訂閱分類 */}
+        <section className="an-card">
+          <div className="an-card-head">
+            <h3><i className="fa-solid fa-circle-dot" aria-hidden="true"></i>訂閱分類分析</h3>
+            <div className="an-controls">
+              <Seg options={PERIODS} value={chartType} onChange={setChartType} label="統計期間" />
+              {chartType === 'year' && (
+                <select id="chartYearSelect" className="an-select" aria-label="年度" value={chartYear} onChange={e => setChartYear(Number(e.target.value))}>
+                  {chartYears.map(y => <option key={y} value={y}>{y} 年</option>)}
+                </select>
+              )}
+              <Seg options={SHAPES} value={chartShape} onChange={setChartShape} label="圖表類型" className="an-seg-icon" />
             </div>
           </div>
-          <div className="chart-container"><canvas ref={expChartRef}></canvas></div>
-          <div id="expenseChartList" style={{ marginTop: 20, maxHeight: 250, overflowY: 'auto' }}>
-            {expItemList.length === 0
-              ? <div style={{ textAlign: 'center', padding: 10, color: 'var(--text-muted)' }}>本期無分類支出明細</div>
-              : expItemList.map((di, i) => (
-                  <div key={i} className="expense-list-row">
-                    <div className="expense-list-info">
-                      <div className="expense-list-color" style={{ backgroundColor: di.color }}></div>
-                      <span style={{ fontWeight: 500 }}>{di.name}</span>
-                    </div>
-                    <div className="expense-list-amount">NT$ {Math.round(di.cost).toLocaleString()}</div>
-                  </div>
-                ))
-            }
-          </div>
-        </div>
+          {!expData ? loadingBox(300) : expEmpty ? (
+            <ChartEmpty icon="fa-solid fa-chart-pie" title={chartType === 'year' ? `${chartYear} 年沒有固定支出` : '這個月沒有固定支出'}
+              hint="在「固定」分頁新增訂閱或帳單後，這裡會依分類拆解。" />
+          ) : (
+            <>
+              <div className="an-chart" style={{ height: 300 }}><canvas ref={expChartRef}></canvas></div>
+              <ul id="expenseChartList" className="an-list">
+                {expData.details.map((di, i) => (
+                  <li key={i}>
+                    <i style={{ background: di.color }} aria-hidden="true"></i>
+                    <span className="an-list-name">{di.name}</span>
+                    <span className="an-list-amt">{fmtNT(di.cost)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
 
-        {/* Life category chart */}
-        <div className="chart-section">
-          <div className="chart-header">
-            <h3><i className="fa-solid fa-bars"></i> 生活費分類分析</h3>
+        {/* 生活費分類 */}
+        <section className="an-card">
+          <div className="an-card-head">
+            <h3><i className="fa-solid fa-bars" aria-hidden="true"></i>生活費分類分析</h3>
           </div>
-          <div className="chart-container" style={{ cursor: 'pointer' }}><canvas ref={lifeCatRef}></canvas></div>
-          <div style={{ marginTop: 10, fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <i className="fa-solid fa-hand-pointer" style={{ color: 'var(--primary-color)', opacity: 0.7 }}></i>
-            點擊長條，可跳轉至生活費分頁並篩選該分類明細
-          </div>
-        </div>
+          {lifeEmpty ? (
+            <ChartEmpty icon="fa-solid fa-wallet" title="這個月還沒有生活費支出" hint="在「生活」分頁記帳後，這裡會顯示各分類花費。" />
+          ) : (
+            <>
+              <div className="an-chart is-clickable" style={{ height: 300 }}><canvas ref={lifeCatRef}></canvas></div>
+              <p className="an-note">
+                <i className="fa-solid fa-hand-pointer" aria-hidden="true"></i>
+                點擊長條，可跳轉至生活費分頁並篩選該分類明細
+              </p>
+            </>
+          )}
+        </section>
       </div>
 
-      {/* Trend chart */}
-      <div className="chart-section">
-        <div className="chart-header">
-          <h3><i className="fa-solid fa-chart-line"></i> 收支趨勢</h3>
-          <select className="form-select chart-select" id="trendRangeSelect" value={trendRange}
-            onChange={e => setTrendRange(Number(e.target.value))}>
-            <option value={3}>近 3 個月</option>
-            <option value={6}>近 6 個月</option>
-            <option value={12}>近 12 個月</option>
-            <option value={24}>近 24 個月</option>
-          </select>
+      {/* 收支趨勢 */}
+      <section className="an-card">
+        <div className="an-card-head">
+          <h3><i className="fa-solid fa-chart-line" aria-hidden="true"></i>收支趨勢</h3>
+          <div className="an-controls">
+            <Seg options={RANGES} value={trendRange} onChange={setTrendRange} label="期間" className="an-seg-range" />
+          </div>
         </div>
-        <div className="chart-container" style={{ height: 260 }}><canvas ref={trendRef}></canvas></div>
-      </div>
+        {!trendData ? loadingBox(260) : trendEmpty ? (
+          <ChartEmpty icon="fa-solid fa-chart-line" title={`近 ${trendRange} 個月沒有支出紀錄`} hint="有固定支出或生活費後，就能看到每月變化。" />
+        ) : (
+          <div className="an-chart" style={{ height: 260 }}><canvas ref={trendRef}></canvas></div>
+        )}
+      </section>
 
-      {/* Annual Compare chart */}
-      <div className="chart-section" style={{ marginTop: 24 }}>
-        <div className="chart-header">
-          <h3><i className="fa-solid fa-chart-bar"></i> 年度消費對比</h3>
+      {/* 年度消費對比 */}
+      <section className="an-card">
+        <div className="an-card-head">
+          <h3><i className="fa-solid fa-chart-bar" aria-hidden="true"></i>年度消費對比</h3>
         </div>
-        <div className="chart-container" style={{ height: 280 }}><canvas ref={annualCompareRef}></canvas></div>
-        <div style={{ marginTop: 20, overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', color: 'var(--text-main)' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
-                <th style={{ padding: '10px 8px', fontWeight: 600 }}>年份</th>
-                <th style={{ padding: '10px 8px', fontWeight: 600 }}>固定支出</th>
-                <th style={{ padding: '10px 8px', fontWeight: 600 }}>生活費</th>
-                <th style={{ padding: '10px 8px', fontWeight: 600 }}>專案支出</th>
-                <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>總消費</th>
-              </tr>
-            </thead>
-            <tbody>
-              {uniqueYears.map((year) => {
-                let annualFixed = 0;
-                for (let m = 1; m <= 12; m++) {
-                  for (const item of items) {
-                    annualFixed += calculateExpenseForMonth(item, year, m);
-                  }
-                }
-                const annualLife = lifeExpenses
-                  .filter(e => e.type !== 'income' && e.date && e.date.startsWith(String(year)))
-                  .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-                
-                let annualProject = 0;
-                if (projects) {
-                  projects.forEach(p => {
-                    (p.expenses || []).forEach(e => {
-                      if (e.date && e.date.startsWith(String(year))) {
-                        annualProject += Number(e.amount) || 0;
-                      }
-                    });
-                  });
-                }
-                const total = annualFixed + annualLife + annualProject;
-                return (
-                  <tr key={year} style={{ borderBottom: '1px solid var(--border-color)', opacity: 0.9 }}>
-                    <td style={{ padding: '10px 8px', fontWeight: 600 }}>{year} 年</td>
-                    <td style={{ padding: '10px 8px' }}>NT$ {Math.round(annualFixed).toLocaleString()}</td>
-                    <td style={{ padding: '10px 8px' }}>NT$ {Math.round(annualLife).toLocaleString()}</td>
-                    <td style={{ padding: '10px 8px' }}>NT$ {Math.round(annualProject).toLocaleString()}</td>
-                    <td style={{ padding: '10px 8px', fontWeight: 700, textAlign: 'right', color: 'var(--primary-color)' }}>NT$ {Math.round(total).toLocaleString()}</td>
+        {!annualData ? loadingBox(280) : annualEmpty ? (
+          <ChartEmpty icon="fa-solid fa-chart-column" title="還沒有年度消費資料" hint="固定支出、生活費與專案支出會依年份加總在這裡。" />
+        ) : (
+          <>
+            <div className="an-chart" style={{ height: 280 }}><canvas ref={annualCompareRef}></canvas></div>
+            <div className="an-table-wrap">
+              <table className="an-table">
+                <caption>金額單位：NT$</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">年份</th>
+                    <th scope="col" className="num">固定</th>
+                    <th scope="col" className="num">生活</th>
+                    <th scope="col" className="num">專案</th>
+                    <th scope="col" className="num">合計</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </thead>
+                <tbody>
+                  {annualRows.map(r => (
+                    <tr key={r.year}>
+                      <th scope="row">{r.year}</th>
+                      <td className="num">{Math.round(r.fixed).toLocaleString()}</td>
+                      <td className="num">{Math.round(r.life).toLocaleString()}</td>
+                      <td className="num">{Math.round(r.project).toLocaleString()}</td>
+                      <td className="num is-total">{Math.round(r.total).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }

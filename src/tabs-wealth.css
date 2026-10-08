@@ -1,0 +1,470 @@
+/* wealth 分頁樣式（試算）：首屏 hero → 持股 / 現金兩張卡 → 資產試算 */
+
+/* ── 首屏 hero（同 FixedTab .fx-hero 質感，無左側色條） ── */
+.wl-hero {
+  margin-bottom: 16px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+}
+.wl-hero-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.wl-hero-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+  font-family: var(--font-serif);
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.wl-hero-cur {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
+.wl-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  margin-top: 18px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.wl-bar > span { min-width: 4px; transition: width 0.5s cubic-bezier(0.2, 0, 0, 1); }
+.wl-bar > .is-invest { background: var(--primary-color); }
+.wl-bar > .is-cash   { flex: 1; background: var(--success-color); }
+
+.wl-hero-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.wl-hero-cell {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cell-color) 9%, transparent);
+}
+.wl-hero-cell.is-invest { --cell-color: var(--primary-color); }
+.wl-hero-cell.is-cash   { --cell-color: var(--success-color); }
+.wl-hero-cell-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.wl-hero-cell-label i {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--cell-color);
+}
+.wl-hero-cell-value {
+  margin-top: 6px;
+  font-family: var(--font-serif);
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wl-hero-cell-pct {
+  margin-top: 2px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--cell-color);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 卡片共用：標頭 + 右上「新增」 ── */
+.chart-section.wl-panel {
+  padding: 18px 20px 20px;
+  border-radius: var(--radius-lg);
+}
+.wl-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.wl-panel-head-main { min-width: 0; }
+.wl-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-main);
+}
+.wl-panel-title i { color: var(--primary-color); font-size: 0.9rem; }
+.wl-panel-sub {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wl-panel-sub strong {
+  margin-left: 2px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  color: var(--text-main);
+}
+.wl-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 13%, transparent);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.wl-panel-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+.wl-add-btn,
+.wl-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 0.15s, color 0.15s, transform 0.12s;
+}
+.wl-add-btn {
+  padding: 0 16px;
+  border: none;
+  background: var(--primary-color);
+  color: var(--card-bg);
+}
+.wl-add-btn:hover { background: var(--primary-hover); }
+.wl-add-btn i { font-size: 0.8rem; }
+.wl-icon-btn {
+  width: 44px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-muted);
+}
+.wl-icon-btn:hover { color: var(--primary-color); background: var(--hover-bg); }
+.wl-add-btn:active,
+.wl-icon-btn:active { transform: scale(0.96); }
+.wl-add-btn:focus-visible,
+.wl-icon-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+/* 版面：格線欄位允許縮到 0，避免長列把卡片撐出畫面 */
+.wealth-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wealth-grid > * { min-width: 0; }
+@media (max-width: 900px) {
+  .wealth-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* 持股 / 帳戶列 */
+.wl-panel .wealth-row {
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+.wl-panel .wealth-row-left { min-width: 0; }
+.wl-panel .wealth-row-mid { min-width: 0; }
+.wl-row-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wl-panel .wealth-row-value { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 600px) {
+  /* 手機改兩行：名稱｜市值；股數·價格·時間｜操作 */
+  .wl-panel .wealth-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "left value"
+      "mid  actions";
+    align-items: center;
+    gap: 6px 10px;
+    padding: 12px 12px 6px 14px;
+  }
+  .wl-panel .wealth-row-left {
+    grid-area: left;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .wl-panel .wealth-row-left .wealth-row-symbol {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wl-panel .wealth-row-name { max-width: none; min-width: 0; font-size: 0.78rem; }
+  .wl-panel .wealth-row-value { grid-area: value; margin-left: 0; font-size: 0.98rem; }
+  .wl-panel .wealth-row-mid {
+    grid-area: mid;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 10px;
+  }
+  .wl-panel .wealth-row-detail,
+  .wl-panel .wealth-row-price { font-size: 0.78rem; }
+  .wl-panel .wealth-row-actions { grid-area: actions; margin-right: -6px; }
+  .wl-panel .wealth-row-actions .icon-btn { width: 44px; height: 44px; min-width: 44px; }
+}
+
+/* 清單空狀態 */
+.wealth-empty.wl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: normal;
+  text-align: center;
+}
+.wealth-empty.wl-empty i { font-size: 1.3rem; color: var(--primary-color); opacity: 0.7; }
+
+/* ── 資產試算 ── */
+.wl-calc-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.wl-group {
+  min-width: 0;
+  margin: 0;
+  padding: 14px 14px 4px;
+  border: none;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--group-color) 7%, transparent);
+}
+.wl-group.is-invest { --group-color: var(--primary-color); }
+.wl-group.is-cash   { --group-color: var(--success-color); }
+.wl-group-head {
+  float: left; /* 讓 legend 退出 fieldset 邊框位置，當一般區塊排版 */
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 0;
+}
+.wl-group-head + * { clear: both; }
+.wl-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.wl-group-title i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--group-color);
+}
+.wl-group-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 10px;
+}
+.wl-calc .form-group { margin-bottom: 12px; }
+.wl-calc .form-label {
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wl-calc .form-input,
+.wl-calc .form-select {
+  background-color: var(--card-bg);
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-cagr-search { position: relative; }
+.wl-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  width: max(100%, 220px);
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow-md);
+}
+.wl-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.wl-dropdown-item span { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-dropdown-item:hover,
+.wl-dropdown-item:focus-visible { background: var(--hover-bg); outline: none; }
+
+.wl-cagr-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: -4px 0 12px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.wl-cagr-label { font-weight: 600; color: var(--primary-color); }
+
+/* 目標 + 結果：短欄（目標、距離目標）併排；主結果整列大字 */
+.wl-goal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-top: 14px;
+}
+.wl-goal-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: end;
+  gap: 12px;
+}
+.wl-goal .form-group { margin-bottom: 0; }
+.wl-goal-input .form-input {
+  font-family: var(--font-serif);
+  font-weight: 700;
+}
+.wl-goal-gap .form-label { display: block; }
+.wl-goal-gap-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.wl-goal-result {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-color) 12%, var(--card-bg));
+}
+.wl-goal-result-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent-color);
+}
+.wl-goal-result-main {
+  margin-top: 4px;
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.wl-goal-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+.wl-goal-summary strong { font-family: var(--font-serif); }
+.wl-goal-summary-sub { font-size: 0.78rem; color: var(--text-muted); }
+
+.wl-chart {
+  position: relative;
+  height: 260px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .wl-calc-groups { grid-template-columns: 1fr; }
+  .wl-goal { grid-template-columns: minmax(0, 1fr); }
+  .wl-goal-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .wl-hero { padding: 18px 16px; }
+  .wl-hero-amount { font-size: 1.85rem; }
+  .wl-hero-cell { padding: 10px 12px; }
+  .wl-hero-cell-value { font-size: 1rem; }
+  .chart-section.wl-panel { padding: 16px 14px; }
+  .wl-goal-result { padding: 14px 16px; }
+  .wl-goal-result-main { font-size: 1.7rem; }
+}

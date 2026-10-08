@@ -196,7 +196,7 @@ function HoldingModal({ initial, onClose, onSave }) {
       <div className="modal" style={{ maxWidth: 380 }}>
         <div className="modal-header">
           <h3>{isEdit ? '編輯持股' : '新增持股'}</h3>
-          <button className="icon-btn" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="關閉"><i className="fa-solid fa-xmark" aria-hidden="true"></i></button>
         </div>
         <div className="form-group" id="stockSearchWrap" style={{ position: 'relative' }}>
           <label className="form-label">搜尋股票代號 / 名稱</label>
@@ -270,7 +270,7 @@ function BankModal({ initial, onClose, onSave }) {
       <div className="modal" style={{ maxWidth: 360 }}>
         <div className="modal-header">
           <h3>{initial ? '編輯帳戶' : '新增帳戶'}</h3>
-          <button className="icon-btn" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="關閉"><i className="fa-solid fa-xmark" aria-hidden="true"></i></button>
         </div>
         <div className="form-group" style={{ position: 'relative' }}>
           <label className="form-label">銀行 / 機構</label>
@@ -312,14 +312,20 @@ function BankModal({ initial, onClose, onSave }) {
 
 // ── Wealth Chart ──────────────────────────────────────────────────────────────
 function WealthChart({ labels, cashData, investData, totalData, targetFV }) {
+  const theme     = useAppStore(s => s.theme);
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
 
   useEffect(() => {
-    if (!chartRef.current || !labels?.length) { chartInst.current?.destroy(); return; }
-    const isDark   = document.documentElement.getAttribute('data-theme') === 'dark';
-    const tc       = isDark ? '#F0EDE8' : '#1A1A1A';
-    const gc       = isDark ? '#2D2B28' : '#E8E5E0';
+    if (!chartRef.current || !labels?.length) { chartInst.current?.destroy(); chartInst.current = null; return; }
+    const cs       = getComputedStyle(document.documentElement);
+    const tok      = (k, fb) => cs.getPropertyValue(k).trim() || fb;
+    const tc       = tok('--text-muted', '#4D687D');
+    const gc       = tok('--border-color', '#B5C8D4');
+    const cInv     = tok('--primary-color', '#526D82');
+    const cCash    = tok('--success-color', '#3D7A5A');
+    const cTotal   = tok('--text-main', '#27374D');
+    const cTarget  = tok('--accent-color', '#C17B2E');
     const targetArr = new Array(labels.length).fill(targetFV);
     chartInst.current?.destroy();
     chartInst.current = new Chart(chartRef.current, {
@@ -327,10 +333,10 @@ function WealthChart({ labels, cashData, investData, totalData, targetFV }) {
       data: {
         labels,
         datasets: [
-          { label: '現金/活存累積', data: cashData,   borderColor: '#10b981', backgroundColor: '#10b98133', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
-          { label: '投資部位累積', data: investData, borderColor: '#3b82f6', backgroundColor: '#3b82f633', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
-          { label: '總資產',       data: totalData,  borderColor: '#8b5cf6', backgroundColor: '#8b5cf633', borderWidth: 3, pointRadius: 3, tension: 0.3, fill: false },
-          { label: '目標金額',     data: targetArr,  borderColor: '#f59e0b', borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false },
+          { label: '現金/活存累積', data: cashData,   borderColor: cCash, backgroundColor: cCash + '26', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
+          { label: '投資部位累積', data: investData, borderColor: cInv, backgroundColor: cInv + '26', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
+          { label: '總資產',       data: totalData,  borderColor: cTotal, borderWidth: 2.5, pointRadius: 3, tension: 0.3, fill: false },
+          { label: '目標金額',     data: targetArr,  borderColor: cTarget, borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false },
         ],
       },
       options: {
@@ -341,14 +347,14 @@ function WealthChart({ labels, cashData, investData, totalData, targetFV }) {
           tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': NT$ ' + Math.round(ctx.raw).toLocaleString() } },
         },
         scales: {
-          y: { ticks: { color: tc, callback: v => 'NT$ ' + (v / 10000).toLocaleString() + '萬' }, grid: { color: gc } },
+          y: { beginAtZero: true, ticks: { color: tc, callback: v => 'NT$ ' + (v / 10000).toLocaleString() + '萬' }, grid: { color: gc } },
           x: { ticks: { color: tc }, grid: { display: false } },
         },
       },
     });
-  }, [labels, cashData, investData, totalData, targetFV]);
+  }, [labels, cashData, investData, totalData, targetFV, theme]);
 
-  useEffect(() => () => chartInst.current?.destroy(), []);
+  useEffect(() => () => { chartInst.current?.destroy(); chartInst.current = null; }, []);
 
   return <canvas ref={chartRef}></canvas>;
 }
@@ -389,6 +395,7 @@ export default function WealthTab() {
   const totalInvest = wealthHoldings.reduce((s, h) => s + h.shares * (h.lastPrice || 0), 0);
   const totalCash   = wealthBankAccounts.reduce((s, a) => s + (a.balance || 0), 0);
   const totalAssets = totalInvest + totalCash;
+  const investPct   = totalAssets > 0 ? Math.round((totalInvest / totalAssets) * 100) : 0;
 
   // ── Save params ──
   const saveParams = useCallback((patch = {}) => {
@@ -431,6 +438,8 @@ export default function WealthTab() {
     const timeStr = (y > 0 ? y + ' 年 ' : '') + (m > 0 ? m + ' 個月' : y === 0 ? '不到 1 個月' : '');
     return { result: `約需 ${timeStr}`, labels, cashData, investData, totalData, curInv, curCash };
   }, [invRate, invMonthly, cashRate, cashMonthly, target, totalInvest, totalCash, totalAssets]);
+  const goalTarget = parseFloat(target) || 0;
+  const goalGap    = goalTarget > 0 ? Math.max(0, goalTarget - totalAssets) : null;
 
   // ── Holdings actions ──
   const handleSaveHolding = (holding) => {
@@ -576,77 +585,63 @@ export default function WealthTab() {
         <div className="loading-text">正在更新持股價格…</div>
       </div>
 
-      {/* Total assets card */}
-      <div className="wealth-total-card chart-section" style={{ display: 'block', padding: '28px 32px', background: 'linear-gradient(135deg, var(--card-bg) 60%, rgba(193,123,46,0.06) 100%)', marginBottom: 12 }}>
-        {/* Label + amount */}
-        <div className="wealth-total-label" style={{ marginBottom: 6 }}>
-          <i className="fa-solid fa-vault"></i> 當前資產總額
-        </div>
-        <div className="wealth-total-amount" id="wealthTotalAssetsDisplay" style={{ marginBottom: 20 }}>
-          NT$ <AnimatedNumber value={totalAssets} format={v => formatAmount(v, 'asset')} effect="scroll" />
+      {/* Total assets hero */}
+      <section className="wl-hero" aria-label="資產總覽">
+        <div className="wl-hero-label">當前資產總額</div>
+        <div className="wl-hero-amount" id="wealthTotalAssetsDisplay">
+          <span className="wl-hero-cur">NT$</span><AnimatedNumber value={totalAssets} format={v => formatAmount(v, 'asset')} effect="scroll" />
         </div>
 
-        {/* Ratio bar */}
         {totalAssets > 0 && (
-          <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', display: 'flex', marginBottom: 16, background: 'var(--border-color)' }}>
-            <div style={{ width: `${Math.round((totalInvest / totalAssets) * 100)}%`, background: '#3b82f6', transition: 'width 0.5s ease' }} />
-            <div style={{ flex: 1, background: '#10b981' }} />
+          <div className="wl-bar" role="img" aria-label={`投資 ${investPct}%、現金 ${100 - investPct}%`}>
+            <span className="is-invest" style={{ width: `${investPct}%` }} />
+            <span className="is-cash" />
           </div>
         )}
 
-        {/* Sub stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div style={{ padding: '12px 16px', background: 'rgba(59,130,246,0.07)', borderRadius: 10 }}>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <i className="fa-solid fa-chart-line" style={{ color: '#3b82f6' }}></i> 投資市值
-            </div>
-            <div id="wealthTotalInvestSub" style={{ fontFamily: 'var(--font-serif)', fontSize: '1.1rem', fontWeight: 700, color: '#3b82f6' }}>
+        <div className="wl-hero-split">
+          <div className="wl-hero-cell is-invest">
+            <div className="wl-hero-cell-label"><i aria-hidden="true"></i>投資市值</div>
+            <div className="wl-hero-cell-value" id="wealthTotalInvestSub">
               NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" />
             </div>
-            {totalAssets > 0 && (
-              <div id="wealthTotalInvestPct" style={{ fontSize: '0.72rem', color: '#3b82f6', opacity: 0.75, marginTop: 3 }}>
-                占比 {Math.round((totalInvest / totalAssets) * 100)}%
-              </div>
-            )}
+            {totalAssets > 0 && <div className="wl-hero-cell-pct" id="wealthTotalInvestPct">占比 {investPct}%</div>}
           </div>
-          <div style={{ padding: '12px 16px', background: 'rgba(16,185,129,0.07)', borderRadius: 10 }}>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <i className="fa-solid fa-building-columns" style={{ color: '#10b981' }}></i> 現金存款
-            </div>
-            <div id="wealthTotalCashSub" style={{ fontFamily: 'var(--font-serif)', fontSize: '1.1rem', fontWeight: 700, color: '#10b981' }}>
+          <div className="wl-hero-cell is-cash">
+            <div className="wl-hero-cell-label"><i aria-hidden="true"></i>現金存款</div>
+            <div className="wl-hero-cell-value" id="wealthTotalCashSub">
               NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" />
             </div>
-            {totalAssets > 0 && (
-              <div id="wealthTotalCashPct" style={{ fontSize: '0.72rem', color: '#10b981', opacity: 0.75, marginTop: 3 }}>
-                占比 {Math.round((totalCash / totalAssets) * 100)}%
-              </div>
-            )}
+            {totalAssets > 0 && <div className="wl-hero-cell-pct" id="wealthTotalCashPct">占比 {100 - investPct}%</div>}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Wealth grid (2×2) */}
       <div className="wealth-grid">
 
       {/* Holdings panel */}
-      <div className="wealth-panel chart-section">
-        <div className="wealth-panel-header">
-          <div>
-            <h3 className="wealth-panel-title"><i className="fa-solid fa-chart-line"></i> 投資持股</h3>
-            <div className="wealth-panel-total">總市值：<strong id="holdingsTotalValue">NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>{wealthHoldings.length > 0 && <span className="wealth-count-badge">{wealthHoldings.length} 檔</span>}</div>
+      <div className="wealth-panel chart-section wl-panel">
+        <div className="wl-panel-head">
+          <div className="wl-panel-head-main">
+            <h3 className="wl-panel-title"><i className="fa-solid fa-chart-line" aria-hidden="true"></i> 投資持股</h3>
+            <div className="wl-panel-sub">
+              總市值 <strong id="holdingsTotalValue">NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>
+              {wealthHoldings.length > 0 && <span className="wl-count">{wealthHoldings.length} 檔</span>}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => handleRefreshAll()} title="全部更新股價">
-              <i className="fa-solid fa-rotate"></i> 更新價格
+          <div className="wl-panel-actions">
+            <button type="button" className="wl-icon-btn" onClick={() => handleRefreshAll()} title="全部更新股價" aria-label="全部更新股價">
+              <i className="fa-solid fa-rotate"></i>
             </button>
-            <button className="btn btn-primary btn-sm" onClick={() => setHoldingModal('new')}>
+            <button type="button" className="wl-add-btn" onClick={() => setHoldingModal('new')}>
               <i className="fa-solid fa-plus"></i> 新增
             </button>
           </div>
         </div>
         <div id="holdingsList" className="wealth-scroll-list">
           {wealthHoldings.length === 0
-            ? <div className="wealth-empty" style={{ padding: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>尚未新增持股，點擊「＋ 新增」開始</div>
+            ? <div className="wealth-empty wl-empty"><i className="fa-solid fa-seedling" aria-hidden="true"></i><span>還沒有持股，按右上「新增」加入第一檔</span></div>
             : wealthHoldings.map(h => {
                 const value   = h.shares * (h.lastPrice || 0);
                 const timeStr = h.lastUpdated ? new Date(h.lastUpdated).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
@@ -661,17 +656,17 @@ export default function WealthTab() {
                       <span className="wealth-row-price" style={{ color: 'var(--primary-color)' }}>
                         {h.lastPrice ? <>NT$ <AnimatedNumber value={h.lastPrice} format={v => formatAmount(v, 'asset')} effect="scroll" /></> : '—'}
                       </span>
-                      {timeStr && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 1 }}>{timeStr}</span>}
+                      {timeStr && <span className="wl-row-time">{timeStr}</span>}
                     </div>
                     <div className="wealth-row-value" style={{ color: 'var(--text-main)', fontWeight: 800 }}>{h.lastPrice ? <>NT$ <AnimatedNumber value={Math.round(value)} format={v => formatAmount(v, 'asset')} effect="scroll" /></> : '—'}</div>
                     <div className="wealth-row-actions">
-                      <button className="icon-btn" title="更新股價" onClick={() => handleRefreshPrice(h.id)}>
+                      <button type="button" className="icon-btn" title="更新股價" aria-label="更新股價" onClick={() => handleRefreshPrice(h.id)}>
                         <i className={`fa-solid fa-rotate${fetchingId === h.id ? ' fa-spin' : ''}`}></i>
                       </button>
-                      <button className="icon-btn" title="編輯" onClick={() => setHoldingModal(h)}>
+                      <button type="button" className="icon-btn" title="編輯" aria-label="編輯" onClick={() => setHoldingModal(h)}>
                         <i className="fa-solid fa-pen"></i>
                       </button>
-                      <button className="icon-btn delete" title="刪除" onClick={() => handleDeleteHolding(h.id)}>
+                      <button type="button" className="icon-btn delete" title="刪除" aria-label="刪除" onClick={() => handleDeleteHolding(h.id)}>
                         <i className="fa-solid fa-trash"></i>
                       </button>
                     </div>
@@ -683,29 +678,32 @@ export default function WealthTab() {
       </div>
 
       {/* Bank accounts panel */}
-      <div className="wealth-panel chart-section">
-        <div className="wealth-panel-header">
-          <div style={{ width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 className="wealth-panel-title" style={{ margin: 0 }}><i className="fa-solid fa-building-columns"></i> 銀行現金</h3>
-              <button className="btn btn-primary btn-sm" style={{ flex: 'none' }} onClick={() => { setEditBankId(null); setShowBankModal(true); }}>
-                <i className="fa-solid fa-plus"></i> 新增
-              </button>
+      <div className="wealth-panel chart-section wl-panel">
+        <div className="wl-panel-head">
+          <div className="wl-panel-head-main">
+            <h3 className="wl-panel-title"><i className="fa-solid fa-building-columns" aria-hidden="true"></i> 銀行現金</h3>
+            <div className="wl-panel-sub">
+              現金合計 <strong id="bankTotalValue">NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>
+              {wealthBankAccounts.length > 0 && <span className="wl-count">{wealthBankAccounts.length} 個帳戶</span>}
             </div>
-            <div className="wealth-panel-total" style={{ marginTop: 4 }}>現金合計：<strong id="bankTotalValue">NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>{wealthBankAccounts.length > 0 && <span className="wealth-count-badge">{wealthBankAccounts.length} 個帳戶</span>}</div>
+          </div>
+          <div className="wl-panel-actions">
+            <button type="button" className="wl-add-btn" onClick={() => { setEditBankId(null); setShowBankModal(true); }}>
+              <i className="fa-solid fa-plus"></i> 新增
+            </button>
           </div>
         </div>
         <div id="bankAccountsList" className="wealth-scroll-list">
           {wealthBankAccounts.length === 0
-            ? <div className="wealth-empty" style={{ padding: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>尚未新增帳戶，點擊「＋ 新增」開始</div>
+            ? <div className="wealth-empty wl-empty"><i className="fa-solid fa-piggy-bank" aria-hidden="true"></i><span>還沒有帳戶，按右上「新增」加入第一個</span></div>
             : wealthBankAccounts.map(a => (
                 <div key={a.id} className="wealth-row">
                   <div className="wealth-row-left"><span className="wealth-row-symbol" style={{ fontSize: '0.9rem' }}>{a.bankName}</span></div>
                   <div className="wealth-row-mid"><span className="wealth-row-detail">利率 {a.rate || 0}%</span></div>
                   <div className="wealth-row-value">NT$ <AnimatedNumber value={Math.round(a.balance || 0)} format={v => formatAmount(v, 'asset')} effect="scroll" /></div>
                   <div className="wealth-row-actions">
-                    <button className="icon-btn" title="編輯" onClick={() => { setEditBankId(a.id); setShowBankModal(true); }}><i className="fa-solid fa-pen"></i></button>
-                    <button className="icon-btn delete" title="刪除" onClick={() => handleDeleteBank(a.id)}><i className="fa-solid fa-trash"></i></button>
+                    <button type="button" className="icon-btn" title="編輯" aria-label="編輯" onClick={() => { setEditBankId(a.id); setShowBankModal(true); }}><i className="fa-solid fa-pen"></i></button>
+                    <button type="button" className="icon-btn delete" title="刪除" aria-label="刪除" onClick={() => handleDeleteBank(a.id)}><i className="fa-solid fa-trash"></i></button>
                   </div>
                 </div>
               ))
@@ -714,43 +712,47 @@ export default function WealthTab() {
       </div>
 
       {/* Calculator — full width */}
-      <div className="wealth-panel chart-section" style={{ gridColumn: '1/-1' }}>
-        <div className="wealth-panel-header"><span style={{ fontWeight: 600 }}>資產試算</span></div>
+      <div className="wealth-panel chart-section wl-panel wl-calc" style={{ gridColumn: '1/-1' }}>
+        <div className="wl-panel-head">
+          <div className="wl-panel-head-main">
+            <h3 className="wl-panel-title"><i className="fa-solid fa-calculator" aria-hidden="true"></i> 資產試算</h3>
+            <div className="wl-panel-sub">依每月投入與報酬率，推算多久能達到目標</div>
+          </div>
+        </div>
 
-        <div className="wealth-form-grid">
+        <div className="wl-calc-groups">
           {/* Investment */}
-          <div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#3b82f6', marginBottom: 8 }}>投資部位</div>
-            <div className="form-group" style={{ marginBottom: 8 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>現有資產</label>
-              <div className="form-input" id="wealthInvestCurrentDisplay" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center' }}>NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} /></div>
-            </div>
-            <div className="form-group" style={{ marginBottom: 8 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>每月投入（NT$）</label>
-              <input className="form-input" id="wealthInvestMonthlyInput" type="number" inputMode="decimal" min="0" value={invMonthly} onChange={e => { setInvMonthly(e.target.value); saveParams({ invMonthly: e.target.value }); }} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 8 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>預期年化報酬率（%）</label>
-              <input className="form-input" id="wealthInvestRateInput" type="number" inputMode="decimal" min="0" step="0.1" value={invRate} onChange={e => { setInvRate(e.target.value); saveParams({ invRate: e.target.value }); }} />
-            </div>
-            {/* CAGR auto-fetch */}
-            <div className="form-group" style={{ marginBottom: 4, position: 'relative' }} id="cagrSearchWrap">
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>CAGR 自動抓取</label>
-              <div style={{ display: 'flex', width: '100%', gap: 8, alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: '3 1 0%', minWidth: 0 }}>
-                  <input className="form-input" id="wealthInvestTickerSearch" value={cagrSearch} onChange={e => handleCagrSearch(e.target.value)} placeholder="代號搜尋…" style={{ width: '100%', fontSize: '16px' }} />
-                  {cagrDropdown.length > 0 && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 6, zIndex: 100 }}>
-                      {cagrDropdown.map((s, i) => (
-                        <div key={i} style={{ padding: '6px 10px', cursor: 'pointer' }} onClick={() => selectCagrStock(s)}>
-                          <strong>{s.symbol}</strong> {s.name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div style={{ flex: '1 1 0%', minWidth: 0 }}>
-                  <select className="form-select" id="wealthInvestRangeSelect" style={{ width: '100%', paddingLeft: 8, paddingRight: 24 }} value={cagrYears}
+          <fieldset className="wl-group is-invest">
+            <legend className="wl-group-head">
+              <span className="wl-group-title"><i aria-hidden="true"></i>投資部位</span>
+              <span className="wl-group-current" id="wealthInvestCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} /></span>
+            </legend>
+            <div className="wl-grid-2">
+              <div className="form-group">
+                <label className="form-label" htmlFor="wealthInvestMonthlyInput">每月投入（NT$）</label>
+                <input className="form-input" id="wealthInvestMonthlyInput" type="number" inputMode="decimal" min="0" value={invMonthly} onChange={e => { setInvMonthly(e.target.value); saveParams({ invMonthly: e.target.value }); }} />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="wealthInvestRateInput">年化報酬率（%）</label>
+                <input className="form-input" id="wealthInvestRateInput" type="number" inputMode="decimal" min="0" step="0.1" value={invRate} onChange={e => { setInvRate(e.target.value); saveParams({ invRate: e.target.value }); }} />
+              </div>
+              {/* CAGR auto-fetch */}
+              <div className="form-group wl-cagr-search" id="cagrSearchWrap">
+                <label className="form-label" htmlFor="wealthInvestTickerSearch">CAGR 代號</label>
+                <input className="form-input" id="wealthInvestTickerSearch" value={cagrSearch} onChange={e => handleCagrSearch(e.target.value)} placeholder="代號搜尋…" autoComplete="off" />
+                {cagrDropdown.length > 0 && (
+                  <div className="wl-dropdown">
+                    {cagrDropdown.map((s, i) => (
+                      <button type="button" key={i} className="wl-dropdown-item" onClick={() => selectCagrStock(s)}>
+                        <strong>{s.symbol}</strong> <span>{s.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="wealthInvestRangeSelect">回看期間</label>
+                <select className="form-select" id="wealthInvestRangeSelect" value={cagrYears}
                   onChange={e => {
                     setCagrYears(e.target.value);
                     saveParams({ cagrYears: e.target.value });
@@ -760,57 +762,67 @@ export default function WealthTab() {
                   <option value="5">5 年</option>
                   <option value="10">10 年</option>
                 </select>
-                </div>
               </div>
-              {cagrLabel && (
-                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--primary-color)', marginTop: 4 }}>
-                  {cagrLabel}
-                </div>
-              )}
-              {cagrStatus && <div id="wealthCAGRStatus" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 4 }}>{cagrStatus}</div>}
             </div>
-          </div>
+            {(cagrLabel || cagrStatus) && (
+              <div className="wl-cagr-note">
+                {cagrLabel && <span className="wl-cagr-label">{cagrLabel}</span>}
+                {cagrStatus && <span id="wealthCAGRStatus">{cagrStatus}</span>}
+              </div>
+            )}
+          </fieldset>
 
           {/* Cash */}
-          <div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#10b981', marginBottom: 8 }}>現金 / 存款</div>
-            <div className="form-group" style={{ marginBottom: 8 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>現有資產</label>
-              <div className="form-input" id="wealthCashCurrentDisplay" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center' }}>NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} /></div>
-            </div>
-            <div className="form-group" style={{ marginBottom: 8 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>每月存入（NT$）</label>
-              <input className="form-input" id="wealthCashMonthlyInput" type="number" inputMode="decimal" min="0" value={cashMonthly} onChange={e => { setCashMonthly(e.target.value); saveParams({ cashMonthly: e.target.value }); }} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 8 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>年利率（%）</label>
-              <input className="form-input" id="wealthCashRateInput" type="number" inputMode="decimal" min="0" step="0.01" value={cashRate} onChange={e => { setCashRate(e.target.value); saveParams({ cashRate: e.target.value }); }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Target */}
-        <div className="form-group" style={{ marginTop: 8 }}>
-          <label className="form-label">目標資產（NT$）</label>
-          <input className="form-input" id="wealthTargetInput" type="number" inputMode="decimal" min="0" value={target} onChange={e => { setTarget(e.target.value); saveParams({ target: e.target.value }); }} />
-        </div>
-
-        {/* Result */}
-        <div className="wealth-result-card" style={{ marginTop: 12, padding: 16, background: 'var(--bg-secondary)', borderRadius: 10 }}>
-          <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--primary-color)' }} id="wealthResultText">{simulation.result}</div>
-          {simulation.curInv != null && (
-            <div id="wealthSummaryText" style={{ marginTop: 8, fontSize: '0.85rem' }}>
-              <div>總結累積：<strong>NT$ <AnimatedNumber value={Math.round((simulation.curInv || 0) + (simulation.curCash || 0))} format={v => formatAmount(v, 'asset')} /></strong></div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                現金：NT$ <AnimatedNumber value={Math.round(simulation.curCash || 0)} format={v => formatAmount(v, 'asset')} /> ｜ 投資：NT$ <AnimatedNumber value={Math.round(simulation.curInv || 0)} format={v => formatAmount(v, 'asset')} />
+          <fieldset className="wl-group is-cash">
+            <legend className="wl-group-head">
+              <span className="wl-group-title"><i aria-hidden="true"></i>現金 / 存款</span>
+              <span className="wl-group-current" id="wealthCashCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} /></span>
+            </legend>
+            <div className="wl-grid-2">
+              <div className="form-group">
+                <label className="form-label" htmlFor="wealthCashMonthlyInput">每月存入（NT$）</label>
+                <input className="form-input" id="wealthCashMonthlyInput" type="number" inputMode="decimal" min="0" value={cashMonthly} onChange={e => { setCashMonthly(e.target.value); saveParams({ cashMonthly: e.target.value }); }} />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="wealthCashRateInput">年利率（%）</label>
+                <input className="form-input" id="wealthCashRateInput" type="number" inputMode="decimal" min="0" step="0.01" value={cashRate} onChange={e => { setCashRate(e.target.value); saveParams({ cashRate: e.target.value }); }} />
               </div>
             </div>
-          )}
+          </fieldset>
+        </div>
+
+        {/* Target + Result */}
+        {/* 目標（短欄 2 格併排）＋ 主結果（整列大字） */}
+        <div className="wl-goal">
+          <div className="wl-goal-fields">
+            <div className="form-group wl-goal-input">
+              <label className="form-label" htmlFor="wealthTargetInput">目標資產（NT$）</label>
+              <input className="form-input" id="wealthTargetInput" type="number" inputMode="decimal" min="0" value={target} onChange={e => { setTarget(e.target.value); saveParams({ target: e.target.value }); }} />
+            </div>
+            <div className="form-group wl-goal-gap">
+              <span className="form-label" id="wealthGapLabel">距離目標</span>
+              <div className="wl-goal-gap-value" aria-labelledby="wealthGapLabel">
+                {goalGap == null ? '—' : goalGap === 0 ? '已達標' : <>NT$ <AnimatedNumber value={Math.round(goalGap)} format={v => formatAmount(v, 'asset')} /></>}
+              </div>
+            </div>
+          </div>
+          <div className="wl-goal-result" aria-live="polite">
+            <div className="wl-goal-result-label">預估達標</div>
+            <div className="wl-goal-result-main">{simulation.result}</div>
+            {simulation.curInv != null ? (
+              <div className="wl-goal-summary" id="wealthSummaryText">
+                <span>總結累積 <strong>NT$ <AnimatedNumber value={Math.round((simulation.curInv || 0) + (simulation.curCash || 0))} format={v => formatAmount(v, 'asset')} /></strong></span>
+                <span className="wl-goal-summary-sub">現金 NT$ <AnimatedNumber value={Math.round(simulation.curCash || 0)} format={v => formatAmount(v, 'asset')} /> ｜ 投資 NT$ <AnimatedNumber value={Math.round(simulation.curInv || 0)} format={v => formatAmount(v, 'asset')} /></span>
+              </div>
+            ) : simulation.summary ? (
+              <div className="wl-goal-summary"><span className="wl-goal-summary-sub">{simulation.summary}</span></div>
+            ) : null}
+          </div>
         </div>
 
         {/* Chart */}
         {simulation.labels?.length > 0 && (
-          <div style={{ height: 260, position: 'relative', marginTop: 16 }} id="wealthChart">
+          <div className="wl-chart" id="wealthChart">
             <WealthChart
               labels={simulation.labels}
               cashData={simulation.cashData}

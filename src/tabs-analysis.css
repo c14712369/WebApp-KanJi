@@ -1,0 +1,284 @@
+/* analysis 分頁樣式（AnalysisTab）：月份列 → 圖表卡片；沿用 FixedTab 的卡片/分段控制語彙 */
+
+.an-page {
+  padding-bottom: 24px;
+}
+
+/* ── 月份切換列：靠左一組，本月靠右 ── */
+.an-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.an-month {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 2px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+.an-month-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.an-month-step:hover { background: var(--hover-bg); color: var(--text-main); }
+.an-month-step:active { transform: scale(0.94); }
+.an-month-step:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+.an-month-input {
+  width: 9.5rem;
+  min-width: 0;
+  height: 40px;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light;
+  cursor: pointer;
+}
+[data-theme="dark"] .an-month-input { color-scheme: dark; }
+.an-month-input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; border-radius: 8px; }
+.an-today {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  margin-left: auto;
+  padding: 0 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+}
+.an-today i { color: var(--primary-color); font-size: 0.8rem; }
+.an-today:hover:not(:disabled) { background: var(--hover-bg); }
+.an-today:active:not(:disabled) { transform: scale(0.97); }
+.an-today:disabled { opacity: 0.45; cursor: default; }
+.an-today:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+.an-mom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.an-mom.is-up { color: var(--danger-color); background: color-mix(in srgb, var(--danger-color) 11%, transparent); }
+.an-mom.is-down { color: var(--success-color); background: color-mix(in srgb, var(--success-color) 12%, transparent); }
+
+/* ── 卡片 ── */
+.an-dual {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.an-card {
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+}
+.an-dual > .an-card { margin-bottom: 0; }
+
+.an-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  min-height: 44px;
+  margin-bottom: 16px;
+}
+.an-card-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+.an-card-head h3 i { color: var(--primary-color); font-size: 0.9rem; }
+
+.an-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.an-seg .fx-seg-btn { min-height: 38px; padding: 0 12px; font-size: 0.82rem; }
+.an-seg-icon .fx-seg-btn { min-width: 40px; padding: 0 10px; }
+.an-seg-range .fx-seg-btn { padding: 0 10px; }
+
+.an-select {
+  height: 44px;
+  padding: 0 30px 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background-color: var(--card-bg);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+.an-select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+.an-chart {
+  position: relative;
+  width: 100%;
+}
+.an-chart.is-clickable { cursor: pointer; }
+.an-chart-wait { width: 100%; }
+
+.an-card .chart-empty {
+  min-height: 220px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+}
+
+.an-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.an-note i { color: var(--primary-color); opacity: 0.75; }
+
+/* 分類明細清單 */
+.an-list {
+  max-height: 250px;
+  margin: 16px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border-top: 1px solid var(--border-color);
+}
+.an-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.88rem;
+}
+.an-list li:last-child { border-bottom: none; }
+.an-list li > i { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; }
+.an-list-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-main);
+  font-weight: 500;
+}
+.an-list-amt {
+  color: var(--text-main);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 年度對比表：不換行、數字靠右；表格自己水平捲動，頁面不捲 */
+.an-table-wrap {
+  margin-top: 18px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.an-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+.an-table caption {
+  caption-side: top;
+  padding-bottom: 6px;
+  text-align: right;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.an-table th,
+.an-table td {
+  padding: 11px 8px;
+  white-space: nowrap;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+.an-table th:first-child,
+.an-table td:first-child { padding-left: 0; }
+.an-table th:last-child,
+.an-table td:last-child { padding-right: 0; }
+.an-table thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.an-table tbody th { font-weight: 600; }
+.an-table tbody tr:last-child > * { border-bottom: none; }
+.an-table .num { text-align: right; }
+.an-table .is-total { font-weight: 700; color: var(--primary-color); }
+
+@media (max-width: 900px) {
+  .an-dual { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .an-card { padding: 16px; }
+  .an-card-head { margin-bottom: 12px; }
+  .an-card-head h3 { font-size: 0.98rem; }
+  .an-controls { width: 100%; }
+  .an-controls > .an-seg:first-child { flex: 1; }
+  .an-seg-range { flex: 1; }
+  .an-seg-range .fx-seg-btn { padding: 0 4px; font-size: 0.78rem; }
+  .an-card .chart-empty { min-height: 180px; }
+  .an-table { font-size: 0.8rem; }
+  .an-table th, .an-table td { padding: 10px 6px; }
+}
+
+@media (max-width: 360px) {
+  .an-month-input { width: 8.25rem; font-size: 0.88rem; }
+  .an-today { padding: 0 10px; }
+}

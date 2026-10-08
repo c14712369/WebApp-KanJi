@@ -1,0 +1,325 @@
+/* projects 分頁樣式（ProjectsTab）：預備金總覽 → 狀態分段 → 專案卡片；沿用 FixedTab 的 fx-* 語彙 */
+
+.pj-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding-bottom: 88px; /* 讓最後一張卡不被 FAB 蓋住 */
+}
+
+/* ── 預備金總覽 ── */
+.pj-hero { margin-bottom: 4px; }
+.pj-save-list {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-color);
+}
+.pj-save-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.pj-save-list li:last-child { border-bottom: none; padding-bottom: 0; }
+.pj-save-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pj-save-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.pj-save-meta {
+  line-height: 1.45;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pj-save-amt {
+  flex-shrink: 0;
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pj-save-amt small {
+  margin-left: 2px;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* ── 工具列 ── */
+.pj-toolbar .fx-seg { flex: 1; }
+@media (min-width: 769px) {
+  .pj-toolbar .fx-seg { flex: 0 1 360px; }
+}
+
+/* ── 空狀態 ── */
+.pj-empty { margin-top: 4px; }
+
+/* ── 專案卡片 ── */
+.pj-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+}
+.pj-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.2s;
+}
+@media (hover: hover) {
+  .pj-card:hover {
+    border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-color));
+    box-shadow: var(--shadow-sm);
+  }
+}
+.pj-card:active { background: color-mix(in srgb, var(--text-main) 4%, var(--card-bg)); }
+.pj-card:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+.pj-card-head {
+  display: flex;
+  align-items: flex-start;
+  margin-top: -4px;
+  gap: 8px;
+}
+.pj-card-title {
+  display: flex;
+  flex: 1;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  min-height: 44px;
+}
+.pj-card-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.pj-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success-color) 14%, transparent);
+  color: var(--success-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pj-badge.is-ended {
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  color: var(--text-muted);
+}
+.pj-card-actions {
+  display: flex;
+  flex-shrink: 0;
+  margin: 0 -10px 0 0;
+}
+.pj-icon-btn.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+
+.pj-card-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pj-card-date i { font-size: 0.72rem; }
+
+.pj-card-money {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+.pj-card-label {
+  margin-bottom: 2px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.pj-card-spent {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+.pj-card-budget {
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pj-bar {
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+  overflow: hidden;
+}
+.pj-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-color);
+  transition: width 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+.pj-bar > span.is-over { background: var(--danger-color); }
+
+.pj-card-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pj-remain { font-weight: 500; color: var(--text-main); }
+.pj-remain.is-over { color: var(--danger-color); }
+
+.pj-card.is-ended .pj-card-spent,
+.pj-card.is-ended .pj-card-name { opacity: 0.6; }
+.pj-card.is-ended .pj-bar > span { background: var(--text-muted); }
+
+/* ── 新增／編輯、明細 Modal ── */
+.pj-detail-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.pj-detail-title span {
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pj-sum { margin-bottom: 16px; }
+.pj-sum-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+.pj-sum-label { color: var(--text-muted); }
+.pj-sum-amt {
+  margin: 2px 0 0;
+  font-family: var(--font-serif);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+.pj-sum .pj-bar { margin: 10px 0 6px; }
+
+.pj-add {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+}
+.pj-add-title {
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.pj-add-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.pj-add-grid .form-input,
+.pj-add-grid .form-select { min-width: 0; min-height: 44px; margin: 0; }
+.pj-add-btn.btn { width: 100%; min-height: 44px; margin-top: 8px; justify-content: center; }
+
+.pj-exp-list { padding-bottom: 8px; }
+.pj-exp-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.pj-exp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--border-color);
+}
+.pj-exp-row:last-child { border-bottom: none; }
+.pj-exp-main { flex: 1; min-width: 0; }
+.pj-exp-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-main);
+}
+.pj-exp-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pj-exp-meta i { margin-right: 4px; font-size: 0.45rem; vertical-align: middle; }
+.pj-exp-amt {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--danger-color);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 380px) {
+  .pj-card-spent { font-size: 1.2rem; }
+}
+.pj-nowrap { white-space: nowrap; }

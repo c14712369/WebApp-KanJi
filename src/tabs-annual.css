@@ -1,0 +1,153 @@
+/* annual 分頁樣式（報表）：年份切換 → 一列 3 格總計 → 圖表卡 */
+
+.ar-page {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* ── 年份切換 ── */
+.ar-yearbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: fit-content;
+  margin: 0 auto 14px;
+  padding: 3px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text-muted) 13%, transparent);
+}
+.ar-year-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 0.15s, color 0.15s, transform 0.12s;
+}
+.ar-year-btn:hover:not(:disabled) { background: var(--card-bg); }
+.ar-year-btn:active:not(:disabled) { transform: scale(0.94); }
+.ar-year-btn:disabled { color: var(--text-muted); opacity: 0.4; cursor: default; }
+.ar-year-btn:focus-visible,
+.ar-year-select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+.ar-year-select {
+  min-width: 112px;
+  height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 9px;
+  background: var(--card-bg);
+  color: var(--text-main);
+  font: inherit;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  text-align-last: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgba(39, 55, 77, 0.14);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+[data-theme="dark"] .ar-year-select {
+  background: color-mix(in srgb, var(--text-main) 16%, var(--card-bg));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* ── 年度總計：一列 3 格（手機也 3 格） ── */
+.ar-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.ar-stat {
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  container-type: inline-size;
+}
+.ar-stat-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.ar-stat-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 4px;
+  margin-top: 6px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+.ar-cur {
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.ar-num {
+  min-width: 0;
+  white-space: nowrap;
+  letter-spacing: -0.02em;
+  /* 依格子寬度縮放：手機約 0.85rem、桌面最大 1.75rem */
+  font-size: clamp(0.8rem, 16cqi, 1.75rem);
+}
+.ar-stat-value.is-pos { color: var(--success-color); }
+.ar-stat-value.is-neg { color: var(--danger-color); }
+
+/* ── 圖表卡 ── */
+.chart-section.ar-card {
+  padding: 18px 20px 20px;
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+.ar-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.ar-card-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.ar-card-head h3 i {
+  color: var(--primary-color);
+  font-size: 0.9rem;
+}
+.chart-container.ar-chart-line { height: 340px; }
+.chart-container.ar-chart-pie  { height: 300px; }
+.ar-card .chart-empty { min-height: 200px; }
+
+@media (max-width: 600px) {
+  .ar-summary { gap: 6px; }
+  .ar-stat { padding: 12px 10px; border-radius: 14px; }
+  .ar-stat-label { font-size: 0.74rem; }
+  .ar-cur { flex-basis: 100%; font-size: 0.72rem; }
+  .ar-stat-value { margin-top: 4px; }
+  .chart-section.ar-card { padding: 16px 14px 14px; }
+  .chart-container.ar-chart-line { height: 300px; }
+  .chart-container.ar-chart-pie  { height: 280px; }
+}

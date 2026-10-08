@@ -1,0 +1,26 @@
+/* 四個分頁共用：圖表無資料時的空狀態（取代空座標軸） */
+.chart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 140px;
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+}
+.chart-empty i {
+    font-size: 1.5rem;
+    opacity: 0.55;
+}
+.chart-empty-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+.chart-empty-hint {
+    font-size: 0.8rem;
+    line-height: 1.5;
+    max-width: 26ch;
+}

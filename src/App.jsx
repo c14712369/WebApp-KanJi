@@ -13,6 +13,11 @@ import '../css/main.css';
 // React-specific overrides (patch Vanilla JS CSS assumptions)
 import './overrides.css';
 import './fixed.css';
+import './tabs-shared.css';
+import './tabs-wealth.css';
+import './tabs-annual.css';
+import './tabs-analysis.css';
+import './tabs-projects.css';
 
 // 分頁懶載入：首屏只載入當前分頁，chart.js / 股票清單等重物按需切出獨立 chunk
 const LifeTab     = lazy(() => import('./components/tabs/LifeTab'));
