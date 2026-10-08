@@ -6,9 +6,11 @@
     left: 0;
     width: 100%;
     height: calc(64px + env(safe-area-inset-bottom)); /* 內容 64px + iPhone Home 條安全區（border-box 下 padding 會吃掉高度） */
-    background: var(--card-bg);
-    border-top: 1px solid var(--border-color);
-    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.07);
+    /* 毛玻璃：半透明 + 模糊，捲動時內容隱約透出（取代原本往上擴散的霧狀陰影） */
+    background: color-mix(in srgb, var(--card-bg) 78%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-top: 0.5px solid var(--border-color);
     z-index: 900;
     padding-bottom: env(safe-area-inset-bottom);
     /* No overflow needed — all items fit in one row */
