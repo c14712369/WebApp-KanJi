@@ -665,7 +665,8 @@ export default function LifeTab() {
           {expenseSegments.length > 0 && (
             <div className="expense-progress-legend" aria-label="支出分類占比">
               {expenseSegments.map(segment => {
-                const share = totalSpent > 0 ? Math.round((segment.amount / totalSpent) * 100) : 0;
+                // 以實際收入為分母，各分類加總 = 進度條的「支出 %」
+                const share = tInc > 0 ? Math.round((segment.amount / tInc) * 100) : 0;
                 return (
                   <span className="expense-progress-legend-item" key={segment.id} title={`NT$ ${Math.round(segment.amount).toLocaleString()}`}>
                     <i style={{ backgroundColor: segment.color }} />
@@ -679,7 +680,7 @@ export default function LifeTab() {
         <div className="hero-details">
           <div className="hero-detail-item">
             <div className="detail-label">
-              <i className="fa-solid fa-hand-holding-dollar"></i> 本月實際收入
+              <i className="fa-solid fa-hand-holding-dollar"></i> 實際收入
               <button className="icon-btn salary-settings-btn" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setShowSalary(true); }} title="設定預設薪資">
                 <i className="fa-solid fa-gear"></i>
               </button>
@@ -687,12 +688,12 @@ export default function LifeTab() {
             <div className="detail-value stat-positive" id="lifeMonthBudget">NT$ <AnimatedNumber value={Math.round(tInc)} format={v => formatAmount(v, 'income')} effect="scroll" /></div>
           </div>
           <div className="hero-detail-item">
-            <div className="detail-label"><i className="fa-solid fa-leaf"></i> 本月生活支出</div>
+            <div className="detail-label"><i className="fa-solid fa-leaf"></i> 生活支出</div>
             <div className="detail-value stat-negative" id="lifeMonthSpent">NT$ <AnimatedNumber value={Math.round(tExp)} effect="scroll" /></div>
           </div>
           {fixedMonthly > 0 && (
             <div className="hero-detail-item">
-              <div className="detail-label"><i className="fa-solid fa-money-bill-wave"></i> 本月固定支出</div>
+              <div className="detail-label"><i className="fa-solid fa-money-bill-wave"></i> 固定支出</div>
               <div className="detail-value stat-fixed" id="lifeMonthFixed">NT$ <AnimatedNumber value={fixedMonthly} effect="scroll" /></div>
             </div>
           )}
