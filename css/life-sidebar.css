@@ -175,7 +175,7 @@
 
     body .app-shell .mobile-header .subtitle {
         grid-area: subtitle;
-        font-size: 0.68rem;
+        font-size: 0.72rem;
         line-height: 1.4;
         letter-spacing: 0.03em;
         white-space: nowrap;

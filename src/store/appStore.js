@@ -60,7 +60,7 @@ const initState = {
 
   // Settings
   estimatedIncome: localStorage.getItem(INCOME_KEY) || '0',
-  fixedSortMode:   localStorage.getItem(FIXED_SORT_KEY) || 'category',
+  fixedSortMode:   localStorage.getItem(FIXED_SORT_KEY) || 'next',
   theme:           localStorage.getItem(THEME_KEY) || 'light',
   isPrivacyMode:   localStorage.getItem('privacy_mode') === 'true',
 

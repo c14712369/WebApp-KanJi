@@ -13,7 +13,7 @@
     --bg-color:    #DDE6ED;
     --card-bg:     #F2F7FA;
     --text-main:   #27374D;
-    --text-muted:  #526D82;
+    --text-muted:  #4D687D;   /* 在 --bg-color 上達 4.5:1（原 #526D82 僅 4.3:1） */
     --danger-color:  #B24040;
     --success-color: #3D7A5A;
     --border-color:  #B5C8D4;

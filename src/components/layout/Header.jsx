@@ -1,22 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { TABS } from '../../lib/constants';
-import { supabase } from '../../lib/supabaseClient';
 import AuthModal from './AuthModal';
-import IdentityModal, { applyStoredIdentity } from './IdentityModal';
+import { applyStoredIdentity } from './IdentityModal';
+import SettingsModal from './SettingsModal';
 
 export default function Header() {
-  const { activeTab, setActiveTab, isPrivacyMode, togglePrivacy, theme, setTheme, currentUser, isSyncing } = useAppStore();
+  const { activeTab, setActiveTab, isPrivacyMode, togglePrivacy, currentUser, isSyncing } = useAppStore();
   const [showAuth, setShowAuth]         = useState(false);
-  const [showIdentity, setShowIdentity] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => { applyStoredIdentity(); }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
-
-  const handleAuthClick = () => currentUser ? handleLogout() : setShowAuth(true);
+  const openSettings = () => { if (navigator.vibrate) navigator.vibrate(20); setShowSettings(true); };
 
   return (
     <>
@@ -51,19 +47,17 @@ export default function Header() {
             <button className="sidebar-icon-btn" onClick={togglePrivacy} title={isPrivacyMode ? '顯示金額' : '隱藏金額'}>
               <i className={`fa-solid ${isPrivacyMode ? 'fa-eye-slash' : 'fa-eye'}`}></i>
             </button>
-            <button className="sidebar-icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="切換主題">
-              <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i>
-            </button>
-            <button className="sidebar-icon-btn" onClick={() => setShowIdentity(true)} title="系統設置">
-              <i className="fa-solid fa-palette"></i>
+            <button className="sidebar-icon-btn" onClick={openSettings} title="設定">
+              <i className="fa-solid fa-gear"></i>
             </button>
             {isSyncing && <i className="fa-solid fa-rotate fa-spin sidebar-sync" title="同步中"></i>}
           </div>
-          <button className="sidebar-auth-btn" onClick={handleAuthClick} title={currentUser ? '登出' : '登入 / 註冊'}>
-            {currentUser
-              ? <><i className="fa-solid fa-right-from-bracket"></i><span>登出</span></>
-              : <><i className="fa-solid fa-user"></i><span>登入 / 註冊</span></>}
-          </button>
+          {/* 登出收進「設定」；未登入時才在側欄露出登入入口 */}
+          {!currentUser && (
+            <button className="sidebar-auth-btn" onClick={() => setShowAuth(true)} title="登入 / 註冊">
+              <i className="fa-solid fa-user"></i><span>登入 / 註冊</span>
+            </button>
+          )}
         </div>
       </aside>
 
@@ -89,24 +83,21 @@ export default function Header() {
               <button className="icon-btn" onClick={togglePrivacy} title={isPrivacyMode ? '顯示金額' : '隱藏金額'}>
                 <i className={`fa-solid ${isPrivacyMode ? 'fa-eye-slash' : 'fa-eye'}`} id="privacyIcon"></i>
               </button>
-              <button className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="切換主題">
-                <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`} id="themeIcon"></i>
-              </button>
-              <button className="icon-btn" onClick={() => setShowIdentity(true)} title="系統設置" style={{ fontSize: '1.2rem' }}>
-                <i className="fa-solid fa-palette"></i>
+              <button className="icon-btn" onClick={openSettings} title="設定" aria-label="設定">
+                <i className="fa-solid fa-gear"></i>
               </button>
             </div>
           </div>
-          <button className="btn btn-outline btn-sm" id="authLoginBtn" onClick={handleAuthClick}>
-            {currentUser
-              ? <><i className="fa-solid fa-right-from-bracket"></i> 登出</>
-              : <><i className="fa-solid fa-user"></i> 登入 / 註冊</>}
-          </button>
+          {!currentUser && (
+            <button className="btn btn-outline btn-sm" id="authLoginBtn" onClick={() => setShowAuth(true)}>
+              <i className="fa-solid fa-user"></i> 登入 / 註冊
+            </button>
+          )}
         </div>
       </header>
 
       {showAuth     && <AuthModal     onClose={() => setShowAuth(false)} />}
-      {showIdentity && <IdentityModal onClose={() => setShowIdentity(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogin={() => setShowAuth(true)} />}
     </>
   );
 }

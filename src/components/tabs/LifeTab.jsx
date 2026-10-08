@@ -3,7 +3,6 @@ import { useAppStore } from '../../store/appStore';
 import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly, confirmDialog } from '../../lib/utils';
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
-import CategoryManageModal from '../modals/CategoryManageModal';
 import IconRenderer from '../../lib/IconRenderer';
 import { groupEntriesByDay, paginateGroups } from '../../lib/lifeGrouping';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -392,7 +391,6 @@ export default function LifeTab() {
   const [newType,       setNewType]       = useState('expense');
   const [showSalary,    setShowSalary]    = useState(false);
   const [salaryVersion, setSalaryVersion] = useState(0); // 儲存薪資設定後重跑自動入帳
-  const [showCatManage, setShowCatManage] = useState(false);
   const [filterType,    setFilterType]    = useState('all'); // 'all' | 'expense' | 'income'
   const prefersReducedMotion = useReducedMotion();
   const ym = lifeCurrentMonth;
@@ -567,7 +565,7 @@ export default function LifeTab() {
               setLifeCurrentMonth(e.target.value);
               setSelectedCatId(null);
             }
-          }} 
+          }}
           style={{ 
             width: 'auto', 
             height: '36px', 
@@ -584,17 +582,19 @@ export default function LifeTab() {
           }} 
         />
         <button className="icon-btn" onClick={() => changeMonth(1)}><i className="fa-solid fa-chevron-right"></i></button>
-        <button 
-          className="btn btn-outline btn-sm" 
+        <button
+          className="btn btn-outline btn-sm"
           onClick={() => {
-            const thisMonth = new Date().toISOString().slice(0, 7);
+            // 用本地時間，避免 UTC 在每月 1 號早上 8 點前算成上個月
+            const d = new Date();
+            const thisMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             setLifeCurrentMonth(thisMonth);
             setSelectedCatId(null);
           }}
-          style={{ 
-            height: '36px', 
-            padding: '0 12px', 
-            fontSize: '0.85rem', 
+          style={{
+            height: '36px',
+            padding: '0 12px',
+            fontSize: '0.85rem',
             fontWeight: 500,
             borderColor: 'var(--border-color)',
             color: 'var(--text-main)',
@@ -909,12 +909,6 @@ export default function LifeTab() {
               className="life-view-content active"
             >
               <div className="life-sidebar" style={{ width: '100%' }}>
-                <div className="life-sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="life-sidebar-title">分類</span>
-                  <button className="icon-btn" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setShowCatManage(true); }} title="管理分類" style={{ fontSize: '0.9rem', width: 32, height: 32 }}>
-                    <i className="fa-solid fa-gear"></i>
-                  </button>
-                </div>
                 <div className="life-cat-list" style={{ height: 450, overflowY: 'auto' }}>
                   <div className={`life-cat-row${selectedCatId === null ? ' active' : ''}`}
                     onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(null); setPage(1); setLifeView('exp'); }}>
@@ -981,16 +975,6 @@ export default function LifeTab() {
         />
       )}
       {showSalary && <SalaryModal lifeIncomeCategories={lifeIncomeCategories} lifeExpenses={lifeExpenses} updateLifeExpense={updateLifeExpense} onSaved={() => setSalaryVersion(v => v + 1)} onClose={() => setShowSalary(false)} />}
-      {showCatManage && (
-        <CategoryManageModal
-          categories={lifeCategories}
-          type="expense"
-          onClose={() => setShowCatManage(false)}
-          onSave={cats => {
-            setLifeCategories(cats);
-          }}
-        />
-      )}
     </div>
   );
 }

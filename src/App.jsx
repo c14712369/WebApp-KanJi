@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import '../css/main.css';
 // React-specific overrides (patch Vanilla JS CSS assumptions)
 import './overrides.css';
+import './fixed.css';
 
 // 分頁懶載入：首屏只載入當前分頁，chart.js / 股票清單等重物按需切出獨立 chunk
 const LifeTab     = lazy(() => import('./components/tabs/LifeTab'));
@@ -107,6 +108,8 @@ export default function App() {
   };
 
   const handleDragEnd = (e, { offset, velocity }) => {
+    // 彈窗／面板開著時的橫向滑動不換頁（React stopPropagation 擋不住 framer 掛在祖先的原生 pointer 事件）
+    if (document.body.classList.contains('modal-open')) return;
     const swipe = swipePower(offset.x, velocity.x);
 
     if (swipe < -swipeConfidenceThreshold) {

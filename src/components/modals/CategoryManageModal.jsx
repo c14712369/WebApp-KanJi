@@ -3,7 +3,7 @@ import { Reorder, useDragControls } from 'framer-motion';
 import IconRenderer, { AVAILABLE_ICONS } from '../../lib/IconRenderer';
 import { showToast, confirmDialog } from '../../lib/utils';
 
-export default function CategoryManageModal({ categories, onSave, onClose, type = 'expense' }) {
+export default function CategoryManageModal({ categories, onSave, onClose, type = 'expense', title }) {
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState('#8B5CF6');
@@ -70,7 +70,7 @@ export default function CategoryManageModal({ categories, onSave, onClose, type 
         style={{ maxWidth: 400, margin: '0 auto', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
       >
         <div className="modal-header" style={{ flexShrink: 0 }}>
-          <h3>分類管理 ({type === 'income' ? '收入' : '支出'})</h3>
+          <h3>{title || `分類管理 (${type === 'income' ? '收入' : '支出'})`}</h3>
           <button className="icon-btn" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
         </div>
 
@@ -81,14 +81,17 @@ export default function CategoryManageModal({ categories, onSave, onClose, type 
               <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="輸入名稱..." />
             </div>
             
-            <div className="form-group">
-              <label className="form-label">背景顏色</label>
-              <input type="color" className="form-input" value={color} onChange={e => setColor(e.target.value)} style={{ height: 40, padding: 4 }} />
-            </div>
+            {/* 兩個短控制項併排，避免單一取色器各佔滿整列 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">背景顏色</label>
+                <input type="color" className="form-input" value={color} onChange={e => setColor(e.target.value)} style={{ height: 40, padding: 4 }} />
+              </div>
 
-            <div className="form-group">
-              <label className="form-label">圖示顏色</label>
-              <input type="color" className="form-input" value={iconColor} onChange={e => setIconColor(e.target.value)} style={{ height: 40, padding: 4 }} />
+              <div className="form-group">
+                <label className="form-label">圖示顏色</label>
+                <input type="color" className="form-input" value={iconColor} onChange={e => setIconColor(e.target.value)} style={{ height: 40, padding: 4 }} />
+              </div>
             </div>
 
             <div className="form-group">

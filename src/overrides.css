@@ -404,3 +404,152 @@ body.scrolling-down .fab {
   .life-hero-card,
   .life-shared-container { animation: none; }
 }
+
+/* ── 設定（Settings sheet）：iOS 分組列表；手機從底部滑出，桌面置中 ── */
+.settings-sheet {
+  max-width: 440px;
+  padding: 8px 16px 20px;
+  background: var(--bg-color);
+}
+.settings-grabber { display: none; }
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 4px 4px;
+}
+.settings-head h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.settings-done {
+  min-height: 44px;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--primary-color);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.settings-group-label {
+  margin: 20px 16px 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.settings-group {
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  text-align: left;
+  position: relative;
+}
+button.settings-row { cursor: pointer; transition: background-color 0.15s; }
+button.settings-row:hover { background: var(--hover-bg, var(--bg-color)); }
+button.settings-row:active { background: var(--bg-color); }
+/* 分隔線從文字起點開始（iOS inset separator） */
+.settings-row + .settings-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 54px;
+  height: 1px;
+  background: var(--border-color);
+}
+.settings-row.is-danger { justify-content: center; }
+.settings-row.is-danger + .settings-row::before,
+.settings-row + .settings-row.is-danger::before { left: 0; }
+.settings-row.is-danger .settings-row-label { color: var(--danger-color); font-weight: 600; text-align: center; }
+.settings-row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.8rem;
+}
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.settings-row-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-row-hint { font-size: 0.75rem; color: var(--text-muted); }
+.settings-row-chevron { font-size: 0.75rem; color: var(--text-muted); opacity: 0.7; }
+
+/* iOS 樣式開關 */
+.settings-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 51px;
+  height: 31px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+  transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+.settings-switch > span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1);
+}
+.settings-switch.is-on { background: var(--success-color); }
+.settings-switch.is-on > span { transform: translateX(20px); }
+
+@media (max-width: 768px) {
+  .settings-overlay { align-items: flex-end; }
+  .settings-sheet {
+    width: 100%;
+    max-width: none;
+    max-height: 88dvh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+  .settings-grabber {
+    display: block;
+    width: 36px;
+    height: 5px;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text-muted) 40%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-switch, .settings-switch > span { transition: none; }
+}
