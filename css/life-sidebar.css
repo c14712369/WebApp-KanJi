@@ -131,14 +131,14 @@
         height: 100dvh;
         min-height: 0;
         max-height: 100dvh;
-        padding-top: max(8px, env(safe-area-inset-top));
+        padding-top: calc(max(8px, env(safe-area-inset-top)) + 16px); /* +16px 避開 iOS 26 狀態列下方的系統模糊帶 */
         padding-bottom: calc(64px + env(safe-area-inset-bottom) + 12px); /* 底部導覽（含安全區）+ 與卡片的間距 */
         overflow: hidden !important;
     }
 
     /* 所有分頁頁首與生活費頁同高 */
     body .container.app-shell {
-        padding-top: max(8px, env(safe-area-inset-top));
+        padding-top: calc(max(8px, env(safe-area-inset-top)) + 16px); /* +16px 避開 iOS 26 狀態列下方的系統模糊帶 */
     }
 
     /* 手機精簡頁首（所有分頁共用）：品牌與圖示同一列，副標題在下 */
