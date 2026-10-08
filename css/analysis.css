@@ -159,6 +159,13 @@
     line-height: 1;
 }
 
+/* 齒輪字形在自身 em 框內偏上約 2px（框已置中），光學修正下移，與標籤文字同一條中線 */
+.life-hero-card .salary-settings-btn > i {
+    display: block;
+    line-height: 1;
+    transform: translateY(1.5px);
+}
+
 /* Mobile Analysis Adjustments */
 @media (max-width: 768px) {
     .analysis-header {

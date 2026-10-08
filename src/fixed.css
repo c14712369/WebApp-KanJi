@@ -578,3 +578,10 @@
   .fx-item-body { padding: 16px 20px 8px; }
   .fx-item-foot { padding: 12px 20px calc(14px + env(safe-area-inset-bottom)); }
 }
+
+/* 篩選面板：金額排序方向提示 */
+.fx-sort-hint {
+  margin: 8px 4px 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}

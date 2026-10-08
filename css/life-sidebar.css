@@ -651,10 +651,16 @@
         min-height: 0;
     }
 
-    #lifeExpList,
-    .life-cat-list {
+    #lifeExpList {
         height: clamp(280px, calc(100vh - 292px), 760px) !important;
         height: clamp(280px, calc(100dvh - 292px), 760px) !important;
+    }
+
+    /* 分類清單筆數少，依內容收合；只在超過可視高度時才捲動，避免下方大片留白 */
+    .life-cat-list {
+        height: auto !important;
+        max-height: clamp(280px, calc(100vh - 292px), 760px);
+        max-height: clamp(280px, calc(100dvh - 292px), 760px);
     }
 }
 

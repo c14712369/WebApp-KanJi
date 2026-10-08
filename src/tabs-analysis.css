@@ -4,12 +4,14 @@
   padding-bottom: 24px;
 }
 
-/* ── 月份切換列：靠左一組，本月靠右 ── */
+/* ── 月份切換列：月份、本月、較上月 置中排成一組 ── */
 .an-toolbar {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 12px;
+  flex-wrap: wrap;
+  align-items: center; /* 月份、本月、較上月 同一條中線 */
+  justify-content: center; /* 與生活頁的月份列一致，置中 */
+  gap: 8px 12px;
+  margin: 0 0 16px;
 }
 .an-month {
   display: flex;
@@ -60,7 +62,6 @@
   align-items: center;
   gap: 6px;
   height: 44px;
-  margin-left: auto;
   padding: 0 14px;
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -83,7 +84,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin: 0 0 14px;
+  margin: 0;
   padding: 6px 12px;
   border-radius: 999px;
   font-size: 0.8rem;
@@ -193,12 +194,15 @@
   overflow-y: auto;
   list-style: none;
   border-top: 1px solid var(--border-color);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 .an-list li {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: 44px;
+  padding-right: 14px; /* 捲軸與金額之間留呼吸空間；分隔線仍拉滿 */
   border-bottom: 1px solid var(--border-color);
   font-size: 0.88rem;
 }
@@ -281,4 +285,9 @@
 @media (max-width: 360px) {
   .an-month-input { width: 8.25rem; font-size: 0.88rem; }
   .an-today { padding: 0 10px; }
+}
+
+/* 窄螢幕放不下一列：較上月自然換到第二行 */
+@media (max-width: 560px) {
+  .an-toolbar .an-mom { order: 3; }
 }

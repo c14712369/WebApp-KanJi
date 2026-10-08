@@ -412,13 +412,13 @@ export default function AnalysisTab() {
         <button type="button" className="an-today" onClick={() => setYm(initYm)} disabled={isThisMonth} title="回到本月">
           <i className="fa-solid fa-calendar-day" aria-hidden="true"></i> 本月
         </button>
+        {mom && (
+          <div className={`an-mom ${mom.up ? 'is-up' : 'is-down'}`}>
+            <i className={`fa-solid fa-arrow-trend-${mom.up ? 'up' : 'down'}`} aria-hidden="true"></i>
+            生活費較上月 {mom.up ? '+' : '-'}{mom.pct}%（{mom.up ? '+' : '-'}NT$ {Math.abs(Math.round(mom.delta)).toLocaleString()}）
+          </div>
+        )}
       </div>
-      {mom && (
-        <div className={`an-mom ${mom.up ? 'is-up' : 'is-down'}`}>
-          <i className={`fa-solid fa-arrow-trend-${mom.up ? 'up' : 'down'}`} aria-hidden="true"></i>
-          生活費較上月 {mom.up ? '+' : '-'}{mom.pct}%（{mom.up ? '+' : '-'}NT$ {Math.abs(Math.round(mom.delta)).toLocaleString()}）
-        </div>
-      )}
 
       <div className="an-dual">
         {/* 訂閱分類 */}

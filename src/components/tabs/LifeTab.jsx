@@ -783,6 +783,8 @@ export default function LifeTab() {
                               fontWeight: isActive ? 600 : 500,
                               transition: 'background-color 0.2s, color 0.2s, box-shadow 0.2s',
                               fontSize: '0.9rem',
+                              lineHeight: 1,
+                              minHeight: 36,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -801,8 +803,8 @@ export default function LifeTab() {
                               }
                             }}
                           >
-                            <i className={`fa-solid ${iconClass}`} style={{ fontSize: '0.8rem' }}></i>
-                            {opt.label}
+                            <i className={`fa-solid ${iconClass}`} aria-hidden="true" style={{ fontSize: '0.8rem', width: '1em', lineHeight: 1, display: 'inline-flex', justifyContent: 'center' }}></i>
+                            <span style={{ lineHeight: 1 }}>{opt.label}</span>
                           </motion.button>
                         );
                       })}
@@ -909,7 +911,7 @@ export default function LifeTab() {
               className="life-view-content active"
             >
               <div className="life-sidebar" style={{ width: '100%' }}>
-                <div className="life-cat-list" style={{ height: 450, overflowY: 'auto' }}>
+                <div className="life-cat-list" style={{ overflowY: 'auto' }}>
                   <div className={`life-cat-row${selectedCatId === null ? ' active' : ''}`}
                     onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(null); setPage(1); setLifeView('exp'); }}>
                     <div className="life-cat-row-left">

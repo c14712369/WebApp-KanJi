@@ -219,9 +219,17 @@ function ItemModal({ categories, onClose, onSave, onDelete, initial }) {
 // ── List helpers ────────────────────────────────────────────────────────────
 const SORTS = [
   { value: 'next',        label: '即將扣款' },
-  { value: 'amount-desc', label: '金額' },
+  { value: 'amount-desc', label: '金額高→低' },
+  { value: 'amount-asc',  label: '金額低→高' },
   { value: 'category',    label: '分類' },
 ];
+// 面板上金額只佔一格：選中後再點一次切換高低
+const SORT_SEG = [
+  { value: 'next',     label: '即將扣款' },
+  { value: 'amount',   label: '金額' },
+  { value: 'category', label: '分類' },
+];
+const isAmountSort = (m) => m === 'amount-desc' || m === 'amount-asc';
 const PAY_FILTERS = [
   { value: 'all',    label: '全部' },
   { value: 'credit', label: '信用卡' },
@@ -277,7 +285,15 @@ function FilterSheet({ payFilter, setPayFilter, sortMode, setSortMode, onClose }
           <button type="button" className="settings-done" onClick={onClose}>完成</button>
         </div>
         <div className="settings-group-label">排序</div>
-        <Segmented options={SORTS} value={sortMode} onChange={setSortMode} label="排序方式" />
+        <Segmented
+          options={SORT_SEG.map(o => o.value !== 'amount' ? o : {
+            ...o,
+            label: <>金額 <i className={`fa-solid ${sortMode === 'amount-asc' ? 'fa-arrow-up-short-wide' : 'fa-arrow-down-wide-short'}`} aria-hidden="true"></i></>,
+          })}
+          value={isAmountSort(sortMode) ? 'amount' : sortMode}
+          onChange={v => setSortMode(v !== 'amount' ? v : (sortMode === 'amount-desc' ? 'amount-asc' : 'amount-desc'))}
+          label="排序方式" />
+        {isAmountSort(sortMode) && <p className="fx-sort-hint">{sortMode === 'amount-desc' ? '金額高→低' : '金額低→高'}，再點一次「金額」切換</p>}
         <div className="settings-group-label">付款方式</div>
         <Segmented options={PAY_FILTERS} value={payFilter} onChange={setPayFilter} label="付款方式" />
       </div>
@@ -365,7 +381,7 @@ export default function FixedTab() {
   const [showFilter, setShowFilter] = useState(false);
   const [openRowId, setOpenRowId]   = useState(null);   // 目前左滑展開的列
 
-  // 舊排序值（日期、金額低→高）併入新選項
+  // 不認得的舊排序值（例如日期）一律回到「即將扣款」
   const sortMode = SORTS.some(s => s.value === fixedSortMode) ? fixedSortMode : 'next';
 
   const now = new Date(); now.setHours(0, 0, 0, 0);
@@ -389,6 +405,7 @@ export default function FixedTab() {
     .sort((a, b) => {
       if (a.ended !== b.ended) return a.ended ? 1 : -1; // 已結束一律沉底
       if (sortMode === 'amount-desc') return toMonthlyAmount(b.item) - toMonthlyAmount(a.item);
+      if (sortMode === 'amount-asc')  return toMonthlyAmount(a.item) - toMonthlyAmount(b.item);
       if (sortMode === 'category') {
         const ai = categories.findIndex(c => c.id === a.item.categoryId);
         const bi = categories.findIndex(c => c.id === b.item.categoryId);
@@ -504,7 +521,7 @@ export default function FixedTab() {
         <Segmented options={STATUS_FILTERS} value={statusFilter} onChange={setStatus} label="項目狀態" counts={statusCounts} />
         <button type="button" className={`fx-filter-btn${filterDirty ? ' is-dirty' : ''}`} onClick={() => { vibrate(); setShowFilter(true); }}
           aria-label={`篩選與排序，目前依${SORTS.find(s => s.value === sortMode).label}排序${filterDirty ? '，已篩選付款方式' : ''}`}>
-          <i className="fa-solid fa-arrow-down-wide-short" aria-hidden="true"></i>
+          <i className={`fa-solid ${sortMode === 'amount-asc' ? 'fa-arrow-up-short-wide' : 'fa-arrow-down-wide-short'}`} aria-hidden="true"></i>
           <span>{SORTS.find(s => s.value === sortMode).label}</span>
         </button>
       </div>
