@@ -138,6 +138,12 @@
     line-height: 1;
 }
 
+/* 標籤不換行、不被金額擠壓（滾動數字動畫時欄寬會暫時撐大） */
+.life-hero-card .detail-label {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 .life-hero-card .detail-label > i {
     display: grid;
     place-items: center;
