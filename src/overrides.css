@@ -553,3 +553,94 @@ button.settings-row:active { background: var(--bg-color); }
 @media (prefers-reduced-motion: reduce) {
   .settings-switch, .settings-switch > span { transition: none; }
 }
+
+/* ── 版本更新提示（頂端浮出，避開 iOS 26 狀態列下方的系統模糊帶） ── */
+.update-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 16px);
+  left: 50%;
+  z-index: 10000;
+  width: calc(100% - 40px);
+  max-width: 380px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
+  box-shadow: var(--shadow-lg);
+}
+.update-banner-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-color);
+}
+.update-banner-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--accent-color);
+  animation: update-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes update-ping { 75%, 100% { transform: scale(2.4); opacity: 0; } }
+.update-banner-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.update-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.update-banner-btn:active { transform: scale(0.95); }
+.update-banner-close {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.update-banner-close:active { transform: scale(0.9); }
+
+/* 設定 → 關於：版本列右側按鈕 */
+.settings-version-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.settings-version-btn.is-update {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: #fff;
+}
+.settings-version-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+@media (prefers-reduced-motion: reduce) { .update-banner-dot::after { animation: none; } }

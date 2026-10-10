@@ -4,6 +4,7 @@ import { useSync } from './hooks/useSync';
 import Header from './components/layout/Header';
 import BottomNav from './components/layout/BottomNav';
 import SyncOverlay from './components/layout/SyncOverlay';
+import UpdateBanner from './components/layout/UpdateBanner';
 import TabSkeleton from './components/layout/TabSkeleton';
 import { TABS } from './lib/constants';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -133,6 +134,7 @@ export default function App() {
   return (
     <div className={`container app-shell${activeTab === 'life' ? ' life-page-shell' : ''}`} style={{ overflowX: 'hidden', position: 'relative' }}>
       <SyncOverlay />
+      <UpdateBanner />
       <Header />
       <main className="app-main" style={{ position: 'relative', minHeight: '80vh', paddingBottom: '0' }}>
         <AnimatePresence initial={false} custom={direction}>

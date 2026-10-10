@@ -39,16 +39,35 @@ function yahooDevProxy() {
   };
 }
 
+// 版本號：Vercel 部署用 commit 短碼；本機開發為 dev（不提示更新）
+const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'dev';
+
+// build 時輸出 dist/version.json，App 拿它跟執行中版本比對
+function versionFile() {
+  return {
+    name: 'version-file',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ version: BUILD_ID }) });
+    },
+  };
+}
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(BUILD_ID),
+  },
   plugins: [
     react(),
     yahooDevProxy(),
+    versionFile(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // prompt：新版下載好先等著，由使用者按「更新」才換版，避免記帳到一半被重新整理
+      registerType: 'prompt',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Kanji',
-        short_name: 'Kanji',
+        name: 'Kakei',
+        short_name: 'Kakei',
         description: '記錄每一筆固定支出與日常生活費的財務管理工具',
         theme_color: '#C17B2E',
         background_color: '#F0EDE8',

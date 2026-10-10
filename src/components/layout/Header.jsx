@@ -21,7 +21,7 @@ export default function Header() {
         <div className="sidebar-brand">
           <span className="sidebar-logo"><i className="fa-solid fa-vault"></i></span>
           <div className="sidebar-brand-text">
-            <span className="sidebar-name">Kanji</span>
+            <span className="sidebar-name">Kakei</span>
             <span className="sidebar-tagline">固定支出與日常生活費</span>
           </div>
         </div>
@@ -66,7 +66,7 @@ export default function Header() {
         <div className="header-title">
           <h1>
             <i className="fa-solid fa-vault title-icon"></i>
-            <span id="appDisplayName">Kanji</span>
+            <span id="appDisplayName">Kakei</span>
           </h1>
           <span className="subtitle">記錄每一筆固定支出與日常生活費</span>
         </div>

@@ -4,6 +4,15 @@ import { supabase } from '../../lib/supabaseClient';
 import { showToast } from '../../lib/utils';
 import CategoryManageModal from '../modals/CategoryManageModal';
 import IdentityModal from './IdentityModal';
+import { APP_VERSION, useAppUpdate, checkForUpdate, applyUpdate } from '../../lib/appUpdate';
+
+const VERSION_HINT = {
+  idle: '檢查中…',
+  checking: '檢查中…',
+  latest: '已是最新版本',
+  outdated: '有新版本可用',
+  error: '無法檢查，請稍後再試',
+};
 
 // iOS 分組列表的一列：圖示 + 標題（+ 副標）+ 右側附件
 function Row({ icon, iconBg, label, hint, accessory, onClick, danger, ...aria }) {
@@ -34,6 +43,8 @@ export default function SettingsModal({ onClose, onLogin }) {
   } = useAppStore();
   // 子畫面：null = 設定列表；關閉子畫面回到列表（像 iOS 的 push / back）
   const [sub, setSub] = useState(null);
+  const updateStatus = useAppUpdate(s => s.status);
+  const isOutdated = updateStatus === 'outdated';
 
   const vibrate = () => { if (navigator.vibrate) navigator.vibrate(20); };
   const open = (key) => { vibrate(); setSub(key); };
@@ -104,6 +115,22 @@ export default function SettingsModal({ onClose, onLogin }) {
           ) : (
             <Row icon="fa-user" iconBg="#6B7A8F" label="登入 / 註冊" hint="登入後資料可跨裝置同步" accessory={Chevron} onClick={() => { vibrate(); onClose(); onLogin(); }} />
           )}
+        </div>
+
+        <div className="settings-group-label">關於</div>
+        <div className="settings-group">
+          <Row
+            icon="fa-circle-info" iconBg="#526D82"
+            label={<>Kakei <span className="settings-version-code">{APP_VERSION}</span></>}
+            hint={VERSION_HINT[updateStatus]}
+            onClick={() => { vibrate(); isOutdated ? applyUpdate() : checkForUpdate(); }}
+            accessory={
+              <span className={`settings-version-btn${isOutdated ? ' is-update' : ''}`}>
+                <i className={`fa-solid fa-rotate${updateStatus === 'checking' ? ' fa-spin' : ''}`} aria-hidden="true"></i>
+                {isOutdated ? '立即更新' : '檢查更新'}
+              </span>
+            }
+          />
         </div>
       </div>
     </div>
