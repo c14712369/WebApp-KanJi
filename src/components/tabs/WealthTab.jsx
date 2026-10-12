@@ -5,6 +5,7 @@ import { fetchWithCache, formatAmount, showToast, autoFocusDesktop, confirmDialo
 import { buildProxyUrl, unwrapAllOrigins, twSymbolCandidates } from '../../lib/yahooProxy';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { WEALTH_PARAMS_KEY } from '../../lib/constants';
+import { holdingAllocation, loanPayment, loanPayAt, solveMonthlyBudget } from '../../lib/wealthPlan';
 
 Chart.register(...registerables);
 
@@ -106,15 +107,17 @@ async function fetchStockPrice(rawSymbol, forceRefresh = false) {
   return null;
 }
 
-async function fetchCAGR(symbol, years) {
-  const range     = years + 'y';
-  const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1mo&range=${range}`;
-  try {
-    const data   = unwrapAllOrigins(await fetchWithCache(buildProxyUrl(targetUrl), 24));
-    const prices = (data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []).filter(p => p != null);
-    if (prices.length < 2) return null;
-    return Math.pow(prices[prices.length - 1] / prices[0], 1 / years) - 1;
-  } catch { return null; }
+async function fetchCAGR(rawSymbol, years) {
+  // 跟取價一樣，上市/上櫃依序嘗試，取第一個有資料者
+  for (const symbol of twSymbolCandidates(rawSymbol)) {
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1mo&range=${years}y`;
+    try {
+      const data   = unwrapAllOrigins(await fetchWithCache(buildProxyUrl(targetUrl), 24));
+      const prices = (data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []).filter(p => p != null);
+      if (prices.length >= 2) return Math.pow(prices[prices.length - 1] / prices[0], 1 / years) - 1;
+    } catch { /* 換下一個候選 */ }
+  }
+  return null;
 }
 
 // ── Holding Modal ─────────────────────────────────────────────────────────────
@@ -310,8 +313,25 @@ function BankModal({ initial, onClose, onSave }) {
   );
 }
 
+// ── 規劃頁的摘要列：平常一行，點了才展開編輯 ──
+function PlanRow({ id, title, desc, open, onToggle, children }) {
+  return (
+    <div className={`wl-prow${open ? ' is-open' : ''}`}>
+      <button type="button" className="wl-prow-sum" aria-expanded={open} aria-controls={`prow-${id}`} onClick={onToggle}>
+        <span className="wl-prow-title">{title}</span>
+        <span className="wl-prow-desc">{desc}</span>
+        <i className="fa-solid fa-chevron-down wl-prow-chev" aria-hidden="true"></i>
+      </button>
+      {open && <div className="wl-prow-body" id={`prow-${id}`}>{children}</div>}
+    </div>
+  );
+}
+
+// 摘要用的萬元寫法：26,953 → 2.7 萬、17,000,000 → 1,700 萬
+const wan = v => v >= 10000 ? `${(Math.round(v / 1000) / 10).toLocaleString()} 萬` : Math.round(v).toLocaleString();
+
 // ── Wealth Chart ──────────────────────────────────────────────────────────────
-function WealthChart({ labels, cashData, investData, totalData, targetFV }) {
+function WealthChart({ labels, cashData, investData, totalData, targetFV, targetLabel = '目標金額' }) {
   const theme     = useAppStore(s => s.theme);
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
@@ -336,7 +356,7 @@ function WealthChart({ labels, cashData, investData, totalData, targetFV }) {
           { label: '現金/活存累積', data: cashData,   borderColor: cCash, backgroundColor: cCash + '26', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
           { label: '投資部位累積', data: investData, borderColor: cInv, backgroundColor: cInv + '26', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
           { label: '總資產',       data: totalData,  borderColor: cTotal, borderWidth: 2.5, pointRadius: 3, tension: 0.3, fill: false },
-          { label: '目標金額',     data: targetArr,  borderColor: cTarget, borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false },
+          { label: targetLabel,     data: targetArr,  borderColor: cTarget, borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false },
         ],
       },
       options: {
@@ -352,7 +372,7 @@ function WealthChart({ labels, cashData, investData, totalData, targetFV }) {
         },
       },
     });
-  }, [labels, cashData, investData, totalData, targetFV, theme]);
+  }, [labels, cashData, investData, totalData, targetFV, targetLabel, theme]);
 
   useEffect(() => () => { chartInst.current?.destroy(); chartInst.current = null; }, []);
 
@@ -381,9 +401,20 @@ export default function WealthTab() {
   const [invMonthly, setInvMonthly] = useState(savedParams.invMonthly || '5000');
   const [cashRate,   setCashRate]   = useState(savedParams.cashRate   || '1.5');
   const [cashMonthly, setCashMonthly] = useState(savedParams.cashMonthly || '5000');
-  const [target,     setTarget]     = useState(savedParams.target     || '10000000');
-
+  // 人生目標規劃：買車/買房等目標 + 退休，回推每月要能挪出多少（貸款從這筆錢裡扣）
+  const [planGoals, setPlanGoals] = useState(() => savedParams.planGoals || [
+    { id: 'g-car',   name: '買車', years: '5',  cash: '500000',  loan: '1500000',  loanRate: '3',   loanYears: '5' },
+    { id: 'g-house', name: '買房', years: '10', cash: '3000000', loan: '17000000', loanRate: '2.2', loanYears: '30' },
+  ]);
+  const [planRetire, setPlanRetire] = useState(() => ({
+    age: '30', retireAge: '65', lifeAge: '85', monthlySpend: '40000', pension: '20000', inflation: '2', postReturn: '3',
+    ...(savedParams.planRetire || {}),
+  }));
   // CAGR auto-fetch
+  // 試算頁分兩頁：我的資產 / 目標規劃（只是畫面偏好，存本機即可）
+  const [view, setViewState] = useState(() => { try { return localStorage.getItem('wealth_view') || 'assets'; } catch { return 'assets'; } });
+  const setView = (v) => { setViewState(v); try { localStorage.setItem('wealth_view', v); } catch { /* 無痕模式等 */ } };
+
   const [cagrSearch,   setCagrSearch]   = useState(savedParams.cagrSearch || '');
   const [cagrDropdown, setCagrDropdown] = useState([]);
   const [cagrStatus,   setCagrStatus]   = useState(savedParams.cagrStatus || '');
@@ -399,48 +430,77 @@ export default function WealthTab() {
 
   // ── Save params ──
   const saveParams = useCallback((patch = {}) => {
-    const params = { invRate, invMonthly, cashRate, cashMonthly, target, cagrSearch, cagrYears, cagrLabel, selectedCagrSymbol: selectedCagrSymbol.current, cagrStatus, ...patch };
+    const params = { invRate, invMonthly, cashRate, cashMonthly, planGoals, planRetire, cagrSearch, cagrYears, cagrLabel, selectedCagrSymbol: selectedCagrSymbol.current, cagrStatus, ...patch };
     localStorage.setItem(WEALTH_PARAMS_KEY, JSON.stringify(params));
     setWealthParams(params);
-  }, [invRate, invMonthly, cashRate, cashMonthly, target, cagrSearch, cagrYears, cagrLabel, cagrStatus, setWealthParams]);
+  }, [invRate, invMonthly, cashRate, cashMonthly, planGoals, planRetire, cagrSearch, cagrYears, cagrLabel, cagrStatus, setWealthParams]);
 
-  // ── Calc simulation ──
-  const simulation = useMemo(() => {
-    const inv      = parseFloat(invRate)    / 100 / 12;
-    const invM     = parseFloat(invMonthly) || 0;
-    const cash     = parseFloat(cashRate)   / 100 / 12;
-    const cashM    = parseFloat(cashMonthly)|| 0;
-    const tgt      = parseFloat(target)     || 0;
+  const allocation = useMemo(() => holdingAllocation(wealthHoldings), [wealthHoldings]);
 
-    if (tgt <= 0) return { result: '請輸入有效的目標金額', labels: [], cashData: [], investData: [], totalData: [] };
-    if (totalAssets >= tgt) return { result: '您已經達標了！🎉', summary: '當前總資產已達到目標', labels: ['第 0 年'], cashData: [totalCash], investData: [totalInvest], totalData: [totalAssets] };
-    if (invM <= 0 && cashM <= 0 && inv <= 0 && cash <= 0) return { result: '無法達標', summary: '無月投入且無報酬增長', labels: [], cashData: [], investData: [], totalData: [] };
+  const num = v => parseFloat(v) || 0;
+  const goalsNum = useMemo(() => planGoals.map(g => ({
+    id: g.id, name: g.name, years: num(g.years), cash: num(g.cash), loan: num(g.loan), loanRate: num(g.loanRate), loanYears: num(g.loanYears),
+  })), [planGoals]);
+  const retireNum = useMemo(() => Object.fromEntries(Object.entries(planRetire).map(([k, v]) => [k, num(v)])), [planRetire]);
 
-    let curInv = totalInvest, curCash = totalCash, total = totalAssets, months = 0;
-    const MAX = 1200;
-    const labels = ['第 0 年'], cashData = [curCash], investData = [curInv], totalData = [totalAssets];
+  // 存下來的錢照「目前定期定額 : 存款」的比例分配；兩者都 0 就各半
+  const curInv = num(invMonthly), curCashM = num(cashMonthly);
+  const invShare = curInv + curCashM > 0 ? curInv / (curInv + curCashM) : 0.5;
 
-    while (total < tgt && months < MAX) {
-      months++;
-      curInv  = curInv  * (1 + inv)  + invM;
-      curCash = curCash * (1 + cash) + cashM;
-      total   = curInv + curCash;
-      if (months % 12 === 0 || total >= tgt) {
-        const yr  = Math.ceil(months / 12);
-        const rem = months % 12;
-        labels.push(`第 ${yr} 年${rem ? ` (${rem}月)` : ''}`);
-        cashData.push(curCash); investData.push(curInv); totalData.push(total);
-      }
+  const life = useMemo(() => {
+    const p = {
+      inv0: totalInvest, cash0: totalCash, invRate: num(invRate), cashRate: num(cashRate),
+      invShare, goals: goalsNum, retire: retireNum,
+    };
+    const { budget, sim } = solveMonthlyBudget(p);
+    if (budget == null) return { budget: null, sim };
+    const b = Math.ceil(budget / 100) * 100;  // 進位到百元，照存一定夠
+    // 依「付頭期 / 貸款還完 / 退休」切出各階段，列出每段要還多少、還能存多少
+    const R = sim.horizon, age0 = retireNum.age;
+    const cuts = new Set([0, R]);
+    goalsNum.forEach(g => {
+      const gm = Math.round(g.years * 12), lm = Math.round(g.loanYears * 12);
+      if (gm < R) cuts.add(gm);
+      if (g.loan > 0 && gm + lm < R) cuts.add(gm + lm);
+    });
+    const pts = [...cuts].sort((a, z) => a - z);
+    const phases = [];
+    for (let k = 0; k < pts.length - 1; k++) {
+      const pay = loanPayAt(pts[k] + 1, goalsNum);
+      phases.push({ from: age0 + pts[k] / 12, to: age0 + pts[k + 1] / 12, pay, free: b - pay });
     }
+    const series = sim.series;
+    return {
+      budget: b, sim, phases,
+      labels: series.map(x => `${Math.round(age0 + x.month / 12)} 歲`),
+      cashData: series.map(x => x.cash), investData: series.map(x => x.inv), totalData: series.map(x => x.inv + x.cash),
+      current: curInv + curCashM,
+    };
+  }, [goalsNum, retireNum, invShare, totalInvest, totalCash, invRate, cashRate, invMonthly, cashMonthly]);
 
-    if (months >= MAX) return { result: '超過 100 年才能達標', labels, cashData, investData, totalData, curInv, curCash };
-    const y = Math.floor(months / 12), m = months % 12;
-    const timeStr = (y > 0 ? y + ' 年 ' : '') + (m > 0 ? m + ' 個月' : y === 0 ? '不到 1 個月' : '');
-    return { result: `約需 ${timeStr}`, labels, cashData, investData, totalData, curInv, curCash };
-  }, [invRate, invMonthly, cashRate, cashMonthly, target, totalInvest, totalCash, totalAssets]);
-  const goalTarget = parseFloat(target) || 0;
-  const goalGap    = goalTarget > 0 ? Math.max(0, goalTarget - totalAssets) : null;
-
+  const updateGoal = (id, patch) => {
+    const next = planGoals.map(g => g.id === id ? { ...g, ...patch } : g);
+    setPlanGoals(next); saveParams({ planGoals: next });
+  };
+  // 一次只展開一列（目標 id / 'retire' / 'assume'）
+  const [openRow, setOpenRow] = useState(null);
+  const toggleRow = key => setOpenRow(o => (o === key ? null : key));
+  const addGoal = () => {
+    const id = 'g-' + Date.now();
+    const next = [...planGoals, { id, name: '新目標', years: '3', cash: '300000', loan: '0', loanRate: '2', loanYears: '0' }];
+    setPlanGoals(next); saveParams({ planGoals: next });
+    setOpenRow(id);
+  };
+  const removeGoal = async (id) => {
+    const g = planGoals.find(x => x.id === id);
+    if (!await confirmDialog({ title: '刪除目標', message: `確定要刪除「${g?.name || '此目標'}」嗎？`, confirmText: '刪除' })) return;
+    const next = planGoals.filter(x => x.id !== id);
+    setPlanGoals(next); saveParams({ planGoals: next });
+  };
+  const updateRetire = (patch) => {
+    const next = { ...planRetire, ...patch };
+    setPlanRetire(next); saveParams({ planRetire: next });
+  };
   // ── Holdings actions ──
   const handleSaveHolding = (holding) => {
     const exists = wealthHoldings.some(h => h.id === holding.id);
@@ -536,20 +596,28 @@ export default function WealthTab() {
 
   // ── CAGR autocomplete ──
   const handleCagrSearch = (q) => {
+    // 一改字就作廢先前的選擇，避免標籤顯示 B、實際卻拿 A 算
+    selectedCagrSymbol.current = '';
     setCagrSearch(q);
-    saveParams({ cagrSearch: q });
-    if (!q) {
-      setCagrLabel('');
-      selectedCagrSymbol.current = '';
-      saveParams({ cagrSearch: '', cagrLabel: '', selectedCagrSymbol: '' });
+    setCagrLabel('');
+    saveParams({ cagrSearch: q, cagrLabel: '', selectedCagrSymbol: '' });
+    const lower = q.trim().toLowerCase();
+    if (!lower) { setCagrDropdown([]); return; }
+    const list = STOCK_LIST.filter(s => s.symbol.toLowerCase().startsWith(lower) || s.name.toLowerCase().includes(lower)).slice(0, 6);
+    // 清單外的代號（如 VT、00713）也能直接線上查
+    const raw = q.trim().toUpperCase();
+    if (/^[A-Z0-9.^-]+$/.test(raw) && !list.some(s => s.symbol.toUpperCase() === raw)) {
+      list.push({ symbol: raw, name: `線上查詢「${raw}」`, suffix: '', isDynamic: true });
     }
-    const lower = q.toLowerCase();
-    setCagrDropdown(lower ? STOCK_LIST.filter(s => s.symbol.toLowerCase().startsWith(lower) || s.name.toLowerCase().includes(lower)).slice(0, 6) : []);
+    setCagrDropdown(list);
   };
+
+  // 有選過就用選的；沒選就拿輸入框第一段當代號（數字代號由 fetchCAGR 補 .TW/.TWO）
+  const resolveCagrSymbol = () => selectedCagrSymbol.current || (cagrSearch.trim().split(/\s+/)[0] || '').toUpperCase();
 
   const selectCagrStock = (stock) => {
     const sym = stock.symbol + (stock.suffix || '');
-    const newSearch = `${stock.symbol} ${stock.name}`;
+    const newSearch = stock.isDynamic ? stock.symbol : `${stock.symbol} ${stock.name}`;
     selectedCagrSymbol.current = sym;
     setCagrSearch(newSearch);
     setCagrLabel(newSearch);
@@ -585,256 +653,371 @@ export default function WealthTab() {
         <div className="loading-text">正在更新持股價格…</div>
       </div>
 
-      {/* Total assets hero */}
-      <section className="wl-hero" aria-label="資產總覽">
-        <div className="wl-hero-label">當前資產總額</div>
-        <div className="wl-hero-amount" id="wealthTotalAssetsDisplay">
-          <span className="wl-hero-cur">NT$</span><AnimatedNumber value={totalAssets} format={v => formatAmount(v, 'asset')} effect="scroll" />
-        </div>
-
-        {totalAssets > 0 && (
-          <div className="wl-bar" role="img" aria-label={`投資 ${investPct}%、現金 ${100 - investPct}%`}>
-            <span className="is-invest" style={{ width: `${investPct}%` }} />
-            <span className="is-cash" />
-          </div>
-        )}
-
-        <div className="wl-hero-split">
-          <div className="wl-hero-cell is-invest">
-            <div className="wl-hero-cell-label"><i aria-hidden="true"></i>投資市值</div>
-            <div className="wl-hero-cell-value" id="wealthTotalInvestSub">
-              NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" />
-            </div>
-            {totalAssets > 0 && <div className="wl-hero-cell-pct" id="wealthTotalInvestPct">占比 {investPct}%</div>}
-          </div>
-          <div className="wl-hero-cell is-cash">
-            <div className="wl-hero-cell-label"><i aria-hidden="true"></i>現金存款</div>
-            <div className="wl-hero-cell-value" id="wealthTotalCashSub">
-              NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" />
-            </div>
-            {totalAssets > 0 && <div className="wl-hero-cell-pct" id="wealthTotalCashPct">占比 {100 - investPct}%</div>}
-          </div>
-        </div>
-      </section>
-
-      {/* Wealth grid (2×2) */}
-      <div className="wealth-grid">
-
-      {/* Holdings panel */}
-      <div className="wealth-panel chart-section wl-panel">
-        <div className="wl-panel-head">
-          <div className="wl-panel-head-main">
-            <h3 className="wl-panel-title"><i className="fa-solid fa-chart-line" aria-hidden="true"></i> 投資持股</h3>
-            <div className="wl-panel-sub">
-              總市值 <strong id="holdingsTotalValue">NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>
-              {wealthHoldings.length > 0 && <span className="wl-count">{wealthHoldings.length} 檔</span>}
-            </div>
-          </div>
-          <div className="wl-panel-actions">
-            <button type="button" className="wl-icon-btn" onClick={() => handleRefreshAll()} title="全部更新股價" aria-label="全部更新股價">
-              <i className="fa-solid fa-rotate"></i>
-            </button>
-            <button type="button" className="wl-add-btn" onClick={() => setHoldingModal('new')}>
-              <i className="fa-solid fa-plus"></i> 新增
-            </button>
-          </div>
-        </div>
-        <div id="holdingsList" className="wealth-scroll-list">
-          {wealthHoldings.length === 0
-            ? <div className="wealth-empty wl-empty"><i className="fa-solid fa-seedling" aria-hidden="true"></i><span>還沒有持股，按右上「新增」加入第一檔</span></div>
-            : wealthHoldings.map(h => {
-                const value   = h.shares * (h.lastPrice || 0);
-                const timeStr = h.lastUpdated ? new Date(h.lastUpdated).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-                return (
-                  <div key={h.id} className="wealth-row" data-id={h.id}>
-                    <div className="wealth-row-left">
-                      <span className="wealth-row-symbol" style={{ background: symbolColor(h.symbol), color: '#fff', fontWeight: 700, padding: '2px 8px', borderRadius: 6, fontSize: '0.8rem', letterSpacing: '0.04em', display: 'inline-block', flexShrink: 0 }}>{h.symbol}</span>
-                      <span className="wealth-row-name">{h.name || ''}</span>
-                    </div>
-                    <div className="wealth-row-mid">
-                      <span className="wealth-row-detail" style={{ color: 'var(--text-muted)' }}>{h.shares.toLocaleString()} 股</span>
-                      <span className="wealth-row-price" style={{ color: 'var(--primary-color)' }}>
-                        {h.lastPrice ? <>NT$ <AnimatedNumber value={h.lastPrice} format={v => formatAmount(v, 'asset')} effect="scroll" /></> : '—'}
-                      </span>
-                      {timeStr && <span className="wl-row-time">{timeStr}</span>}
-                    </div>
-                    <div className="wealth-row-value" style={{ color: 'var(--text-main)', fontWeight: 800 }}>{h.lastPrice ? <>NT$ <AnimatedNumber value={Math.round(value)} format={v => formatAmount(v, 'asset')} effect="scroll" /></> : '—'}</div>
-                    <div className="wealth-row-actions">
-                      <button type="button" className="icon-btn" title="更新股價" aria-label="更新股價" onClick={() => handleRefreshPrice(h.id)}>
-                        <i className={`fa-solid fa-rotate${fetchingId === h.id ? ' fa-spin' : ''}`}></i>
-                      </button>
-                      <button type="button" className="icon-btn" title="編輯" aria-label="編輯" onClick={() => setHoldingModal(h)}>
-                        <i className="fa-solid fa-pen"></i>
-                      </button>
-                      <button type="button" className="icon-btn delete" title="刪除" aria-label="刪除" onClick={() => handleDeleteHolding(h.id)}>
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-          }
-        </div>
+      {/* 分頁切換：我的資產 / 目標規劃 */}
+      <div className="wl-view-switch" role="tablist" aria-label="試算分頁">
+        {[['assets', '我的資產', 'fa-wallet'], ['plan', '目標規劃', 'fa-flag-checkered']].map(([id, label, icon]) => (
+          <button key={id} type="button" role="tab" aria-selected={view === id} className={view === id ? 'is-active' : ''} onClick={() => setView(id)}>
+            <i className={`fa-solid ${icon}`} aria-hidden="true"></i> {label}
+          </button>
+        ))}
       </div>
 
-      {/* Bank accounts panel */}
-      <div className="wealth-panel chart-section wl-panel">
-        <div className="wl-panel-head">
-          <div className="wl-panel-head-main">
-            <h3 className="wl-panel-title"><i className="fa-solid fa-building-columns" aria-hidden="true"></i> 銀行現金</h3>
-            <div className="wl-panel-sub">
-              現金合計 <strong id="bankTotalValue">NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>
-              {wealthBankAccounts.length > 0 && <span className="wl-count">{wealthBankAccounts.length} 個帳戶</span>}
+      {view === 'assets' && (
+        <>
+          {/* Total assets hero */}
+          <section className="wl-hero" aria-label="資產總覽">
+            <div className="wl-hero-label">當前資產總額</div>
+            <div className="wl-hero-amount" id="wealthTotalAssetsDisplay">
+              <span className="wl-hero-cur">NT$</span><AnimatedNumber value={totalAssets} format={v => formatAmount(v, 'asset')} effect="scroll" />
             </div>
-          </div>
-          <div className="wl-panel-actions">
-            <button type="button" className="wl-add-btn" onClick={() => { setEditBankId(null); setShowBankModal(true); }}>
-              <i className="fa-solid fa-plus"></i> 新增
-            </button>
-          </div>
-        </div>
-        <div id="bankAccountsList" className="wealth-scroll-list">
-          {wealthBankAccounts.length === 0
-            ? <div className="wealth-empty wl-empty"><i className="fa-solid fa-piggy-bank" aria-hidden="true"></i><span>還沒有帳戶，按右上「新增」加入第一個</span></div>
-            : wealthBankAccounts.map(a => (
-                <div key={a.id} className="wealth-row">
-                  <div className="wealth-row-left"><span className="wealth-row-symbol" style={{ fontSize: '0.9rem' }}>{a.bankName}</span></div>
-                  <div className="wealth-row-mid"><span className="wealth-row-detail">利率 {a.rate || 0}%</span></div>
-                  <div className="wealth-row-value">NT$ <AnimatedNumber value={Math.round(a.balance || 0)} format={v => formatAmount(v, 'asset')} effect="scroll" /></div>
-                  <div className="wealth-row-actions">
-                    <button type="button" className="icon-btn" title="編輯" aria-label="編輯" onClick={() => { setEditBankId(a.id); setShowBankModal(true); }}><i className="fa-solid fa-pen"></i></button>
-                    <button type="button" className="icon-btn delete" title="刪除" aria-label="刪除" onClick={() => handleDeleteBank(a.id)}><i className="fa-solid fa-trash"></i></button>
-                  </div>
-                </div>
-              ))
-          }
-        </div>
-      </div>
 
-      {/* Calculator — full width */}
-      <div className="wealth-panel chart-section wl-panel wl-calc" style={{ gridColumn: '1/-1' }}>
-        <div className="wl-panel-head">
-          <div className="wl-panel-head-main">
-            <h3 className="wl-panel-title"><i className="fa-solid fa-calculator" aria-hidden="true"></i> 資產試算</h3>
-            <div className="wl-panel-sub">依每月投入與報酬率，推算多久能達到目標</div>
-          </div>
-        </div>
-
-        <div className="wl-calc-groups">
-          {/* Investment */}
-          <fieldset className="wl-group is-invest">
-            <legend className="wl-group-head">
-              <span className="wl-group-title"><i aria-hidden="true"></i>投資部位</span>
-              <span className="wl-group-current" id="wealthInvestCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} /></span>
-            </legend>
-            <div className="wl-grid-2">
-              <div className="form-group">
-                <label className="form-label" htmlFor="wealthInvestMonthlyInput">每月投入（NT$）</label>
-                <input className="form-input" id="wealthInvestMonthlyInput" type="number" inputMode="decimal" min="0" value={invMonthly} onChange={e => { setInvMonthly(e.target.value); saveParams({ invMonthly: e.target.value }); }} />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="wealthInvestRateInput">年化報酬率（%）</label>
-                <input className="form-input" id="wealthInvestRateInput" type="number" inputMode="decimal" min="0" step="0.1" value={invRate} onChange={e => { setInvRate(e.target.value); saveParams({ invRate: e.target.value }); }} />
-              </div>
-              {/* CAGR auto-fetch */}
-              <div className="form-group wl-cagr-search" id="cagrSearchWrap">
-                <label className="form-label" htmlFor="wealthInvestTickerSearch">CAGR 代號</label>
-                <input className="form-input" id="wealthInvestTickerSearch" value={cagrSearch} onChange={e => handleCagrSearch(e.target.value)} placeholder="代號搜尋…" autoComplete="off" />
-                {cagrDropdown.length > 0 && (
-                  <div className="wl-dropdown">
-                    {cagrDropdown.map((s, i) => (
-                      <button type="button" key={i} className="wl-dropdown-item" onClick={() => selectCagrStock(s)}>
-                        <strong>{s.symbol}</strong> <span>{s.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="wealthInvestRangeSelect">回看期間</label>
-                <select className="form-select" id="wealthInvestRangeSelect" value={cagrYears}
-                  onChange={e => {
-                    setCagrYears(e.target.value);
-                    saveParams({ cagrYears: e.target.value });
-                    if (selectedCagrSymbol.current) refreshCagrNow(selectedCagrSymbol.current, e.target.value);
-                  }}>
-                  <option value="3">3 年</option>
-                  <option value="5">5 年</option>
-                  <option value="10">10 年</option>
-                </select>
-              </div>
-            </div>
-            {(cagrLabel || cagrStatus) && (
-              <div className="wl-cagr-note">
-                {cagrLabel && <span className="wl-cagr-label">{cagrLabel}</span>}
-                {cagrStatus && <span id="wealthCAGRStatus">{cagrStatus}</span>}
+            {totalAssets > 0 && (
+              <div className="wl-bar" role="img" aria-label={`投資 ${investPct}%、現金 ${100 - investPct}%`}>
+                <span className="is-invest" style={{ width: `${investPct}%` }} />
+                <span className="is-cash" />
               </div>
             )}
-          </fieldset>
 
-          {/* Cash */}
-          <fieldset className="wl-group is-cash">
-            <legend className="wl-group-head">
-              <span className="wl-group-title"><i aria-hidden="true"></i>現金 / 存款</span>
-              <span className="wl-group-current" id="wealthCashCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} /></span>
-            </legend>
-            <div className="wl-grid-2">
-              <div className="form-group">
-                <label className="form-label" htmlFor="wealthCashMonthlyInput">每月存入（NT$）</label>
-                <input className="form-input" id="wealthCashMonthlyInput" type="number" inputMode="decimal" min="0" value={cashMonthly} onChange={e => { setCashMonthly(e.target.value); saveParams({ cashMonthly: e.target.value }); }} />
+            <div className="wl-hero-split">
+              <div className="wl-hero-cell is-invest">
+                <div className="wl-hero-cell-label"><i aria-hidden="true"></i>投資市值</div>
+                <div className="wl-hero-cell-value" id="wealthTotalInvestSub">
+                  NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" />
+                </div>
+                {totalAssets > 0 && <div className="wl-hero-cell-pct" id="wealthTotalInvestPct">占比 {investPct}%</div>}
               </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="wealthCashRateInput">年利率（%）</label>
-                <input className="form-input" id="wealthCashRateInput" type="number" inputMode="decimal" min="0" step="0.01" value={cashRate} onChange={e => { setCashRate(e.target.value); saveParams({ cashRate: e.target.value }); }} />
+              <div className="wl-hero-cell is-cash">
+                <div className="wl-hero-cell-label"><i aria-hidden="true"></i>現金存款</div>
+                <div className="wl-hero-cell-value" id="wealthTotalCashSub">
+                  NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" />
+                </div>
+                {totalAssets > 0 && <div className="wl-hero-cell-pct" id="wealthTotalCashPct">占比 {100 - investPct}%</div>}
               </div>
             </div>
-          </fieldset>
+          </section>
+
+          <div className="wealth-grid">
+          {/* Holdings panel */}
+          <div className="wealth-panel chart-section wl-panel">
+            <div className="wl-panel-head">
+              <div className="wl-panel-head-main">
+                <h3 className="wl-panel-title"><i className="fa-solid fa-chart-line" aria-hidden="true"></i> 投資持股</h3>
+                <div className="wl-panel-sub">
+                  總市值 <strong id="holdingsTotalValue">NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>
+                  {wealthHoldings.length > 0 && <span className="wl-count">{wealthHoldings.length} 檔</span>}
+                </div>
+              </div>
+              <div className="wl-panel-actions">
+                <button type="button" className="wl-icon-btn" onClick={() => handleRefreshAll()} title="全部更新股價" aria-label="全部更新股價">
+                  <i className="fa-solid fa-rotate"></i>
+                </button>
+                <button type="button" className="wl-add-btn" onClick={() => setHoldingModal('new')}>
+                  <i className="fa-solid fa-plus"></i> 新增
+                </button>
+              </div>
+            </div>
+            {allocation.length > 0 && (
+              <div className="wl-alloc">
+                <div className="wl-alloc-bar" role="img" aria-label={'持倉比重：' + allocation.map(h => `${h.name || h.symbol} ${h.pct.toFixed(1)}%`).join('、')}>
+                  {allocation.map(h => (
+                    <span key={h.id} style={{ flexGrow: h.pct, background: symbolColor(h.symbol) }} title={`${h.name || h.symbol} ${h.pct.toFixed(1)}%`} />
+                  ))}
+                </div>
+                <ul className="wl-alloc-legend">
+                  {allocation.map(h => (
+                    <li key={h.id}>
+                      <i style={{ background: symbolColor(h.symbol) }} aria-hidden="true"></i>
+                      <span className="wl-alloc-name">{h.name || h.symbol}</span>
+                      <span className="wl-alloc-pct">{h.pct.toFixed(1)}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div id="holdingsList" className="wealth-scroll-list">
+              {wealthHoldings.length === 0
+                ? <div className="wealth-empty wl-empty"><i className="fa-solid fa-seedling" aria-hidden="true"></i><span>還沒有持股，按右上「新增」加入第一檔</span></div>
+                : wealthHoldings.map(h => {
+                    const value   = h.shares * (h.lastPrice || 0);
+                    const timeStr = h.lastUpdated ? new Date(h.lastUpdated).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                    return (
+                      <div key={h.id} className="wealth-row" data-id={h.id}>
+                        <div className="wealth-row-left">
+                          <span className="wealth-row-symbol" style={{ background: symbolColor(h.symbol), color: '#fff', fontWeight: 700, padding: '2px 8px', borderRadius: 6, fontSize: '0.8rem', letterSpacing: '0.04em', display: 'inline-block', flexShrink: 0 }}>{h.symbol}</span>
+                          <span className="wealth-row-name">{h.name || ''}</span>
+                        </div>
+                        <div className="wealth-row-mid">
+                          <span className="wealth-row-detail" style={{ color: 'var(--text-muted)' }}>{h.shares.toLocaleString()} 股</span>
+                          <span className="wealth-row-price" style={{ color: 'var(--primary-color)' }}>
+                            {h.lastPrice ? <>NT$ <AnimatedNumber value={h.lastPrice} format={v => formatAmount(v, 'asset')} effect="scroll" /></> : '—'}
+                          </span>
+                          {timeStr && <span className="wl-row-time">{timeStr}</span>}
+                        </div>
+                        <div className="wealth-row-value" style={{ color: 'var(--text-main)', fontWeight: 800 }}>{h.lastPrice ? <>NT$ <AnimatedNumber value={Math.round(value)} format={v => formatAmount(v, 'asset')} effect="scroll" /></> : '—'}</div>
+                        <div className="wealth-row-actions">
+                          <button type="button" className="icon-btn" title="更新股價" aria-label="更新股價" onClick={() => handleRefreshPrice(h.id)}>
+                            <i className={`fa-solid fa-rotate${fetchingId === h.id ? ' fa-spin' : ''}`}></i>
+                          </button>
+                          <button type="button" className="icon-btn" title="編輯" aria-label="編輯" onClick={() => setHoldingModal(h)}>
+                            <i className="fa-solid fa-pen"></i>
+                          </button>
+                          <button type="button" className="icon-btn delete" title="刪除" aria-label="刪除" onClick={() => handleDeleteHolding(h.id)}>
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+          </div>
+
+          {/* Bank accounts panel */}
+          <div className="wealth-panel chart-section wl-panel">
+            <div className="wl-panel-head">
+              <div className="wl-panel-head-main">
+                <h3 className="wl-panel-title"><i className="fa-solid fa-building-columns" aria-hidden="true"></i> 銀行現金</h3>
+                <div className="wl-panel-sub">
+                  現金合計 <strong id="bankTotalValue">NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>
+                  {wealthBankAccounts.length > 0 && <span className="wl-count">{wealthBankAccounts.length} 個帳戶</span>}
+                </div>
+              </div>
+              <div className="wl-panel-actions">
+                <button type="button" className="wl-add-btn" onClick={() => { setEditBankId(null); setShowBankModal(true); }}>
+                  <i className="fa-solid fa-plus"></i> 新增
+                </button>
+              </div>
+            </div>
+            <div id="bankAccountsList" className="wealth-scroll-list">
+              {wealthBankAccounts.length === 0
+                ? <div className="wealth-empty wl-empty"><i className="fa-solid fa-piggy-bank" aria-hidden="true"></i><span>還沒有帳戶，按右上「新增」加入第一個</span></div>
+                : wealthBankAccounts.map(a => (
+                    <div key={a.id} className="wealth-row">
+                      <div className="wealth-row-left"><span className="wealth-row-symbol" style={{ fontSize: '0.9rem' }}>{a.bankName}</span></div>
+                      <div className="wealth-row-mid"><span className="wealth-row-detail">利率 {a.rate || 0}%</span></div>
+                      <div className="wealth-row-value">NT$ <AnimatedNumber value={Math.round(a.balance || 0)} format={v => formatAmount(v, 'asset')} effect="scroll" /></div>
+                      <div className="wealth-row-actions">
+                        <button type="button" className="icon-btn" title="編輯" aria-label="編輯" onClick={() => { setEditBankId(a.id); setShowBankModal(true); }}><i className="fa-solid fa-pen"></i></button>
+                        <button type="button" className="icon-btn delete" title="刪除" aria-label="刪除" onClick={() => handleDeleteBank(a.id)}><i className="fa-solid fa-trash"></i></button>
+                      </div>
+                    </div>
+                  ))
+              }
+            </div>
+          </div>
+
+          </div>
+        </>
+      )}
+
+      {view === 'plan' && (
+        <div className="wl-plan-layout">
+          <div className="wl-plan-main">
+            <section className="wealth-panel chart-section wl-panel">
+              <div className="wl-panel-head">
+                <div className="wl-panel-head-main">
+                  <h3 className="wl-panel-title"><i className="fa-solid fa-flag-checkered" aria-hidden="true"></i> 人生目標</h3>
+                  <div className="wl-panel-sub">點一下展開修改；之後的貸款也從每月挪出的錢裡付</div>
+                </div>
+              </div>
+              <div className="wl-prows">
+                {planGoals.map(g => {
+                  const pay = loanPayment(num(g.loan), num(g.loanRate), num(g.loanYears));
+                  const atAge = Math.round(num(planRetire.age) + num(g.years));
+                  return (
+                    <PlanRow key={g.id} id={g.id} title={g.name || '未命名'} open={openRow === g.id} onToggle={() => toggleRow(g.id)}
+                      desc={`${atAge} 歲・頭期 ${wan(num(g.cash))}${num(g.loan) > 0 ? `・貸 ${wan(num(g.loan))}・月付 ${wan(pay)}` : ''}`}>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor={`${g.id}-name`}>名稱</label>
+                        <input className="form-input" id={`${g.id}-name`} value={g.name} onChange={e => updateGoal(g.id, { name: e.target.value })} />
+                      </div>
+                      <div className="wl-life-grid">
+                        {[
+                          ['cash', '頭期現金', '10000', 1], ['loan', '貸款金額', '10000', 1],
+                          ['years', '幾年後', '0.5'], ['loanRate', '貸款利率 %', '0.1'], ['loanYears', '貸款年限', '1'],
+                        ].map(([k, label, step, wide]) => (
+                          <div className={`form-group${wide ? ' is-wide' : ''}`} key={k}>
+                            <label className="form-label" htmlFor={`${g.id}-${k}`}>{label}</label>
+                            <input className="form-input" id={`${g.id}-${k}`} type="number" inputMode="decimal" min="0" step={step} value={g[k]} onChange={e => updateGoal(g.id, { [k]: e.target.value })} />
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" className="wl-prow-delete" onClick={() => removeGoal(g.id)}>
+                        <i className="fa-solid fa-trash" aria-hidden="true"></i> 刪除這個目標
+                      </button>
+                    </PlanRow>
+                  );
+                })}
+                <button type="button" className="wl-life-add" onClick={addGoal}><i className="fa-solid fa-plus" aria-hidden="true"></i> 新增目標</button>
+              </div>
+            </section>
+
+            <section className="wealth-panel chart-section wl-panel wl-calc">
+              <div className="wl-panel-head">
+                <div className="wl-panel-head-main">
+                  <h3 className="wl-panel-title"><i className="fa-solid fa-sliders" aria-hidden="true"></i> 退休與假設</h3>
+                </div>
+              </div>
+              <div className="wl-prows">
+                <PlanRow id="retire" title="退休" open={openRow === 'retire'} onToggle={() => toggleRow('retire')}
+                  desc={`${Math.round(num(planRetire.age))} → ${Math.round(num(planRetire.retireAge))} 歲退休，用到 ${Math.round(num(planRetire.lifeAge))} 歲・月花 ${wan(num(planRetire.monthlySpend))}（勞保勞退 ${wan(num(planRetire.pension))}）`}>
+                  <p className="wl-prow-note">月花費、勞保勞退請用「今天的錢」填，會依通膨自動換算</p>
+                  <div className="wl-life-grid">
+                    {[
+                      ['age', '現在年齡', '1'], ['retireAge', '退休年齡', '1'], ['lifeAge', '預計活到', '1'],
+                      ['monthlySpend', '退休後月花費', '1000', 1], ['pension', '勞保勞退月領', '1000', 1],
+                      ['inflation', '通膨 %', '0.1', 1], ['postReturn', '退休後報酬 %', '0.1', 1],
+                    ].map(([k, label, step, wide]) => (
+                      <div className={`form-group${wide ? ' is-wide' : ''}`} key={k}>
+                        <label className="form-label" htmlFor={`retire-${k}`}>{label}</label>
+                        <input className="form-input" id={`retire-${k}`} type="number" inputMode="decimal" min="0" step={step} value={planRetire[k]} onChange={e => updateRetire({ [k]: e.target.value })} />
+                      </div>
+                    ))}
+                  </div>
+                </PlanRow>
+                <PlanRow id="assume" title="報酬假設" open={openRow === 'assume'} onToggle={() => toggleRow('assume')}
+                  desc={`投資 ${num(invRate)}%・存款 ${num(cashRate)}%・目前每月存 ${wan(curInv + curCashM)}`}>
+                  <p className="wl-prow-note">從現有資產 NT$ {formatAmount(Math.round(totalAssets), 'asset')} 起算；每月存的錢照目前定期定額與存款的比例分配</p>
+                  <div className="wl-calc-groups">
+                  {/* Investment */}
+                  <fieldset className="wl-group is-invest">
+                    <legend className="wl-group-head">
+                      <span className="wl-group-title"><i aria-hidden="true"></i>投資部位</span>
+                      <span className="wl-group-current" id="wealthInvestCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} /></span>
+                    </legend>
+                    <div className="wl-grid-2">
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="wealthInvestMonthlyInput">目前每月定期定額</label>
+                        <input className="form-input" id="wealthInvestMonthlyInput" type="number" inputMode="decimal" min="0" value={invMonthly} onChange={e => { setInvMonthly(e.target.value); saveParams({ invMonthly: e.target.value }); }} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="wealthInvestRateInput">年化報酬率（%）</label>
+                        <input className="form-input" id="wealthInvestRateInput" type="number" inputMode="decimal" min="0" step="0.1" value={invRate} onChange={e => { setInvRate(e.target.value); saveParams({ invRate: e.target.value }); }} />
+                      </div>
+                      {/* CAGR auto-fetch */}
+                      <div className="form-group wl-cagr-search" id="cagrSearchWrap">
+                        <label className="form-label" htmlFor="wealthInvestTickerSearch">CAGR 代號</label>
+                        <input className="form-input" id="wealthInvestTickerSearch" value={cagrSearch} onChange={e => handleCagrSearch(e.target.value)} placeholder="代號搜尋…" autoComplete="off"
+                          onKeyDown={e => {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            const sym = resolveCagrSymbol();
+                            if (!sym) return;
+                            selectedCagrSymbol.current = sym;
+                            setCagrLabel(cagrSearch.trim()); setCagrDropdown([]);
+                            saveParams({ cagrLabel: cagrSearch.trim(), selectedCagrSymbol: sym });
+                            refreshCagrNow(sym);
+                          }} />
+                        {cagrDropdown.length > 0 && (
+                          <div className="wl-dropdown">
+                            {cagrDropdown.map((s, i) => (
+                              <button type="button" key={i} className="wl-dropdown-item" onClick={() => selectCagrStock(s)}>
+                                <strong>{s.symbol}</strong> <span>{s.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="wealthInvestRangeSelect">回看期間</label>
+                        <select className="form-select" id="wealthInvestRangeSelect" value={cagrYears}
+                          onChange={e => {
+                            setCagrYears(e.target.value);
+                            saveParams({ cagrYears: e.target.value });
+                            const sym = resolveCagrSymbol();
+                            if (sym) refreshCagrNow(sym, e.target.value);
+                            else { setCagrStatus('先輸入代號，才會依回看期間計算'); }
+                          }}>
+                          <option value="3">3 年</option>
+                          <option value="5">5 年</option>
+                          <option value="10">10 年</option>
+                        </select>
+                      </div>
+                    </div>
+                    {(cagrLabel || cagrStatus) && (
+                      <div className="wl-cagr-note">
+                        {cagrLabel && <span className="wl-cagr-label">{cagrLabel}</span>}
+                        {cagrStatus && <span id="wealthCAGRStatus">{cagrStatus}</span>}
+                      </div>
+                    )}
+                  </fieldset>
+
+                  {/* Cash */}
+                  <fieldset className="wl-group is-cash">
+                    <legend className="wl-group-head">
+                      <span className="wl-group-title"><i aria-hidden="true"></i>現金 / 存款</span>
+                      <span className="wl-group-current" id="wealthCashCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} /></span>
+                    </legend>
+                    <div className="wl-grid-2">
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="wealthCashMonthlyInput">目前每月存款</label>
+                        <input className="form-input" id="wealthCashMonthlyInput" type="number" inputMode="decimal" min="0" value={cashMonthly} onChange={e => { setCashMonthly(e.target.value); saveParams({ cashMonthly: e.target.value }); }} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="wealthCashRateInput">年利率（%）</label>
+                        <input className="form-input" id="wealthCashRateInput" type="number" inputMode="decimal" min="0" step="0.01" value={cashRate} onChange={e => { setCashRate(e.target.value); saveParams({ cashRate: e.target.value }); }} />
+                      </div>
+                    </div>
+                  </fieldset>
+                  </div>
+                </PlanRow>
+              </div>
+            </section>
+          </div>
+
+            <div className="wl-goal-result is-plan wl-life-result wl-plan-side" aria-live="polite">
+              <div className="wl-goal-result-label">每月要能挪出</div>
+              {life.budget == null ? (
+                <div className="wl-goal-result-main">目標太大，無法達成</div>
+              ) : (
+                <>
+                  <div className="wl-goal-result-main">NT$ <AnimatedNumber value={life.budget} format={v => formatAmount(v, 'asset')} /></div>
+                  <div className="wl-goal-summary">
+                    <span>退休時要備 <strong>NT$ {formatAmount(Math.round(life.sim.need), 'asset')}</strong></span>
+                    <span className="wl-goal-summary-sub">{Math.round(num(planRetire.retireAge))} 歲退休，用到 {Math.round(num(planRetire.lifeAge))} 歲</span>
+                  </div>
+                  <ol className="wl-life-phases">
+                    {life.phases.map((ph, k) => (
+                      <li key={k}>
+                        <span className="wl-life-phase-age">{Math.round(ph.from)}–{Math.round(ph.to)} 歲</span>
+                        <span className="wl-life-phase-desc">
+                          {ph.pay > 0 && <>還貸 NT$ {formatAmount(Math.round(ph.pay), 'asset')}，</>}
+                          {ph.free >= 0
+                            ? <>存 <strong>NT$ {formatAmount(Math.round(ph.free), 'asset')}</strong></>
+                            : <strong className="is-short">每月要從存款補 NT$ {formatAmount(Math.round(-ph.free), 'asset')}</strong>}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="wl-plan-compare">
+                    <span className={life.budget > life.current ? 'is-short' : 'is-ok'}>
+                      {life.budget > life.current
+                        ? `目前每月存 NT$ ${formatAmount(life.current, 'asset')}，還差 NT$ ${formatAmount(life.budget - life.current, 'asset')}`
+                        : `目前每月存 NT$ ${formatAmount(life.current, 'asset')} 已足夠`}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+
+          {life.budget != null && life.labels.length > 1 && (
+          <section className="wealth-panel chart-section wl-panel wl-plan-chart">
+            <div className="wl-panel-head">
+              <div className="wl-panel-head-main">
+                <h3 className="wl-panel-title"><i className="fa-solid fa-chart-line" aria-hidden="true"></i> 資產走勢</h3>
+                <div className="wl-panel-sub">照每月挪出的金額存到退休，虛線是退休那天要備的錢</div>
+              </div>
+            </div>
+            <div className="wl-chart">
+              <WealthChart labels={life.labels} cashData={life.cashData} investData={life.investData} totalData={life.totalData}
+                targetFV={life.sim.need} targetLabel="退休所需" />
+            </div>
+          </section>
+          )}
         </div>
+      )}
 
-        {/* Target + Result */}
-        {/* 目標（短欄 2 格併排）＋ 主結果（整列大字） */}
-        <div className="wl-goal">
-          <div className="wl-goal-fields">
-            <div className="form-group wl-goal-input">
-              <label className="form-label" htmlFor="wealthTargetInput">目標資產（NT$）</label>
-              <input className="form-input" id="wealthTargetInput" type="number" inputMode="decimal" min="0" value={target} onChange={e => { setTarget(e.target.value); saveParams({ target: e.target.value }); }} />
-            </div>
-            <div className="form-group wl-goal-gap">
-              <span className="form-label" id="wealthGapLabel">距離目標</span>
-              <div className="wl-goal-gap-value" aria-labelledby="wealthGapLabel">
-                {goalGap == null ? '—' : goalGap === 0 ? '已達標' : <>NT$ <AnimatedNumber value={Math.round(goalGap)} format={v => formatAmount(v, 'asset')} /></>}
-              </div>
-            </div>
-          </div>
-          <div className="wl-goal-result" aria-live="polite">
-            <div className="wl-goal-result-label">預估達標</div>
-            <div className="wl-goal-result-main">{simulation.result}</div>
-            {simulation.curInv != null ? (
-              <div className="wl-goal-summary" id="wealthSummaryText">
-                <span>總結累積 <strong>NT$ <AnimatedNumber value={Math.round((simulation.curInv || 0) + (simulation.curCash || 0))} format={v => formatAmount(v, 'asset')} /></strong></span>
-                <span className="wl-goal-summary-sub">現金 NT$ <AnimatedNumber value={Math.round(simulation.curCash || 0)} format={v => formatAmount(v, 'asset')} /> ｜ 投資 NT$ <AnimatedNumber value={Math.round(simulation.curInv || 0)} format={v => formatAmount(v, 'asset')} /></span>
-              </div>
-            ) : simulation.summary ? (
-              <div className="wl-goal-summary"><span className="wl-goal-summary-sub">{simulation.summary}</span></div>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Chart */}
-        {simulation.labels?.length > 0 && (
-          <div className="wl-chart" id="wealthChart">
-            <WealthChart
-              labels={simulation.labels}
-              cashData={simulation.cashData}
-              investData={simulation.investData}
-              totalData={simulation.totalData}
-              targetFV={parseFloat(target) || 0}
-            />
-          </div>
-        )}
-      </div>
-
-      </div>{/* end wealth-grid */}
 
       {/* Modals */}
       {holdingModal && <HoldingModal initial={holdingModal === 'new' ? null : holdingModal} onClose={() => setHoldingModal(null)} onSave={handleSaveHolding} />}

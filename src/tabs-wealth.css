@@ -372,42 +372,6 @@
 }
 .wl-cagr-label { font-weight: 600; color: var(--primary-color); }
 
-/* 目標 + 結果：短欄（目標、距離目標）併排；主結果整列大字 */
-.wl-goal {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: 12px;
-  align-items: stretch;
-  margin-top: 14px;
-}
-.wl-goal-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-content: end;
-  gap: 12px;
-}
-.wl-goal .form-group { margin-bottom: 0; }
-.wl-goal-input .form-input {
-  font-family: var(--font-serif);
-  font-weight: 700;
-}
-.wl-goal-gap .form-label { display: block; }
-.wl-goal-gap-value {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
-  font-family: var(--font-serif);
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text-main);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-}
 .wl-goal-result {
   display: flex;
   flex-direction: column;
@@ -447,6 +411,89 @@
 .wl-goal-summary strong { font-family: var(--font-serif); }
 .wl-goal-summary-sub { font-size: 0.78rem; color: var(--text-muted); }
 
+/* 持倉比重：分段條 + 由大到小圖例 */
+.wl-alloc { margin: 4px 0 12px; }
+.wl-alloc-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.wl-alloc-bar > span { flex-basis: 0; min-width: 3px; transition: flex-grow 0.5s cubic-bezier(0.2, 0, 0, 1); }
+.wl-alloc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wl-alloc-legend li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.wl-alloc-legend i { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.wl-alloc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 9em; }
+.wl-alloc-pct { font-weight: 700; color: var(--text-main); }
+
+.wl-goal-result.is-plan { background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg)); }
+.wl-goal-result.is-plan .wl-goal-result-label { color: var(--primary-color); }
+.wl-plan-compare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.wl-plan-compare .is-short { color: var(--danger-color, #B5483B); font-weight: 600; }
+.wl-plan-compare .is-ok    { color: var(--success-color); font-weight: 600; }
+
+.wl-life-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0 10px;
+}
+.wl-life-grid > .form-group { grid-column: span 2; min-width: 0; }   /* 短欄：一列三格 */
+.wl-life-grid > .form-group.is-wide { grid-column: span 3; }         /* 金額：一列兩格 */
+.wl-life-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.wl-life-add:hover { border-color: var(--primary-color); color: var(--primary-color); }
+
+
+.wl-life-phases {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px dashed color-mix(in srgb, var(--primary-color) 30%, transparent);
+  list-style: none;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.wl-life-phases li { display: flex; gap: 12px; align-items: baseline; }
+.wl-life-phase-age { flex: 0 0 5.5em; color: var(--text-muted); font-weight: 600; }
+.wl-life-phase-desc { color: var(--text-main); }
+.wl-life-phase-desc strong { font-family: var(--font-serif); }
+.wl-life-phase-desc .is-short { color: var(--danger-color, #B5483B); font-family: inherit; }
+
 .wl-chart {
   position: relative;
   height: 260px;
@@ -455,8 +502,6 @@
 
 @media (max-width: 720px) {
   .wl-calc-groups { grid-template-columns: 1fr; }
-  .wl-goal { grid-template-columns: minmax(0, 1fr); }
-  .wl-goal-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {
@@ -467,4 +512,143 @@
   .chart-section.wl-panel { padding: 16px 14px; }
   .wl-goal-result { padding: 14px 16px; }
   .wl-goal-result-main { font-size: 1.7rem; }
+}
+
+/* ── 試算分頁切換：我的資產 / 目標規劃 ── */
+.wl-view-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 360px;
+  margin: 0 auto 16px;
+  padding: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+}
+.wl-view-switch button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.wl-view-switch button:hover { color: var(--text-main); }
+.wl-view-switch button.is-active {
+  background: var(--card-bg);
+  color: var(--text-main);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.wl-view-switch button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+/* ── 目標規劃：桌機左輸入、右結果（黏住）；手機結果在最上 ── */
+.wl-plan-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 16px;
+  align-items: start;
+}
+.wl-plan-main { display: grid; gap: 16px; min-width: 0; }
+.wl-plan-main > .wl-panel { margin: 0; }
+.wl-plan-side { position: sticky; top: 16px; }
+.wl-plan-chart { grid-column: 1 / -1; margin: 0; }
+.wl-plan-chart .wl-chart { margin-top: 4px; }
+
+@media (max-width: 900px) {
+  .wl-plan-layout { grid-template-columns: minmax(0, 1fr); }
+  .wl-plan-side { position: static; order: -1; }
+}
+
+/* ── 規劃頁摘要列：平常一行，點開才編輯 ── */
+.wl-prows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.wl-prow {
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  transition: border-color 0.15s ease, box-shadow 0.2s ease;
+}
+.wl-prow.is-open {
+  border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color));
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+}
+.wl-prow-sum {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wl-prow-sum:hover { background: var(--hover-bg); }
+.wl-prow-sum:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+.wl-prow-title {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.wl-prow-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wl-prow-chev {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+.wl-prow.is-open .wl-prow-chev { transform: rotate(180deg); }
+.wl-prow-body {
+  padding: 4px 14px 14px;
+  animation: wl-prow-in 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes wl-prow-in { from { opacity: 0; transform: translateY(-4px); } }
+.wl-prow-note { margin: 0 0 10px; font-size: 0.76rem; color: var(--text-muted); }
+.wl-prow-body .wl-calc-groups { margin-top: 0; }
+.wl-prow-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--danger-color, #B5483B);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wl-prow-delete:hover { text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wl-prow-body { animation: none; }
+  .wl-prow-chev { transition: none; }
+}
+@media (max-width: 600px) {
+  .wl-prow-sum { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+  .wl-prow-title { grid-column: 1; }
+  .wl-prow-desc { grid-column: 1; grid-row: 2; white-space: normal; }
+  .wl-prow-chev { grid-column: 2; grid-row: 1 / span 2; }
+  .wl-plan-chart .wl-chart { height: 210px; }
 }
