@@ -242,6 +242,7 @@ const STATUS_FILTERS = [
 ];
 const SWIPE_W = 84; // 左滑露出的刪除鈕寬度
 const SOON_DAYS = 7;
+const PAGE_SIZE = 5;  // 清單超過才分頁
 const ROW_SPRING = { type: 'spring', stiffness: 520, damping: 42 };
 
 const fmtMD = (date) => `${date.getMonth() + 1}/${date.getDate()}`;
@@ -380,6 +381,10 @@ export default function FixedTab() {
   const [modalItem, setModalItem]   = useState(null);   // null=closed, {}=new, item=edit
   const [showFilter, setShowFilter] = useState(false);
   const [openRowId, setOpenRowId]   = useState(null);   // 目前左滑展開的列
+  const [page, setPage]             = useState(1);
+  const listTopRef = useRef(null);
+  // 換篩選或排序就回第 1 頁
+  useEffect(() => { setPage(1); }, [statusFilter, payFilter, fixedSortMode]);
 
   // 不認得的舊排序值（例如日期）一律回到「即將扣款」
   const sortMode = SORTS.some(s => s.value === fixedSortMode) ? fixedSortMode : 'next';
@@ -415,6 +420,15 @@ export default function FixedTab() {
       const bd = b.next ? b.next.daysLeft : Infinity;
       return ad - bd;
     });
+
+  // 刪到最後一頁沒東西時，自動退回最後一頁
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const curPage    = Math.min(page, totalPages);
+  const pageRows   = rows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+  const goPage = (p) => {
+    vibrate(); setOpenRowId(null); setPage(p);
+    listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // ── Totals（進行中 + 付款篩選）──
   const activeRows   = withNext.filter(r => !r.ended && matchPay(r.item));
@@ -517,7 +531,7 @@ export default function FixedTab() {
       </section>}
 
       {/* 工具列：狀態 + 篩選排序 */}
-      <div className="fx-toolbar">
+      <div className="fx-toolbar" ref={listTopRef}>
         <Segmented options={STATUS_FILTERS} value={statusFilter} onChange={setStatus} label="項目狀態" counts={statusCounts} />
         <button type="button" className={`fx-filter-btn${filterDirty ? ' is-dirty' : ''}`} onClick={() => { vibrate(); setShowFilter(true); }}
           aria-label={`篩選與排序，目前依${SORTS.find(s => s.value === sortMode).label}排序${filterDirty ? '，已篩選付款方式' : ''}`}>
@@ -525,6 +539,22 @@ export default function FixedTab() {
           <span>{SORTS.find(s => s.value === sortMode).label}</span>
         </button>
       </div>
+
+      {/* 分頁（放在清單上方，切換時不用滑到底） */}
+      {totalPages > 1 && (
+        <nav className="fx-pager" aria-label="分頁">
+          <span className="fx-pager-info">共 {rows.length} 筆・第 {curPage}/{totalPages} 頁</span>
+          <button type="button" className="pagination-btn" disabled={curPage === 1} onClick={() => goPage(curPage - 1)} aria-label="上一頁">
+            <i className="fa-solid fa-chevron-left" aria-hidden="true"></i>
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            <button key={p} type="button" className={`pagination-btn${curPage === p ? ' active' : ''}`} aria-current={curPage === p ? 'page' : undefined} onClick={() => goPage(p)}>{p}</button>
+          ))}
+          <button type="button" className="pagination-btn" disabled={curPage === totalPages} onClick={() => goPage(curPage + 1)} aria-label="下一頁">
+            <i className="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </button>
+        </nav>
+      )}
 
       {/* 列表 */}
       {rows.length === 0 ? (
@@ -544,7 +574,7 @@ export default function FixedTab() {
       ) : (
         <div className="fx-list">
           <AnimatePresence initial={false}>
-            {rows.map(({ item, ended, next }) => (
+            {pageRows.map(({ item, ended, next }) => (
               <motion.div key={item.id} layout="position"
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}>

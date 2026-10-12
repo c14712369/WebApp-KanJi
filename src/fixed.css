@@ -585,3 +585,20 @@
   font-size: 0.78rem;
   color: var(--text-muted);
 }
+
+/* 分頁：沿用生活費頁的 .pagination-btn；放在清單上方，左資訊右頁碼 */
+.fx-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+.fx-pager-info {
+  margin-right: auto;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fx-toolbar { scroll-margin-top: 16px; }
