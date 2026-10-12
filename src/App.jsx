@@ -24,17 +24,13 @@ import './tabs-projects.css';
 const LifeTab     = lazy(() => import('./components/tabs/LifeTab'));
 const FixedTab    = lazy(() => import('./components/tabs/FixedTab'));
 const AnalysisTab = lazy(() => import('./components/tabs/AnalysisTab'));
-const AnnualTab   = lazy(() => import('./components/tabs/AnnualTab'));
 const WealthTab   = lazy(() => import('./components/tabs/WealthTab'));
-const ProjectsTab = lazy(() => import('./components/tabs/ProjectsTab'));
 
 const TAB_MAP = {
   life:     LifeTab,
   fixed:    FixedTab,
   analysis: AnalysisTab,
-  annual:   AnnualTab,
   wealth:   WealthTab,
-  projects: ProjectsTab,
 };
 
 const swipeConfidenceThreshold = 10000;

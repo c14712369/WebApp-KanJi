@@ -291,3 +291,24 @@
 @media (max-width: 560px) {
   .an-toolbar .an-mom { order: 3; }
 }
+
+/* 各年明細表：預設收合，圖表已能看出趨勢 */
+.an-details { margin-top: 12px; border-top: 1px solid var(--border-color); }
+.an-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 2px;
+  list-style: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.an-details > summary::-webkit-details-marker { display: none; }
+.an-details > summary:hover { color: var(--text-main); }
+.an-details > summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; border-radius: 6px; }
+.an-details > summary i { font-size: 0.75rem; transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1); }
+.an-details[open] > summary i { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .an-details > summary i { transition: none; } }

@@ -47,15 +47,21 @@ function getLifeExpForMonth(lifeExpenses, ym) {
 
 function buildChartYears(items) {
   const now = new Date().getFullYear();
-  let min = now, max = now + 2;
+  const max = now + 1;  // 最多看到明年；固定支出設很久以後才結束，也不把那些年列出來
+  let min = now;
   items.forEach(i => {
     const s = new Date(i.startDate).getFullYear();
     if (s < min) min = s;
-    if (i.endDate && new Date(i.endDate).getFullYear() > max) max = new Date(i.endDate).getFullYear();
   });
   const years = [];
   for (let y = min; y <= max; y++) years.push(y);
   return years;
+}
+
+// 年度合計要算幾個月：過去年份算滿 12 個月；今年只到本月（還沒扣的固定支出、還沒領的收入不先算）；未來年份 0
+function monthsCounted(year) {
+  const now = new Date();
+  return year < now.getFullYear() ? 12 : year === now.getFullYear() ? now.getMonth() + 1 : 0;
 }
 
 function getUniqueYears(items, lifeExpenses, projects, projectExpenses) {
@@ -68,7 +74,9 @@ function getUniqueYears(items, lifeExpenses, projects, projectExpenses) {
     if (e.date) years.add(new Date(e.date).getFullYear());
   });
   projectExpenseYears(projects, projectExpenses).forEach(y => years.add(Number(y)));
-  return Array.from(years).sort((a, b) => a - b);
+  // 固定支出的結束日可能設到好幾年後，那些年只有預估扣款，最多列到明年
+  const maxYear = new Date().getFullYear() + 1;
+  return Array.from(years).filter(y => y <= maxYear).sort((a, b) => a - b);
 }
 
 // ── Chart hook ───────────────────────────────────────────────────────────────
@@ -119,13 +127,16 @@ export default function AnalysisTab() {
   const {
     items, categories, lifeExpenses, lifeCategories,
     setActiveTab, setLifeCurrentMonth, setLifePendingCatId,
-    projects, projectExpenses, theme
+    projects, projectExpenses, estimatedIncome, theme
   } = useAppStore();
 
   const now    = new Date();
   const initYm = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
 
   const [ym,          setYm]          = useState(initYm);
+  // 分兩頁：本月（分類拆解）/ 長期（趨勢與年度）；只是畫面偏好，存本機即可
+  const [view, setViewState] = useState(() => { try { return localStorage.getItem('analysis_view') || 'month'; } catch { return 'month'; } });
+  const setView = (v) => { setViewState(v); try { localStorage.setItem('analysis_view', v); } catch { /* 無痕模式等 */ } };
   const [chartType,   setChartType]   = useState('month'); // 'year' | 'month'
   const [chartShape,  setChartShape]  = useState('pie');   // 'pie'  | 'bar'
   const [chartYear,   setChartYear]   = useState(now.getFullYear());
@@ -225,7 +236,7 @@ export default function AnalysisTab() {
         },
       });
     }
-  }, [expData, chartShape, theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expData, chartShape, theme, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Life Category Chart ──
   const lifeCatData = useMemo(() => {
@@ -262,7 +273,7 @@ export default function AnalysisTab() {
         },
       },
     });
-  }, [lifeCatData, theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lifeCatData, theme, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Trend Chart ──
   const [trendData, setTrendData] = useState(null);
@@ -306,12 +317,13 @@ export default function AnalysisTab() {
         scales: { y: yScale(), x: xScale() },
       },
     });
-  }, [trendData, trendEmpty, theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trendData, trendEmpty, theme, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Annual compare（圖表與表格共用同一套年度數字）──
   const annualRows = useMemo(() => uniqueYears.map(year => {
+    const lastMonth = monthsCounted(year);
     let annualFixed = 0;
-    for (let m = 1; m <= 12; m++) {
+    for (let m = 1; m <= lastMonth; m++) {
       for (const item of items) {
         annualFixed += calculateExpenseForMonth(item, year, m);
       }
@@ -320,8 +332,21 @@ export default function AnalysisTab() {
       .filter(e => e.type !== 'income' && e.date && e.date.startsWith(String(year)))
       .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const annualProject = sumProjectExpenses(projects, projectExpenses, year);
-    return { year, fixed: annualFixed, life: annualLife, project: annualProject, total: annualFixed + annualLife + annualProject };
-  }), [uniqueYears, items, lifeExpenses, projects, projectExpenses]);
+    // 收入：該月有記收入就用實記，沒有就用預估月收入（原年度報表的算法）
+    const estInc = parseFloat(estimatedIncome) || 0;
+    let income = 0;
+    for (let m = 1; m <= lastMonth; m++) {
+      const ym = `${year}-${String(m).padStart(2, '0')}`;
+      const real = lifeExpenses.reduce((s, e) => s + (e.type === 'income' && (e.date || '').startsWith(ym) ? Number(e.amount) || 0 : 0), 0);
+      income += real > 0 ? real : estInc;
+    }
+    const total = annualFixed + annualLife + annualProject;
+    return { year, fixed: annualFixed, life: annualLife, project: annualProject, total, income, balance: income - total };
+  }), [uniqueYears, items, lifeExpenses, projects, projectExpenses, estimatedIncome]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 年度總計（原「年度報表」頁）：預設今年
+  const [sumYear, setSumYear] = useState(now.getFullYear());
+  const sumRow = annualRows.find(r => r.year === sumYear) || annualRows[annualRows.length - 1];
 
   const [annualData, setAnnualData] = useState(null);
   const buildAnnualData = useCallback(async () => {
@@ -333,7 +358,7 @@ export default function AnalysisTab() {
     const fixedData = [], lifeData = [], projectData = [];
     uniqueYears.forEach(year => {
       let annualFixed = 0;
-      for (let m = 1; m <= 12; m++) {
+      for (let m = 1; m <= monthsCounted(year); m++) {
         for (const item of items) annualFixed += calculateExpenseForMonth(item, year, m);
       }
       fixedData.push(Math.round(annualFixed));
@@ -384,7 +409,7 @@ export default function AnalysisTab() {
         scales: { x: xScale({ stacked: true }), y: yScale({ stacked: true }) },
       }
     });
-  }, [annualData, annualEmpty, theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [annualData, annualEmpty, theme, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 月對月：生活費較上月
   const mom = (() => {
@@ -402,6 +427,16 @@ export default function AnalysisTab() {
 
   return (
     <div className="tab-content an-page">
+      {/* 分頁切換：本月 / 長期（沿用試算頁的 .wl-view-switch） */}
+      <div className="wl-view-switch" role="tablist" aria-label="分析分頁">
+        {[['month', '本月', 'fa-calendar-day'], ['long', '長期', 'fa-chart-line']].map(([id, label, icon]) => (
+          <button key={id} type="button" role="tab" aria-selected={view === id} className={view === id ? 'is-active' : ''} onClick={() => setView(id)}>
+            <i className={`fa-solid ${icon}`} aria-hidden="true"></i> {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'month' && (<>
       {/* 月份切換列 */}
       <div className="an-toolbar">
         <div className="an-month" role="group" aria-label="選擇月份">
@@ -472,7 +507,9 @@ export default function AnalysisTab() {
           )}
         </section>
       </div>
+      </>)}
 
+      {view === 'long' && (<>
       {/* 收支趨勢 */}
       <section className="an-card">
         <div className="an-card-head">
@@ -491,13 +528,38 @@ export default function AnalysisTab() {
       {/* 年度消費對比 */}
       <section className="an-card">
         <div className="an-card-head">
-          <h3><i className="fa-solid fa-chart-bar" aria-hidden="true"></i>年度消費對比</h3>
+          <h3><i className="fa-solid fa-chart-bar" aria-hidden="true"></i>年度收支</h3>
+          {annualRows.length > 0 && (
+            <div className="an-controls">
+              <select className="an-select" aria-label="年度總計年份" value={sumRow?.year} onChange={e => setSumYear(Number(e.target.value))}>
+                {[...annualRows].reverse().map(r => <option key={r.year} value={r.year}>{r.year} 年</option>)}
+              </select>
+            </div>
+          )}
         </div>
+        {sumRow && (
+          <section className="ar-summary" aria-label={`${sumRow.year} 年度總計`}>
+            {[
+              ['總收入', sumRow.income, 'is-pos'],
+              ['總支出', sumRow.total, 'is-neg'],
+              ['結餘', sumRow.balance, sumRow.balance < 0 ? 'is-neg' : 'is-pos'],
+            ].map(([label, v, cls]) => (
+              <div className="ar-stat" key={label}>
+                <div className="ar-stat-label">{label}</div>
+                <div className={`ar-stat-value ${cls}`}>
+                  <span className="ar-cur">{v < 0 ? '−NT$' : 'NT$'}</span><span className="ar-num">{Math.abs(Math.round(v)).toLocaleString()}</span>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
         {!annualData ? loadingBox(280) : annualEmpty ? (
           <ChartEmpty icon="fa-solid fa-chart-column" title="還沒有年度消費資料" hint="固定支出、生活費與專案支出會依年份加總在這裡。" />
         ) : (
           <>
             <div className="an-chart" style={{ height: 280 }}><canvas ref={annualCompareRef}></canvas></div>
+            <details className="an-details">
+              <summary><span>各年明細</span><i className="fa-solid fa-chevron-down" aria-hidden="true"></i></summary>
             <div className="an-table-wrap">
               <table className="an-table">
                 <caption>金額單位：NT$</caption>
@@ -523,9 +585,11 @@ export default function AnalysisTab() {
                 </tbody>
               </table>
             </div>
+            </details>
           </>
         )}
       </section>
+      </>)}
     </div>
   );
 }

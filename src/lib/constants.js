@@ -66,6 +66,4 @@ export const TABS = [
   { id: 'fixed',    label: '固定支出',   mobileLabel: '固定', icon: 'fa-solid fa-list-check' },
   { id: 'analysis', label: '收支分析',   mobileLabel: '分析', icon: 'fa-solid fa-chart-pie' },
   { id: 'wealth',   label: '資產試算',   mobileLabel: '試算', icon: 'fa-solid fa-seedling' },
-  { id: 'projects', label: '專案預算',   mobileLabel: '專案', icon: 'fa-solid fa-plane-up' },
-  { id: 'annual',   label: '年度報表',   mobileLabel: '報表', icon: 'fa-solid fa-calendar-days' },
 ];
