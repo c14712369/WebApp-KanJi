@@ -26,10 +26,11 @@ export default function UpdateBanner() {
           transition={{ type: 'spring', stiffness: 420, damping: 32 }}
         >
           <span className="update-banner-dot" aria-hidden="true"></span>
-          <span className="update-banner-text">有新版本可用</span>
+          <span className="update-banner-text">{applying ? '下載新版中…' : '有新版本可用'}</span>
           <button
             type="button"
             className="update-banner-btn"
+            disabled={applying}
             onClick={() => { setApplying(true); applyUpdate(); }}
           >
             <i className={`fa-solid fa-rotate${applying ? ' fa-spin' : ''}`} aria-hidden="true"></i>更新
