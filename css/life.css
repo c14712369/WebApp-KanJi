@@ -846,3 +846,21 @@ body.modal-open {
 .life-day-header .ldh-date  { font-size: 0.9rem;  font-weight: 600; color: var(--text-main); }
 .life-day-header .ldh-week  { font-size: 0.72rem; color: var(--text-muted); margin-left: 2px; }
 .life-day-header .ldh-total { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+
+/* 剛存檔的那筆閃一下：補記舊日期被排到別頁時，跳過去也一眼看到存到哪 */
+.life-row-flash {
+    --row-flash: color-mix(in srgb, var(--primary-color) 14%, transparent);
+    border-radius: 6px;
+    animation: life-row-flash 1.6s ease-out;
+}
+
+@keyframes life-row-flash {
+    0%, 35% {
+        background-color: var(--row-flash);
+        box-shadow: -8px 0 0 var(--row-flash), 8px 0 0 var(--row-flash);
+    }
+    100% {
+        background-color: transparent;
+        box-shadow: -8px 0 0 transparent, 8px 0 0 transparent;
+    }
+}

@@ -64,6 +64,21 @@ export function sortEntries(entries = [], { catOrder = {}, dir = 'desc' } = {}) 
  * @returns {{totalPages:number, pageGroups:Array}}
  */
 export function paginateGroups(groups = [], page = 1, targetSize = 20) {
+  const pages = buildPages(groups, targetSize);
+  return { totalPages: pages.length || 1, pageGroups: pages[page - 1] || [] };
+}
+
+/**
+ * 某筆明細落在第幾頁（1-based，規則同 paginateGroups）；不在清單內回 null。
+ * 存檔後用來跳到那筆：補記幾天前的帳，常被排到第 2 頁，停在第 1 頁看起來像沒存到。
+ */
+export function findEntryPage(groups = [], entryId, targetSize = 20) {
+  const pages = buildPages(groups, targetSize);
+  const i = pages.findIndex(p => p.some(g => (g.entries || []).some(e => e && e.id === entryId)));
+  return i === -1 ? null : i + 1;
+}
+
+function buildPages(groups, targetSize) {
   const arr = Array.isArray(groups) ? groups : [];
   const pages = [];
   let cur = [], count = 0;
@@ -76,5 +91,5 @@ export function paginateGroups(groups = [], page = 1, targetSize = 20) {
     count += n;
   }
   if (cur.length) pages.push(cur);
-  return { totalPages: pages.length || 1, pageGroups: pages[page - 1] || [] };
+  return pages;
 }

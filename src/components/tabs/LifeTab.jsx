@@ -4,7 +4,7 @@ import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly, confirmDi
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import IconRenderer from '../../lib/IconRenderer';
-import { groupEntriesByDay, paginateGroups, sortEntries } from '../../lib/lifeGrouping';
+import { groupEntriesByDay, paginateGroups, findEntryPage, sortEntries } from '../../lib/lifeGrouping';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { isImportedId } from '../../lib/syncMerge';
 import { computeSpendPace } from '../../lib/spendPace';
@@ -392,6 +392,7 @@ export default function LifeTab() {
   const [showSalary,    setShowSalary]    = useState(false);
   const [salaryVersion, setSalaryVersion] = useState(0); // 儲存薪資設定後重跑自動入帳
   const [filterType,    setFilterType]    = useState('all'); // 'all' | 'expense' | 'income'
+  const [justSavedId,   setJustSavedId]   = useState(null);  // 剛存檔的那筆：跳到它所在頁並閃一下
   const prefersReducedMotion = useReducedMotion();
   const ym = lifeCurrentMonth;
 
@@ -509,6 +510,18 @@ export default function LifeTab() {
   const { totalPages, pageGroups } = paginateGroups(dayGroups, page, PAGE_SIZE);
   const pageItems  = pageGroups.flatMap(g => g.entries);
 
+  // 存檔後跳到那筆所在頁、捲過去：補記幾天前的帳常被排到第 2 頁，停在原頁看起來像沒存到
+  useEffect(() => {
+    if (!justSavedId) return;
+    const target = findEntryPage(dayGroups, justSavedId, PAGE_SIZE);
+    if (target == null) { setJustSavedId(null); return; }   // 被篩選掉或存到別的月份
+    if (target !== page) { setPage(target); return; }
+    document.querySelector(`[data-entry-id="${CSS.escape(justSavedId)}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+    const t = setTimeout(() => setJustSavedId(null), 1600);
+    return () => clearTimeout(t);
+  }, [justSavedId, page]);
+
   // ── Month nav ──
   const changeMonth = (delta) => {
     if (navigator.vibrate) navigator.vibrate(50);
@@ -537,8 +550,10 @@ export default function LifeTab() {
       }
     } else {
       addLifeExpense(entry);
-      showToast('已儲存');
+      const entryYm = (entry.date || '').slice(0, 7);
+      showToast(entryYm === ym ? '已儲存' : `已儲存到 ${Number(entryYm.slice(5, 7))} 月`);
     }
+    setJustSavedId(entry.id);
     setExpModal(null);
   };
   const handleDelete = async (id) => {
@@ -847,7 +862,8 @@ export default function LifeTab() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.98 }}
                             transition={{ duration: 0.15, delay: idx * 0.01, ease: "easeOut" }}
-                            className={isIncome ? "life-income-row" : "life-exp-row"}
+                            className={`${isIncome ? 'life-income-row' : 'life-exp-row'}${e.id === justSavedId ? ' life-row-flash' : ''}`}
+                            data-entry-id={e.id}
                           >
                             <div className={isIncome ? "life-income-arrow" : "life-exp-dot"} style={{ background: cat.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {cat.icon && <IconRenderer name={cat.icon} size={14} color={cat.iconColor || "#fff"} />}

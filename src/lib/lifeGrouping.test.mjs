@@ -3,7 +3,7 @@
  * 驗證「依日期分組」與「分頁時整天不切斷」邏輯。
  */
 import assert from 'node:assert';
-import { groupEntriesByDay, paginateGroups, noteGroupKey, sortEntries } from './lifeGrouping.js';
+import { groupEntriesByDay, paginateGroups, findEntryPage, noteGroupKey, sortEntries } from './lifeGrouping.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -71,6 +71,22 @@ test('page 超出範圍回空陣列', () => {
 test('空輸入安全', () => {
   assert.deepEqual(groupEntriesByDay([]), []);
   assert.equal(paginateGroups([], 1, 20).totalPages, 1);
+});
+
+console.log('\n[findEntryPage — 存檔後跳到那筆所在頁]');
+test('找出某筆明細在第幾頁（與 paginateGroups 同規則）', () => {
+  const groups = [
+    { date: 'd1', entries: [{ id: 'a' }, { id: 'b' }], total: 0 },
+    { date: 'd2', entries: [{ id: 'c' }, { id: 'd' }], total: 0 },
+    { date: 'd3', entries: [{ id: 'e' }], total: 0 },
+  ];
+  assert.equal(findEntryPage(groups, 'a', 4), 1);
+  assert.equal(findEntryPage(groups, 'd', 4), 1);
+  assert.equal(findEntryPage(groups, 'e', 4), 2);
+});
+test('找不到（被篩選掉或在別的月份）回 null', () => {
+  assert.equal(findEntryPage(groupEntriesByDay(sample), 'zzz', 20), null);
+  assert.equal(findEntryPage([], 'a', 20), null);
 });
 
 console.log('\n[noteGroupKey — 備註分群鍵]');
