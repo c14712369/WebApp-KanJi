@@ -41,6 +41,7 @@ const swipePower = (offset, velocity) => {
 export default function App() {
   const { activeTab, setActiveTab, theme } = useAppStore();
   const [direction, setDirection] = useState(0);
+  const [swipeLocked, setSwipeLocked] = useState(false);
   const prevTabRef = useRef(activeTab);
 
   useSync(); // 初始化 auth + 雲端同步
@@ -73,12 +74,26 @@ export default function App() {
 
   // 有彈窗開著時在 body 標記 modal-open，CSS 據此收起手機底部導覽列。
   // 不靠 z-index / :has()：iOS Safari 上分頁動畫層的 stacking context 會讓導覽列壓在彈窗上。
+  // 同時決定要不要關掉左右滑換頁：drag="x" 會在分頁層加 touch-action: pan-y 並搶走橫向手勢，
+  // 彈窗開著或正在輸入時，文字框就不能左右滑看長備註。
   useEffect(() => {
-    const sync = () => document.body.classList.toggle('modal-open', !!document.querySelector('.modal-overlay.active'));
+    const sync = () => {
+      const modalOpen = !!document.querySelector('.modal-overlay.active');
+      document.body.classList.toggle('modal-open', modalOpen);
+      const typing = !!document.activeElement?.matches?.('input, textarea, [contenteditable="true"]');
+      setSwipeLocked(modalOpen || typing);
+    };
     const observer = new MutationObserver(sync);
     observer.observe(document.getElementById('root'), { childList: true, subtree: true });
+    document.addEventListener('focusin', sync);
+    document.addEventListener('focusout', sync);
     sync();
-    return () => { observer.disconnect(); document.body.classList.remove('modal-open'); };
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('focusin', sync);
+      document.removeEventListener('focusout', sync);
+      document.body.classList.remove('modal-open');
+    };
   }, []);
 
   const activeIndex = TABS.findIndex(t => t.id === activeTab);
@@ -142,7 +157,7 @@ export default function App() {
             initial="enter"
             animate="center"
             exit="exit"
-            drag="x"
+            drag={swipeLocked ? false : 'x'}
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={1}
             onDragEnd={handleDragEnd}

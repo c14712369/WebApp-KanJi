@@ -4,7 +4,7 @@ import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly, confirmDi
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import IconRenderer from '../../lib/IconRenderer';
-import { groupEntriesByDay, paginateGroups } from '../../lib/lifeGrouping';
+import { groupEntriesByDay, paginateGroups, sortEntries } from '../../lib/lifeGrouping';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { isImportedId } from '../../lib/syncMerge';
 import { computeSpendPace } from '../../lib/spendPace';
@@ -490,27 +490,19 @@ export default function LifeTab() {
   });
 
   // ── Filtered + sorted list ──
-  // 同一天內：收入在前 → 依分類設定順序分組 → 同分類金額大的在前
+  // 同一天內：收入在前 → 依分類設定順序分組 → 同分類內備註同群的相鄰、依金額由大到小
   const catOrder = {};
   [...lifeIncomeCategories, ...lifeCategories].forEach((c, i) => { if (!(c.id in catOrder)) catOrder[c.id] = i; });
-  const sameDayOrder = (a, b) =>
-    ((a.type === 'income' ? 0 : 1) - (b.type === 'income' ? 0 : 1))
-    || ((catOrder[a.categoryId] ?? 1e9) - (catOrder[b.categoryId] ?? 1e9))
-    || (Number(b.amount) || 0) - (Number(a.amount) || 0)
-    || (a.id || '').localeCompare(b.id || '');
-  const visibleEntries = lifeExpenses
-    .filter(e => {
+  const visibleEntries = sortEntries(
+    lifeExpenses.filter(e => {
       if (!(e.date || '').startsWith(ym)) return false;
       if (e.type === 'income' && e._linkedExpenseId) return false;
       if (selectedCatId !== null) return e.categoryId === selectedCatId;
       if (filterType !== 'all') return e.type === filterType;
       return true;
-    })
-    .sort((a, b) =>
-      sortMode === 'date-desc'
-        ? (b.date.localeCompare(a.date) || sameDayOrder(a, b))
-        : (a.date.localeCompare(b.date) || sameDayOrder(a, b))
-    );
+    }),
+    { catOrder, dir: sortMode === 'date-desc' ? 'desc' : 'asc' }
+  );
 
   // 依日期分組，分頁時整天不切斷（避免同一天明細被拆到不同頁而誤以為漏記）
   const dayGroups = groupEntriesByDay(visibleEntries);

@@ -21,6 +21,42 @@ export function groupEntriesByDay(entries = []) {
 }
 
 /**
+ * 備註分群鍵：去掉開頭的 [卡名] 標籤後取第一個詞（半形/全形空白分隔），不分大小寫。
+ * 「伴手禮 小老闆」「伴手禮 芒果乾」→ 都是「伴手禮」。
+ */
+export function noteGroupKey(note) {
+  const s = String(note || '').replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+  return (s.split(/[\s　]+/)[0] || '').toLowerCase();
+}
+
+/**
+ * 明細排序：日期（dir）→ 同日收入在前 → 分類設定順序 → 同分類內「備註同群的黏在一起」，
+ * 群組依該群最大一筆金額由大到小，群內也由大到小。不改動輸入陣列。
+ * @param {Array} entries
+ * @param {{catOrder?: Object<string, number>, dir?: 'asc'|'desc'}} opts
+ */
+export function sortEntries(entries = [], { catOrder = {}, dir = 'desc' } = {}) {
+  const arr = Array.isArray(entries) ? entries : [];
+  const amt = e => Number(e.amount) || 0;
+  const groupId = e => `${e.date}|${e.type}|${e.categoryId}|${noteGroupKey(e.note)}`;
+  const groupMax = {};
+  for (const e of arr) {
+    const g = groupId(e);
+    groupMax[g] = Math.max(groupMax[g] ?? -Infinity, amt(e));
+  }
+  const sign = dir === 'asc' ? 1 : -1;
+  return arr.slice().sort((a, b) =>
+    sign * (a.date || '').localeCompare(b.date || '')
+    || ((a.type === 'income' ? 0 : 1) - (b.type === 'income' ? 0 : 1))
+    || ((catOrder[a.categoryId] ?? 1e9) - (catOrder[b.categoryId] ?? 1e9))
+    || (groupMax[groupId(b)] - groupMax[groupId(a)])
+    || noteGroupKey(a.note).localeCompare(noteGroupKey(b.note))
+    || (amt(b) - amt(a))
+    || (a.id || '').localeCompare(b.id || '')
+  );
+}
+
+/**
  * 以「日」為單位分頁：每頁累積到接近 targetSize 筆就換頁，但同一天的明細永不跨頁。
  * @param {Array} groups - groupEntriesByDay 的結果
  * @param {number} page - 1-based
