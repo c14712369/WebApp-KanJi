@@ -1,0 +1,59 @@
+/* ======================================================
+   GenYoMin (源樣明體 / 源様明朝) Web Font Declarations
+   Based on https://github.com/ButTaiwan/genyo-font
+   License: SIL Open Font License 1.1
+   ====================================================== */
+
+@font-face {
+  font-family: 'GenYoMin';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('GenYoMin2 TW-R'),
+       local('GenYoMin2 TW Regular'),
+       local('GenYoMin2 TW'),
+       local('GenYoMin TW-R'),
+       local('GenYoMin TW Regular'),
+       local('GenYoMin TW'),
+       local('GenYoMin-Regular'),
+       local('GenYoMin'),
+       local('源樣明體 Regular'),
+       local('源樣明體'),
+       url('https://cdn.jsdelivr.net/gh/ButTaiwan/genyo-font@master/otf/TW/GenYoMin2TW-R.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'GenYoMin';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('GenYoMin2 TW-M'),
+       local('GenYoMin2 TW Medium'),
+       local('GenYoMin2 TW'),
+       local('GenYoMin TW-M'),
+       local('GenYoMin TW Medium'),
+       local('GenYoMin TW'),
+       local('GenYoMin-Medium'),
+       local('GenYoMin'),
+       local('源樣明體 Medium'),
+       local('源樣明體'),
+       url('https://cdn.jsdelivr.net/gh/ButTaiwan/genyo-font@master/otf/TW/GenYoMin2TW-M.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'GenYoMin';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('GenYoMin2 TW-B'),
+       local('GenYoMin2 TW Bold'),
+       local('GenYoMin2 TW'),
+       local('GenYoMin TW-B'),
+       local('GenYoMin TW Bold'),
+       local('GenYoMin TW'),
+       local('GenYoMin-Bold'),
+       local('GenYoMin'),
+       local('源樣明體 Bold'),
+       local('源樣明體'),
+       url('https://cdn.jsdelivr.net/gh/ButTaiwan/genyo-font@master/otf/TW/GenYoMin2TW-B.otf') format('opentype');
+}

@@ -4,18 +4,18 @@ import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly, confirmDi
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import IconRenderer from '../../lib/IconRenderer';
-import { groupEntriesByDay, paginateGroups, findEntryPage, sortEntries } from '../../lib/lifeGrouping';
+import { sortEntries } from '../../lib/lifeGrouping';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { isImportedId } from '../../lib/syncMerge';
 import { computeSpendPace } from '../../lib/spendPace';
 import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
+import LifeEntryRow from './LifeEntryRow';
+import CalendarView from './CalendarView';
 
 const localYm = () => {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 };
-
-const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
 
 // 進度條：從 0 滑動至目標寬度
 function BarFill({ value, className, id }) {
@@ -66,8 +66,6 @@ function StackedExpenseBar({ value, segments, id }) {
     </div>
   );
 }
-
-const PAGE_SIZE = 20;
 
 const LIFE_SECTIONS = [
   { id: 'overview', label: '本月總覽', icon: 'fa-gauge-high' },
@@ -386,18 +384,38 @@ export default function LifeTab() {
   const [selectedCatId, setSelectedCatId] = useState(null);
   const [sortMode,      setSortMode]      = useState('date-desc');
   const [lifeView,      setLifeView]      = useState('exp');
-  const [page,          setPage]          = useState(1);
   const [expModal,      setExpModal]      = useState(null);
   const [newType,       setNewType]       = useState('expense');
   const [showSalary,    setShowSalary]    = useState(false);
   const [salaryVersion, setSalaryVersion] = useState(0); // 儲存薪資設定後重跑自動入帳
   const [filterType,    setFilterType]    = useState('all'); // 'all' | 'expense' | 'income'
-  const [justSavedId,   setJustSavedId]   = useState(null);  // 剛存檔的那筆：跳到它所在頁並閃一下
+  const [justSavedId,   setJustSavedId]   = useState(null);  // 剛存檔的那筆：聚焦並閃爍
   const prefersReducedMotion = useReducedMotion();
   const ym = lifeCurrentMonth;
 
-  // Reset page when month, category filter, or type filter changes
-  useEffect(() => { setPage(1); }, [ym, selectedCatId, filterType]);
+  // 選取的日曆日期：當月預設為今日，其他月份預設為 null（看整月）
+  const [selectedCalDate, setSelectedCalDate] = useState(() => {
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return ym === localYm() ? todayStr : null;
+  });
+
+  // 跨月切換時同步選定日期
+  useEffect(() => {
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (ym === localYm()) {
+      setSelectedCalDate(todayStr);
+    } else {
+      setSelectedCalDate(null);
+    }
+  }, [ym]);
+
+  const handleQuickAdd = (targetDate) => {
+    if (navigator.vibrate) navigator.vibrate(50);
+    setNewType('expense');
+    setExpModal({ date: targetDate });
+  };
 
   // When category filter is selected, automatically align type filter to expense
   useEffect(() => {
@@ -494,33 +512,31 @@ export default function LifeTab() {
   // 同一天內：收入在前 → 依分類設定順序分組 → 同分類內備註同群的相鄰、依金額由大到小
   const catOrder = {};
   [...lifeIncomeCategories, ...lifeCategories].forEach((c, i) => { if (!(c.id in catOrder)) catOrder[c.id] = i; });
-  const visibleEntries = sortEntries(
+  const calEntries = sortEntries(
     lifeExpenses.filter(e => {
       if (!(e.date || '').startsWith(ym)) return false;
       if (e.type === 'income' && e._linkedExpenseId) return false;
-      if (selectedCatId !== null) return e.categoryId === selectedCatId;
-      if (filterType !== 'all') return e.type === filterType;
+      if (selectedCatId !== null && e.categoryId !== selectedCatId) return false;
+      if (filterType !== 'all' && e.type !== filterType) return false;
       return true;
     }),
     { catOrder, dir: sortMode === 'date-desc' ? 'desc' : 'asc' }
   );
 
-  // 依日期分組，分頁時整天不切斷（避免同一天明細被拆到不同頁而誤以為漏記）
-  const dayGroups = groupEntriesByDay(visibleEntries);
-  const { totalPages, pageGroups } = paginateGroups(dayGroups, page, PAGE_SIZE);
-  const pageItems  = pageGroups.flatMap(g => g.entries);
-
-  // 存檔後跳到那筆所在頁、捲過去：補記幾天前的帳常被排到第 2 頁，停在原頁看起來像沒存到
+  // 存檔後聚焦該筆日期、捲過去並閃爍提示
   useEffect(() => {
     if (!justSavedId) return;
-    const target = findEntryPage(dayGroups, justSavedId, PAGE_SIZE);
-    if (target == null) { setJustSavedId(null); return; }   // 被篩選掉或存到別的月份
-    if (target !== page) { setPage(target); return; }
-    document.querySelector(`[data-entry-id="${CSS.escape(justSavedId)}"]`)
-      ?.scrollIntoView({ block: 'center', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+    const savedEntry = lifeExpenses.find(e => e.id === justSavedId);
+    if (savedEntry && savedEntry.date) {
+      setSelectedCalDate(savedEntry.date);
+    }
+    const timer = setTimeout(() => {
+      document.querySelector(`[data-entry-id="${CSS.escape(justSavedId)}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+    }, 120);
     const t = setTimeout(() => setJustSavedId(null), 1600);
-    return () => clearTimeout(t);
-  }, [justSavedId, page]);
+    return () => { clearTimeout(timer); clearTimeout(t); };
+  }, [justSavedId, lifeExpenses]);
 
   // ── Month nav ──
   const changeMonth = (delta) => {
@@ -729,192 +745,36 @@ export default function LifeTab() {
             >
               <div className="life-detail-panel" style={{ width: '100%' }}>
                 {selectedCatId !== null && (
-                  <div className="life-detail-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 8px 16px', background: 'transparent', border: 'none' }}>
+                  <div className="life-detail-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px 4px 16px', background: 'transparent', border: 'none' }}>
                     <h3 id="lifeDetailTitle" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)', letterSpacing: '0.3px' }}>
                       {lifeCategories.find(c => c.id === selectedCatId)?.name || '分類明細'}
                     </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button className="icon-btn" id="lifeExpSortBtn"
-                        title={sortMode === 'date-desc' ? '新到舊' : '舊到新'}
-                        onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSortMode(s => s === 'date-desc' ? 'date-asc' : 'date-desc'); setPage(1); }}>
-                        <i className={`fa-solid ${sortMode === 'date-desc' ? 'fa-arrow-down-short-wide' : 'fa-arrow-up-short-wide'}`}></i>
-                      </button>
-                      <button className="icon-btn" id="lifeClearFilter" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(null); setPage(1); }} title="清除篩選">
+                      <button className="icon-btn" id="lifeClearFilter" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(null); }} title="清除篩選">
                         <i className="fa-solid fa-xmark"></i>
                       </button>
                     </div>
                   </div>
                 )}
 
-                {selectedCatId === null && (() => {
-                  const getOptIcon = (key, isActive) => {
-                    if (key === 'all') {
-                      if (!isActive) return 'fa-asterisk';
-                      return sortMode === 'date-desc' ? 'fa-arrow-down-wide-short' : 'fa-arrow-up-short-wide';
-                    }
-                    if (key === 'expense') {
-                      if (!isActive) return 'fa-arrow-down-long';
-                      return sortMode === 'date-desc' ? 'fa-arrow-down-long' : 'fa-arrow-up-long';
-                    }
-                    if (key === 'income') {
-                      if (!isActive) return 'fa-arrow-up-long';
-                      return sortMode === 'date-desc' ? 'fa-arrow-down-long' : 'fa-arrow-up-long';
-                    }
-                  };
-
-                  return (
-                    <div style={{
-                      display: 'flex',
-                      background: 'var(--bg-color)',
-                      borderRadius: '9999px',
-                      padding: '5px',
-                      margin: '0 16px 14px 16px',
-                      border: '1px solid var(--border-color)',
-                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)',
-                      gap: '6px'
-                    }}>
-                      {[
-                        { key: 'all', label: '全部' },
-                        { key: 'expense', label: '支出' },
-                        { key: 'income', label: '收入' }
-                      ].map(opt => {
-                        const isActive = filterType === opt.key;
-                        const iconClass = getOptIcon(opt.key, isActive);
-                        
-                        return (
-                          <motion.button
-                            key={opt.key}
-                            whileTap={{ scale: 0.96 }}
-                            style={{
-                              flex: 1,
-                              padding: '8px 0',
-                              border: 'none',
-                              borderRadius: '9999px',
-                              background: isActive ? 'var(--card-bg)' : 'transparent',
-                              color: isActive 
-                                ? (opt.key === 'expense' ? 'var(--danger-color)' : opt.key === 'income' ? 'var(--success-color)' : 'var(--primary-color)') 
-                                : 'var(--text-muted)',
-                              boxShadow: isActive ? '0 1px 3px rgba(0, 0, 0, 0.08), var(--shadow-sm)' : 'none',
-                              fontWeight: isActive ? 600 : 500,
-                              transition: 'background-color 0.2s, color 0.2s, box-shadow 0.2s',
-                              fontSize: '0.9rem',
-                              lineHeight: 1,
-                              minHeight: 36,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 6,
-                              cursor: 'pointer',
-                              outline: 'none',
-                              WebkitTapHighlightColor: 'transparent'
-                            }}
-                            onClick={() => {
-                              if (navigator.vibrate) navigator.vibrate(20);
-                              if (filterType === opt.key) {
-                                setSortMode(s => s === 'date-desc' ? 'date-asc' : 'date-desc');
-                              } else {
-                                setFilterType(opt.key);
-                                setSortMode('date-desc');
-                              }
-                            }}
-                          >
-                            <i className={`fa-solid ${iconClass}`} aria-hidden="true" style={{ fontSize: '0.8rem', width: '1em', lineHeight: 1, display: 'inline-flex', justifyContent: 'center' }}></i>
-                            <span style={{ lineHeight: 1 }}>{opt.label}</span>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-
-                <div id="lifeExpList" style={{ height: 450, overflowY: 'auto', paddingRight: 4 }}>
-                  {pageItems.length === 0 ? (
-                    <div className="empty-state">
-                      <span className="empty-icon"><i className="fa-regular fa-note-sticky"></i></span>
-                      <strong>本月尚無記錄</strong>
-                      <p>點右上角 + 新增收支</p>
-                    </div>
-                  ) : (
-                    <AnimatePresence mode="popLayout">
-                      {pageGroups.map(group => {
-                        const gParts = (group.date || '').split('-');
-                        const gWeek = group.date ? WEEKDAY_NAMES[new Date(group.date + 'T00:00:00').getDay()] : '';
-                        return (
-                        <div key={group.date}>
-                          <div className="life-day-header">
-                            <span className="ldh-date">
-                              {parseInt(gParts[1])}/{parseInt(gParts[2])}
-                              <span className="ldh-week">（{gWeek}）</span>
-                            </span>
-                            <span className="ldh-total">合計 NT$ {formatAmount(group.total, 'expense')}</span>
-                          </div>
-                      {group.entries.map((e, idx) => {
-                        const rw  = rewardMap[e.id];
-                        const isIncome = e.type === 'income';
-                        const cat = isIncome 
-                          ? (lifeIncomeCategories.find(c => c.id === e.categoryId) || { name: '收入', color: '#3D7A5A' })
-                          : (lifeCategories.find(c => c.id === e.categoryId) || { name: '支出', color: '#6B6B6B' });
-                        
-                        return (
-                          <motion.div
-                            key={e.id}
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.98 }}
-                            transition={{ duration: 0.15, delay: idx * 0.01, ease: "easeOut" }}
-                            className={`${isIncome ? 'life-income-row' : 'life-exp-row'}${e.id === justSavedId ? ' life-row-flash' : ''}`}
-                            data-entry-id={e.id}
-                          >
-                            <div className={isIncome ? "life-income-arrow" : "life-exp-dot"} style={{ background: cat.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {cat.icon && <IconRenderer name={cat.icon} size={14} color={cat.iconColor || "#fff"} />}
-                            </div>
-                            <div className="life-exp-info">
-                              <div className="life-item-main-line">
-                                <span className="life-item-cat-name">{cat.name}</span>
-                                {e.note && <><span className="life-item-note-sep">·</span><span className="life-item-note" title={e.note}>{e.note}</span></>}
-                                {!isIncome && (paymentMethods.find(p => p.id === e.paymentMethod)?.type === 'card' || e.paymentMethod === 'card' || e.paymentMethod === 'credit_card_default') && (
-                                  <i className="fa-solid fa-credit-card" style={{ fontSize: '0.7rem', opacity: 0.6, marginLeft: 4 }}></i>
-                                )}
-                              </div>
-                            </div>
-                            <div className="life-exp-amount-wrap">
-                              <div className={isIncome ? "life-income-amount" : "life-exp-amount stat-negative"}>
-                                {isIncome ? '+' : '-'} NT$ <AnimatedNumber value={Math.round(e.amount)} format={v => formatAmount(v, isIncome ? 'income' : 'expense')} />
-                              </div>
-                              {rw && (
-                                <div className="life-exp-reward-inline">
-                                  <i className="fa-solid fa-gift"></i> +<AnimatedNumber value={rw.amount} />{rw.rate ? ` (${rw.rate})` : ''}
-                                </div>
-                              )}
-                            </div>
-                            <div className="life-item-actions">
-                              <button className="icon-btn" onClick={() => openEdit(e)}><i className="fa-solid fa-pen"></i></button>
-                              <button className="icon-btn delete" onClick={() => handleDelete(e.id)}><i className="fa-solid fa-trash"></i></button>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                        </div>
-                        );
-                      })}
-                    </AnimatePresence>
-                  )}
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: 4, padding: '12px 0', flexWrap: 'wrap' }}>
-                    <button className="pagination-btn" disabled={page === 1} onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setPage(p => p - 1); }}>
-                      <i className="fa-solid fa-chevron-left"></i>
-                    </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                      <button key={p} className={`pagination-btn${page === p ? ' active' : ''}`} onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setPage(p); }}>{p}</button>
-                    ))}
-                    <button className="pagination-btn" disabled={page === totalPages} onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setPage(p => p + 1); }}>
-                      <i className="fa-solid fa-chevron-right"></i>
-                    </button>
-                  </div>
-                )}
+                <CalendarView
+                  ym={ym}
+                  entries={calEntries}
+                  selectedDate={selectedCalDate}
+                  onSelectDate={setSelectedCalDate}
+                  onQuickAdd={handleQuickAdd}
+                  lifeCategories={lifeCategories}
+                  lifeIncomeCategories={lifeIncomeCategories}
+                  paymentMethods={paymentMethods}
+                  rewardMap={rewardMap}
+                  justSavedId={justSavedId}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  filterType={filterType}
+                  setFilterType={setFilterType}
+                  sortMode={sortMode}
+                  setSortMode={setSortMode}
+                />
               </div>
             </motion.div>
           ) : (
@@ -929,7 +789,7 @@ export default function LifeTab() {
               <div className="life-sidebar" style={{ width: '100%' }}>
                 <div className="life-cat-list" style={{ overflowY: 'auto' }}>
                   <div className={`life-cat-row${selectedCatId === null ? ' active' : ''}`}
-                    onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(null); setPage(1); setLifeView('exp'); }}>
+                    onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(null); setLifeView('exp'); }}>
                     <div className="life-cat-row-left">
                       <div className="life-cat-dot" style={{ background: 'var(--text-muted)' }}></div>
                       <div className="life-cat-row-info"><div className="life-cat-row-name">全部支出</div></div>
@@ -943,7 +803,7 @@ export default function LifeTab() {
                     return (
                       <div key={cat.id}
                         className={`life-cat-row${selectedCatId === cat.id ? ' active' : ''}${cat.isOver ? ' over-budget-row' : ''}`}
-                        onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(cat.id); setPage(1); setLifeView('exp'); }}>
+                        onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(cat.id); setLifeView('exp'); }}>
                         <div className="life-cat-row-left">
                           <div className="life-cat-dot" style={{ background: cat.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {cat.icon && <IconRenderer name={cat.icon} size={14} color={cat.iconColor || "#fff"} />}
@@ -987,7 +847,7 @@ export default function LifeTab() {
           lifeIncomeCategories={lifeIncomeCategories}
           paymentMethods={paymentMethods}
           currentMonth={ym}
-          initial={expModal.id ? expModal : { type: newType }}
+          initial={expModal.id ? expModal : { type: newType, ...(expModal.date ? { date: expModal.date } : {}) }}
           onClose={() => setExpModal(null)}
           onSave={handleSaveExp}
         />

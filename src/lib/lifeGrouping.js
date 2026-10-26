@@ -93,3 +93,58 @@ function buildPages(groups, targetSize) {
   if (cur.length) pages.push(cur);
   return pages;
 }
+
+/**
+ * 建立當月日曆網格資料結構（純函式，防範 UTC 偏移，排除折抵回饋金）。
+ * @param {string} ym - 格式 'YYYY-MM'
+ * @param {Array} entries - 當月明細列表
+ * @returns {{paddingDays: number, days: Array<{date: string, day: number, entries: Array, hasExpense: boolean, hasIncome: boolean, totalExpense: number, totalIncome: number}>}}
+ */
+export function buildMonthCalendar(ym, entries = []) {
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return { paddingDays: 0, days: [] };
+  const [yearStr, monthStr] = ym.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+
+  // 防範 UTC 飄移：以本地年、月數值計算
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDayOfWeek = new Date(year, month - 1, 1).getDay(); // 0: 週日 ~ 6: 週六
+
+  const dayMap = {};
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${yearStr}-${monthStr}-${String(d).padStart(2, '0')}`;
+    dayMap[dateStr] = {
+      date: dateStr,
+      day: d,
+      entries: [],
+      hasExpense: false,
+      hasIncome: false,
+      totalExpense: 0,
+      totalIncome: 0,
+    };
+  }
+
+  const arr = Array.isArray(entries) ? entries : [];
+  for (const e of arr) {
+    if (!e || !e.date || !dayMap[e.date]) continue;
+    const item = dayMap[e.date];
+    item.entries.push(e);
+    const amt = Number(e.amount) || 0;
+    if (e.type === 'income') {
+      // 排除信用卡回饋金折抵，避免虛擬收入綠點
+      if (!e._linkedExpenseId) {
+        item.hasIncome = true;
+        item.totalIncome += amt;
+      }
+    } else {
+      item.hasExpense = true;
+      item.totalExpense += amt;
+    }
+  }
+
+  return {
+    paddingDays: firstDayOfWeek,
+    days: Object.values(dayMap),
+  };
+}
+

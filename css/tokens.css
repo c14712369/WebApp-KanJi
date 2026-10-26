@@ -1,4 +1,4 @@
-﻿/* ===========================
+/* ===========================
    ?��?簡�? ??SubItemManager
    Wabi-Sabi Minimalism
    =========================== */
@@ -24,8 +24,8 @@
     --radius:    8px;
     --radius-sm: 5px;
     --radius-lg: 16px;
-    --font-serif: 'Noto Serif TC', serif;
-    --font-sans:  'Noto Sans TC', sans-serif;
+    --font-serif: 'GenYoMin', 'GenYoMin2 TW', 'GenYoMin TW', '源樣明體', 'Noto Serif TC', serif;
+    --font-sans:  'GenYoMin', 'GenYoMin2 TW', 'GenYoMin TW', '源樣明體', 'Noto Sans TC', sans-serif;
     --hover-bg:      rgba(39, 55, 77, 0.05);
     --shadow-color:  rgba(39, 55, 77, 0.10);
     --success-light: rgba(61, 122, 90, 0.08);

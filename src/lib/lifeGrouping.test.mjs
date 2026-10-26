@@ -3,7 +3,7 @@
  * 驗證「依日期分組」與「分頁時整天不切斷」邏輯。
  */
 import assert from 'node:assert';
-import { groupEntriesByDay, paginateGroups, findEntryPage, noteGroupKey, sortEntries } from './lifeGrouping.js';
+import { groupEntriesByDay, paginateGroups, findEntryPage, noteGroupKey, sortEntries, buildMonthCalendar } from './lifeGrouping.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -143,6 +143,68 @@ test('不改動輸入陣列', () => {
   const copy = trip.map(e => e.id);
   sortEntries(trip, { catOrder: { travel: 0 } });
   assert.deepEqual(trip.map(e => e.id), copy);
+});
+
+console.log('\n[buildMonthCalendar — 月曆資料與記帳紅綠點]');
+test('計算當月天數與前置補齊（2026-10 有 31 天，1 號是週四 paddingDays=4）', () => {
+  const cal = buildMonthCalendar('2026-10', []);
+  assert.equal(cal.paddingDays, 4);
+  assert.equal(cal.days.length, 31);
+  assert.equal(cal.days[0].date, '2026-10-01');
+  assert.equal(cal.days[30].date, '2026-10-31');
+  assert.equal(cal.days[0].hasExpense, false);
+  assert.equal(cal.days[0].hasIncome, false);
+});
+
+test('閏年計算（2024-02 有 29 天，2026-02 有 28 天）', () => {
+  const leap = buildMonthCalendar('2024-02', []);
+  assert.equal(leap.days.length, 29);
+  const nonLeap = buildMonthCalendar('2026-02', []);
+  assert.equal(nonLeap.days.length, 28);
+});
+
+test('標記支出紅點與合計金額', () => {
+  const entries = [
+    { id: '1', date: '2026-10-15', amount: 350, type: 'expense' },
+    { id: '2', date: '2026-10-15', amount: 50, type: 'expense' },
+  ];
+  const cal = buildMonthCalendar('2026-10', entries);
+  const day15 = cal.days[14];
+  assert.equal(day15.hasExpense, true);
+  assert.equal(day15.totalExpense, 400);
+  assert.equal(day15.hasIncome, false);
+});
+
+test('標記收入綠點並排除信用卡回饋金折抵（_linkedExpenseId 不觸發假綠點）', () => {
+  const entries = [
+    { id: '1', date: '2026-10-20', amount: 50000, type: 'income' },
+    { id: '2', date: '2026-10-21', amount: 15, type: 'income', _linkedExpenseId: 'exp-123' }, // 回饋折抵
+  ];
+  const cal = buildMonthCalendar('2026-10', entries);
+  const day20 = cal.days[19];
+  const day21 = cal.days[20];
+  assert.equal(day20.hasIncome, true);
+  assert.equal(day20.totalIncome, 50000);
+  assert.equal(day21.hasIncome, false); // 排除回饋金！
+  assert.equal(day21.totalIncome, 0);
+});
+
+test('同一天同時有支出與真實收入', () => {
+  const entries = [
+    { id: '1', date: '2026-10-05', amount: 200, type: 'expense' },
+    { id: '2', date: '2026-10-05', amount: 3000, type: 'income' },
+  ];
+  const cal = buildMonthCalendar('2026-10', entries);
+  const day5 = cal.days[4];
+  assert.equal(day5.hasExpense, true);
+  assert.equal(day5.hasIncome, true);
+  assert.equal(day5.totalExpense, 200);
+  assert.equal(day5.totalIncome, 3000);
+});
+
+test('空輸入或格式錯誤安全回退', () => {
+  assert.deepEqual(buildMonthCalendar('', []), { paddingDays: 0, days: [] });
+  assert.deepEqual(buildMonthCalendar(null, null), { paddingDays: 0, days: [] });
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);

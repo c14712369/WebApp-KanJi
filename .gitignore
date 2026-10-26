@@ -28,3 +28,6 @@ FUTURE_PLANS.md
 
 # 本地備份檔
 *.backup.*
+
+# GAS 暫存
+.clasp.json
