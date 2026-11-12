@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import IconRenderer from '../../lib/IconRenderer';
 import AnimatedNumber from '../../lib/AnimatedNumber';
-import { formatAmount } from '../../lib/utils';
+import { formatAmount, fmtMoney } from '../../lib/utils';
 
 /**
  * 明細列（參考 MOZE）：左大圓分類圖示｜中間標題（備註/店家）＋副標｜右金額＋分類、付款方式小標籤。
@@ -58,7 +58,7 @@ export default function LifeEntryRow({
         {/* 分類已在右側標籤，副標只放回饋，不重複顯示 */}
         {reward && (
           <span className="kk-entry-sub is-reward">
-            <i className="fa-solid fa-gift" aria-hidden="true"></i> 回饋 +<AnimatedNumber value={reward.amount} />{reward.rate ? `（${reward.rate}）` : ''}
+            <i className="fa-solid fa-gift" aria-hidden="true"></i> 回饋 +<AnimatedNumber value={reward.amount} format={fmtMoney} />{reward.rate ? `（${reward.rate}）` : ''}
           </span>
         )}
       </span>

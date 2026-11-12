@@ -328,11 +328,12 @@ function PlanRow({ id, title, desc, open, onToggle, children }) {
 }
 
 // 摘要用的萬元寫法：26,953 → 2.7 萬、17,000,000 → 1,700 萬
-const wan = v => v >= 10000 ? `${(Math.round(v / 1000) / 10).toLocaleString()} 萬` : Math.round(v).toLocaleString();
+const wan = v => { const s = formatAmount(v); return s === '****' ? s : v >= 10000 ? `${(Math.round(v / 1000) / 10).toLocaleString()} 萬` : Math.round(v).toLocaleString(); };
 
 // ── Wealth Chart ──────────────────────────────────────────────────────────────
 function WealthChart({ labels, cashData, investData, totalData, targetFV, targetLabel = '目標金額' }) {
   const theme     = useAppStore(s => s.theme);
+  const isPrivacyMode = useAppStore(s => s.isPrivacyMode); // 切換隱藏金額時重畫，座標軸與提示框才會跟著遮／顯示
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
 
@@ -364,15 +365,15 @@ function WealthChart({ labels, cashData, investData, totalData, targetFV, target
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { position: 'bottom', labels: { color: tc, padding: 16, usePointStyle: true } },
-          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': NT$ ' + Math.round(ctx.raw).toLocaleString() } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': NT$ ' + formatAmount(Math.round(ctx.raw)) } },
         },
         scales: {
-          y: { beginAtZero: true, ticks: { color: tc, callback: v => 'NT$ ' + (v / 10000).toLocaleString() + '萬' }, grid: { color: gc } },
+          y: { beginAtZero: true, ticks: { color: tc, callback: v => formatAmount(v) === '****' ? '****' : 'NT$ ' + (v / 10000).toLocaleString() + '萬' }, grid: { color: gc } },
           x: { ticks: { color: tc }, grid: { display: false } },
         },
       },
     });
-  }, [labels, cashData, investData, totalData, targetFV, targetLabel, theme]);
+  }, [labels, cashData, investData, totalData, targetFV, targetLabel, theme, isPrivacyMode]);
 
   useEffect(() => () => { chartInst.current?.destroy(); chartInst.current = null; }, []);
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { showToast, formatAmount, autoFocusDesktop, confirmDialog } from '../../lib/utils';
+import { showToast, formatAmount, fmtMoney, autoFocusDesktop, confirmDialog } from '../../lib/utils';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -108,15 +108,15 @@ function ProjectDetailModal({ project, projectExpenses, projectCategories, onClo
           <div className="pj-sum">
             <div className="pj-sum-row">
               <span className="pj-sum-label">已花費</span>
-              <span className="pj-sum-label">總預算 NT$ <AnimatedNumber value={Number(project.budget) || 0} /></span>
+              <span className="pj-sum-label">總預算 NT$ <AnimatedNumber value={Number(project.budget) || 0} format={fmtMoney} /></span>
             </div>
-            <div className="pj-sum-amt" id="detailProjectSpent">NT$ <AnimatedNumber value={spent} /></div>
+            <div className="pj-sum-amt" id="detailProjectSpent">NT$ <AnimatedNumber value={spent} format={fmtMoney} /></div>
             <div className="pj-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
               <span id="detailProjectProgress" className={pct >= 100 ? 'is-over' : ''} style={{ width: pct + '%' }}></span>
             </div>
             <div className="pj-sum-row">
               <span id="detailProjectPct" className="pj-sum-label">支出 <AnimatedNumber value={Math.round((spent / (project.budget || 1)) * 100)} />%</span>
-              <span id="detailProjectRemain" className={`pj-remain${rem < 0 ? ' is-over' : ''}`}>剩餘 NT$ <AnimatedNumber value={rem} /></span>
+              <span id="detailProjectRemain" className={`pj-remain${rem < 0 ? ' is-over' : ''}`}>剩餘 NT$ <AnimatedNumber value={rem} format={fmtMoney} /></span>
             </div>
           </div>
 
@@ -151,7 +151,7 @@ function ProjectDetailModal({ project, projectExpenses, projectCategories, onClo
                           <span>{e.date}</span>
                         </div>
                       </div>
-                      <span className="pj-exp-amt">NT$ {(Number(e.amount) || 0).toLocaleString()}</span>
+                      <span className="pj-exp-amt">NT$ {formatAmount(Number(e.amount) || 0)}</span>
                       <button type="button" className="icon-btn delete pj-icon-btn" aria-label={`刪除 ${e.name}`} title="刪除"
                         onClick={async () => { if (await confirmDialog({ title: '刪除明細', message: '確定要刪除這筆支出嗎？', confirmText: '刪除' })) { vibrate(); onDeleteExp(e.id); } }}>
                         <i className="fa-solid fa-trash-can"></i>
@@ -259,7 +259,7 @@ export default function ProjectsTab() {
           <div className="fx-hero-top">
             <div>
               <div className="fx-hero-label">專案預備金・每月應存</div>
-              <div className="fx-hero-amount">NT$ <AnimatedNumber value={monthlyTotal} effect="scroll" /></div>
+              <div className="fx-hero-amount">NT$ <AnimatedNumber value={monthlyTotal} format={fmtMoney} effect="scroll" /></div>
             </div>
             <div className="fx-hero-side">
               <span>{savingsItems.length} 個專案待存</span>
@@ -273,9 +273,9 @@ export default function ProjectsTab() {
                   transition={{ duration: 0.18 }}>
                   <div className="pj-save-main">
                     <span className="pj-save-name">{s.name}</span>
-                    <span className="pj-save-meta">{s.infoText}・<span className="pj-nowrap">缺口 NT$ <AnimatedNumber value={s.remain} effect="scroll" /></span></span>
+                    <span className="pj-save-meta">{s.infoText}・<span className="pj-nowrap">缺口 NT$ <AnimatedNumber value={s.remain} format={fmtMoney} effect="scroll" /></span></span>
                   </div>
-                  <span className="pj-save-amt">NT$ <AnimatedNumber value={s.monthlySave} effect="scroll" /><small>／月</small></span>
+                  <span className="pj-save-amt">NT$ <AnimatedNumber value={s.monthlySave} format={fmtMoney} effect="scroll" /><small>／月</small></span>
                 </motion.li>
               ))}
             </AnimatePresence>
@@ -348,11 +348,11 @@ export default function ProjectsTab() {
                   <div className="pj-card-money">
                     <div>
                       <div className="pj-card-label">已花費</div>
-                      <div className="pj-card-spent">NT$ <AnimatedNumber value={spent} /></div>
+                      <div className="pj-card-spent">NT$ <AnimatedNumber value={spent} format={fmtMoney} /></div>
                     </div>
                     <div className="pj-card-budget">
                       <div className="pj-card-label">總預算</div>
-                      <div>NT$ <AnimatedNumber value={Number(p.budget) || 0} /></div>
+                      <div>NT$ <AnimatedNumber value={Number(p.budget) || 0} format={fmtMoney} /></div>
                     </div>
                   </div>
                   <div className="pj-bar" role="progressbar" aria-label="預算使用率" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
@@ -360,7 +360,7 @@ export default function ProjectsTab() {
                   </div>
                   <div className="pj-card-foot">
                     <span>{Math.round(pct)}%</span>
-                    <span className={`pj-remain${rem < 0 ? ' is-over' : ''}`}>剩餘 NT$ <AnimatedNumber value={rem} /></span>
+                    <span className={`pj-remain${rem < 0 ? ' is-over' : ''}`}>剩餘 NT$ <AnimatedNumber value={rem} format={fmtMoney} /></span>
                   </div>
                 </motion.div>
               );

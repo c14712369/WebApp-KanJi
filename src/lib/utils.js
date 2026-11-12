@@ -20,10 +20,13 @@ export function getLifeCat(cats, id) {
 
 export function formatAmount(val, type) {
   const { isPrivacyMode } = useAppStore.getState();
-  if (isPrivacyMode && (type === 'income' || type === 'asset')) return '****';
+  if (isPrivacyMode && type !== 'plain') return '****';
   if (val == null) return '0';
   return Number(val).toLocaleString();
 }
+
+// 給 AnimatedNumber 的 format 用：隱私模式下一律遮蔽
+export const fmtMoney = (v) => formatAmount(v, 'money');
 
 export function toMonthlyAmount(item) {
   const base = Number(item.originalAmount || item.amount) || 0;

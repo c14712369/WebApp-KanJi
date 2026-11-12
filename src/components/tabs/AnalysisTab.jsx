@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
-import { calculateExpenseForMonth, prefetchFXRates, showToast } from '../../lib/utils';
+import { calculateExpenseForMonth, prefetchFXRates, showToast, formatAmount } from '../../lib/utils';
 import ChartEmpty from '../ui/ChartEmpty';
 import { sumProjectExpenses, projectExpenseYears } from '../../lib/projectSpend';
 
@@ -94,8 +94,8 @@ function useChart(ref) {
 }
 
 // Y 軸刻度：萬以上縮寫，避免手機上刻度擠掉繪圖區
-const fmtTick = (v) => (Math.abs(v) >= 10000 ? `${+(v / 10000).toFixed(1)}萬` : Number(v).toLocaleString());
-const fmtNT   = (v) => 'NT$ ' + Math.round(v).toLocaleString();
+const fmtTick = (v) => { const s = formatAmount(v); return s === "****" || Math.abs(v) < 10000 ? s : `${+(v / 10000).toFixed(1)}萬`; };
+const fmtNT   = (v) => 'NT$ ' + formatAmount(Math.round(v));
 
 // 小型分段控制（沿用 FixedTab 的 .fx-seg 樣式）
 function Seg({ options, value, onChange, label, className = '' }) {
@@ -127,7 +127,7 @@ export default function AnalysisTab() {
   const {
     items, categories, lifeExpenses, lifeCategories,
     setActiveTab, setLifeCurrentMonth, setLifePendingCatId,
-    projects, projectExpenses, estimatedIncome, theme
+    projects, projectExpenses, estimatedIncome, theme, isPrivacyMode
   } = useAppStore();
 
   const now    = new Date();
@@ -236,7 +236,7 @@ export default function AnalysisTab() {
         },
       });
     }
-  }, [expData, chartShape, theme, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expData, chartShape, theme, view, isPrivacyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Life Category Chart ──
   const lifeCatData = useMemo(() => {
@@ -273,7 +273,7 @@ export default function AnalysisTab() {
         },
       },
     });
-  }, [lifeCatData, theme, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lifeCatData, theme, view, isPrivacyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Trend Chart ──
   const [trendData, setTrendData] = useState(null);
@@ -317,7 +317,7 @@ export default function AnalysisTab() {
         scales: { y: yScale(), x: xScale() },
       },
     });
-  }, [trendData, trendEmpty, theme, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trendData, trendEmpty, theme, view, isPrivacyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Annual compare（圖表與表格共用同一套年度數字）──
   const annualRows = useMemo(() => uniqueYears.map(year => {
@@ -401,7 +401,7 @@ export default function AnalysisTab() {
               footer: tooltipItems => {
                 let sum = 0;
                 tooltipItems.forEach(x => { sum += x.raw; });
-                return '總消費: NT$ ' + sum.toLocaleString();
+                return '總消費: NT$ ' + formatAmount(sum);
               }
             }
           }
@@ -409,7 +409,7 @@ export default function AnalysisTab() {
         scales: { x: xScale({ stacked: true }), y: yScale({ stacked: true }) },
       }
     });
-  }, [annualData, annualEmpty, theme, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [annualData, annualEmpty, theme, view, isPrivacyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 月對月：生活費較上月
   const mom = (() => {
@@ -450,7 +450,7 @@ export default function AnalysisTab() {
         {mom && (
           <div className={`an-mom ${mom.up ? 'is-up' : 'is-down'}`}>
             <i className={`fa-solid fa-arrow-trend-${mom.up ? 'up' : 'down'}`} aria-hidden="true"></i>
-            生活費較上月 {mom.up ? '+' : '-'}{mom.pct}%（{mom.up ? '+' : '-'}NT$ {Math.abs(Math.round(mom.delta)).toLocaleString()}）
+            生活費較上月 {mom.up ? '+' : '-'}{mom.pct}%（{mom.up ? '+' : '-'}NT$ {formatAmount(Math.abs(Math.round(mom.delta)))}）
           </div>
         )}
       </div>
@@ -547,7 +547,7 @@ export default function AnalysisTab() {
               <div className="ar-stat" key={label}>
                 <div className="ar-stat-label">{label}</div>
                 <div className={`ar-stat-value ${cls}`}>
-                  <span className="ar-cur">{v < 0 ? '−NT$' : 'NT$'}</span><span className="ar-num">{Math.abs(Math.round(v)).toLocaleString()}</span>
+                  <span className="ar-cur">{v < 0 ? '−NT$' : 'NT$'}</span><span className="ar-num">{formatAmount(Math.abs(Math.round(v)))}</span>
                 </div>
               </div>
             ))}
@@ -576,10 +576,10 @@ export default function AnalysisTab() {
                   {annualRows.map(r => (
                     <tr key={r.year}>
                       <th scope="row">{r.year}</th>
-                      <td className="num">{Math.round(r.fixed).toLocaleString()}</td>
-                      <td className="num">{Math.round(r.life).toLocaleString()}</td>
-                      <td className="num">{Math.round(r.project).toLocaleString()}</td>
-                      <td className="num is-total">{Math.round(r.total).toLocaleString()}</td>
+                      <td className="num">{formatAmount(Math.round(r.fixed))}</td>
+                      <td className="num">{formatAmount(Math.round(r.life))}</td>
+                      <td className="num">{formatAmount(Math.round(r.project))}</td>
+                      <td className="num is-total">{formatAmount(Math.round(r.total))}</td>
                     </tr>
                   ))}
                 </tbody>

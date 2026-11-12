@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
-import { formatAmount, prefetchFXRates, calculateExpenseForMonth } from '../../lib/utils';
+import { formatAmount, fmtMoney, prefetchFXRates, calculateExpenseForMonth } from '../../lib/utils';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChartEmpty from '../ui/ChartEmpty';
@@ -25,7 +25,7 @@ function getYears(items, lifeExpenses, projects, projectExpenses) {
 }
 
 export default function AnnualTab() {
-  const { items, lifeExpenses, projects, projectExpenses, estimatedIncome, theme } = useAppStore();
+  const { items, lifeExpenses, projects, projectExpenses, estimatedIncome, theme, isPrivacyMode } = useAppStore();
   const thisYear = String(new Date().getFullYear());
   const years = useMemo(() => getYears(items, lifeExpenses, projects, projectExpenses), [items, lifeExpenses, projects, projectExpenses]);
   const [pickedYear, setYear] = useState(thisYear);
@@ -118,16 +118,16 @@ export default function AnnualTab() {
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { position: 'bottom', labels: { color: textColor, usePointStyle: true, boxWidth: 8, padding: 14 } },
-          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: NT$ ${Math.round(ctx.raw).toLocaleString()}` } },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: NT$ ${formatAmount(Math.round(ctx.raw))}` } },
         },
         scales: {
           x: { ticks: { color: textColor, maxRotation: 0 }, grid: { display: false } },
           // 從 0 起算；結餘為負時 beginAtZero 仍會往下延伸，不會裁掉負值
-          y: { beginAtZero: true, ticks: { color: textColor, callback: v => 'NT$' + v.toLocaleString() }, grid: { color: gridColor } },
+          y: { beginAtZero: true, ticks: { color: textColor, callback: v => 'NT$' + formatAmount(v) }, grid: { color: gridColor } },
         },
       },
     });
-  }, [monthly, hasLine, theme]);
+  }, [monthly, hasLine, theme, isPrivacyMode]);
 
   // ── Pie Chart ──
   useEffect(() => {
@@ -153,14 +153,14 @@ export default function AnnualTab() {
               label: ctx => {
                 const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                 const pct   = total > 0 ? Math.round((ctx.raw / total) * 100) : 0;
-                return ` NT$ ${ctx.raw.toLocaleString()} (${pct}%)`;
+                return ` NT$ ${formatAmount(ctx.raw)} (${pct}%)`;
               },
             },
           },
         },
       },
     });
-  }, [monthly, hasPie, theme]);
+  }, [monthly, hasPie, theme, isPrivacyMode]);
 
   // cleanup on unmount
   useEffect(() => () => { barChart.current?.destroy(); pieChart.current?.destroy(); }, []);
@@ -195,7 +195,7 @@ export default function AnnualTab() {
           <motion.div key="annual-expense" className="ar-stat" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
             <div className="ar-stat-label">總支出</div>
             <div className="ar-stat-value is-neg" id="annualTotalExpense">
-              <span className="ar-cur">NT$</span><span className="ar-num"><AnimatedNumber value={Math.round(totals.expense)} /></span>
+              <span className="ar-cur">NT$</span><span className="ar-num"><AnimatedNumber value={Math.round(totals.expense)} format={fmtMoney} /></span>
             </div>
           </motion.div>
           <motion.div key="annual-balance" className="ar-stat" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { getCycleLabel, toMonthlyAmount, fetchWithCache, showToast, autoFocusDesktop, confirmDialog } from '../../lib/utils';
+import { getCycleLabel, formatAmount, toMonthlyAmount, fetchWithCache, showToast, autoFocusDesktop, confirmDialog } from '../../lib/utils';
 import { getNextCharge, toYmd } from '../../lib/nextCharge';
 import IconRenderer from '../../lib/IconRenderer';
 import { motion, AnimatePresence, useMotionValue, animate } from 'framer-motion';
@@ -246,7 +246,7 @@ const PAGE_SIZE = 5;  // 清單超過才分頁
 const ROW_SPRING = { type: 'spring', stiffness: 520, damping: 42 };
 
 const fmtMD = (date) => `${date.getMonth() + 1}/${date.getDate()}`;
-const fmtNT = (n) => `NT$ ${Math.round(n).toLocaleString()}`;
+const fmtNT = (n) => `NT$ ${formatAmount(Math.round(n))}`;
 const vibrate = (ms = 20) => { if (navigator.vibrate) navigator.vibrate(ms); };
 
 // 7 天內以「相對時間」開頭（最急的資訊先讀到），更遠的只給日期
@@ -356,7 +356,7 @@ function FixedRow({ item, cat, next, ended, isOpen, onOpen, onClose, onEdit, onD
         </span>
         <span className="fx-row-amount">
           <span className="fx-row-amount-main">
-            {isForeign ? `${item.currency} ${(item.originalAmount || 0).toLocaleString()}` : fmtNT(item.amount || 0)}
+            {isForeign ? `${item.currency} ${formatAmount(item.originalAmount || 0)}` : fmtNT(item.amount || 0)}
           </span>
           <span className="fx-row-amount-sub">
             {isForeign ? `${getCycleLabel(item.cycle)} · ≈ ${fmtNT(item.amount || 0)}` : getCycleLabel(item.cycle)}

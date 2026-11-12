@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppStore } from '../../store/appStore';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly, confirmDialog } from '../../lib/utils';
+import { lifeMonthLabel, formatAmount, fmtMoney, showToast, getFixedLifeMonthly, confirmDialog } from '../../lib/utils';
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import IconRenderer from '../../lib/IconRenderer';
@@ -62,7 +62,7 @@ function StackedExpenseBar({ value, segments, id }) {
             key={segment.id}
             className="expense-progress-segment"
             style={{ flexBasis: `${share}%`, backgroundColor: segment.color }}
-            title={`${segment.label}：NT$ ${Math.round(segment.amount).toLocaleString()}（占支出 ${Math.round(share)}%）`}
+            title={`${segment.label}：NT$ ${formatAmount(Math.round(segment.amount))}（占支出 ${Math.round(share)}%）`}
             aria-hidden="true"
           />
         );
@@ -465,7 +465,7 @@ export default function LifeTab() {
                 // 以實際收入為分母，各分類加總 = 進度條的「支出 %」
                 const share = tInc > 0 ? Math.round((segment.amount / tInc) * 100) : 0;
                 return (
-                  <span className="expense-progress-legend-item" key={segment.id} title={`NT$ ${Math.round(segment.amount).toLocaleString()}`}>
+                  <span className="expense-progress-legend-item" key={segment.id} title={`NT$ ${formatAmount(Math.round(segment.amount))}`}>
                     <i style={{ backgroundColor: segment.color }} />
                     <span>{segment.label} {share}%</span>
                   </span>
@@ -486,12 +486,12 @@ export default function LifeTab() {
           </div>
           <div className="hero-detail-item">
             <div className="detail-label"><i className="fa-solid fa-leaf"></i> 生活支出</div>
-            <div className="detail-value stat-negative" id="lifeMonthSpent">NT$ <AnimatedNumber value={Math.round(tExp)} effect="scroll" /></div>
+            <div className="detail-value stat-negative" id="lifeMonthSpent">NT$ <AnimatedNumber value={Math.round(tExp)} format={fmtMoney} effect="scroll" /></div>
           </div>
           {fixedMonthly > 0 && (
             <div className="hero-detail-item">
               <div className="detail-label"><i className="fa-solid fa-money-bill-wave"></i> 固定支出</div>
-              <div className="detail-value stat-fixed" id="lifeMonthFixed">NT$ <AnimatedNumber value={fixedMonthly} effect="scroll" /></div>
+              <div className="detail-value stat-fixed" id="lifeMonthFixed">NT$ <AnimatedNumber value={fixedMonthly} format={fmtMoney} effect="scroll" /></div>
             </div>
           )}
         </div>
@@ -562,7 +562,7 @@ export default function LifeTab() {
                       <div className="life-cat-row-info"><div className="life-cat-row-name">全部支出</div></div>
                     </div>
                     <div className="life-cat-row-right">
-                      <span className="life-cat-row-amt">NT$ <AnimatedNumber value={tExp} /></span>
+                      <span className="life-cat-row-amt">NT$ <AnimatedNumber value={tExp} format={fmtMoney} /></span>
                     </div>
                   </div>
                   {catSummary.map(cat => {
@@ -588,8 +588,8 @@ export default function LifeTab() {
                           </div>
                         </div>
                         <div className="life-cat-row-right">
-                          <span className={`life-cat-row-amt${cat.isOver ? ' over text-danger' : ''}`}>NT$ <AnimatedNumber value={cat.spent} /></span>
-                          {cat.budget > 0 && <span className="life-cat-row-budget-hint">/ <AnimatedNumber value={cat.budget} /></span>}
+                          <span className={`life-cat-row-amt${cat.isOver ? ' over text-danger' : ''}`}>NT$ <AnimatedNumber value={cat.spent} format={fmtMoney} /></span>
+                          {cat.budget > 0 && <span className="life-cat-row-budget-hint">/ <AnimatedNumber value={cat.budget} format={fmtMoney} /></span>}
                           {cat.isOver && <i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--danger-color)', fontSize: '0.75rem' }}></i>}
                         </div>
                       </div>
