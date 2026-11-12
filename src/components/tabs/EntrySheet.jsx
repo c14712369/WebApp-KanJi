@@ -17,6 +17,16 @@ const KEY_LABEL = { '÷': '除', '×': '乘', '−': '減', '+': '加', '.': '�
 const KEYBOARD_MAP = { '+': '+', '-': '−', '*': '×', 'x': '×', 'X': '×', '/': '÷', '.': '.', 'Backspace': '⌫', 'Delete': 'C', 'c': 'C', 'C': 'C' };
 const LAST_ENTRY_KEY = 'LAST_EXPENSE_ENTRY';
 
+// 切換支出／收入時分類圖示依序淡入放大（打開抽屜時不播，避免和抽屜滑上來搶戲）
+const catGridVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.025 } },
+};
+const catItemVariants = {
+  hidden: { opacity: 0, scale: 0.6, y: 8 },
+  show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 520, damping: 30 } },
+};
+
 const pad2 = (n) => String(n).padStart(2, '0');
 const toIso = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const buzz = (ms = 8) => { if (navigator.vibrate) navigator.vibrate(ms); };
@@ -76,6 +86,7 @@ export default function EntrySheet({
 
   const sheetRef = useRef(null);
   const returnFocusRef = useRef(null);
+  const typeSwitchedRef = useRef(false); // 使用者切換過類型後，分類圖示才播進場動畫
   const longPressRef = useRef({ timer: null, fired: false });
   const dragControls = useDragControls();
   const reduceMotion = useReducedMotion();
@@ -127,6 +138,7 @@ export default function EntrySheet({
   const switchType = (next) => {
     if (next === type) return;
     buzz(12);
+    typeSwitchedRef.current = true;
     setType(next);
   };
 
@@ -234,7 +246,16 @@ export default function EntrySheet({
                   className={`kk-type-btn${type === key ? ` is-active is-${key}` : ''}`}
                   onClick={() => switchType(key)}
                 >
-                  {label}
+                  {/* 白色選取底塊用 layoutId 在兩顆之間滑動 */}
+                  {type === key && (
+                    <motion.span
+                      layoutId="kk-type-pill"
+                      className="kk-type-pill"
+                      transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 38 }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="kk-type-label">{label}</span>
                 </button>
               ))}
             </div>
@@ -256,16 +277,21 @@ export default function EntrySheet({
         </div>
 
         {/* 分類圖示格 */}
-        <div
+        <motion.div
+          key={type}
           className="kk-cat-grid"
           role="radiogroup"
           aria-label={isIncome ? '收入類別' : '支出分類'}
           style={{ '--kk-cat-rows': catRows }}
+          variants={catGridVariants}
+          initial={typeSwitchedRef.current && !reduceMotion ? 'hidden' : false}
+          animate="show"
         >
           {categories.map(c => {
             const active = c.id === activeCatId;
             return (
-              <button
+              <motion.button
+                variants={catItemVariants}
                 key={c.id}
                 type="button"
                 role="radio"
@@ -279,10 +305,10 @@ export default function EntrySheet({
                     : <span className="kk-cat-initial">{(c.name || '?').slice(0, 1)}</span>}
                 </span>
                 <span className="kk-cat-name">{c.name}</span>
-              </button>
+              </motion.button>
             );
           })}
-        </div>
+        </motion.div>
 
         {/* 日期／付款／備註：短膠囊同一列；日期與付款用原生選擇器（透明疊在膠囊上） */}
         {noteEditing ? (

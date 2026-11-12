@@ -117,11 +117,27 @@
     transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.kk-type-btn {
+    position: relative;
+}
+
+/* 選取的白底塊是獨立元素，切換時在兩顆按鈕間滑動（EntrySheet 的 layoutId） */
 .kk-type-btn.is-active {
-    background: var(--card-bg);
     color: var(--text-main);
     font-weight: 700;
+}
+
+.kk-type-pill {
+    position: absolute;
+    inset: 0;
+    border-radius: 9px;
+    background: var(--card-bg);
     box-shadow: var(--shadow-sm);
+}
+
+.kk-type-label {
+    position: relative;
+    z-index: 1;
 }
 
 .kk-type-btn.is-active.is-expense { color: var(--danger-color); }
@@ -153,6 +169,7 @@
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
     color: var(--danger-color);
+    transition: color 0.2s ease;
 }
 
 .kk-sheet.is-income .kk-amount-value { color: var(--success-color); }
