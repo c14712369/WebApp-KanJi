@@ -1,0 +1,446 @@
+/* ── 記一筆／編輯：底部抽屜（EntrySheet.jsx） ───────────────────────── */
+
+/* 層級：高於底部導覽（900），低於確認框等共用彈窗（.modal-overlay 1000），刪除確認才不會被蓋住 */
+.kk-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 998;
+    background: rgba(15, 22, 32, 0.42);
+}
+
+[data-theme="dark"] .kk-sheet-backdrop {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.kk-sheet {
+    --font-num: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    max-width: 480px;
+    max-height: calc(100dvh - 32px);
+    margin: 0 auto;
+    padding: 0 16px calc(12px + env(safe-area-inset-bottom));
+    border-radius: 22px 22px 0 0;
+    background: var(--card-bg);
+    box-shadow: 0 -10px 30px rgba(15, 22, 32, 0.18);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    outline: none;
+}
+
+.kk-sheet button,
+.kk-sheet input,
+.kk-sheet select {
+    font-family: inherit;
+}
+
+.kk-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* 頂部：把手區可往下拉關閉 */
+.kk-sheet-head {
+    flex: 0 0 auto;
+    padding-top: 8px;
+    touch-action: none;
+    cursor: grab;
+}
+
+.kk-sheet-grabber {
+    display: block;
+    width: 40px;
+    height: 5px;
+    margin: 0 auto 6px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--text-muted) 45%, transparent);
+}
+
+.kk-sheet-toprow {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+}
+
+.kk-sheet-icon,
+.kk-sheet-icon-spacer {
+    width: 44px;
+    height: 44px;
+}
+
+.kk-sheet-icon {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.kk-sheet-icon:active { background: var(--hover-bg); }
+.kk-sheet-icon.is-danger { color: var(--danger-color); }
+
+.kk-type-seg {
+    justify-self: center;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 12px;
+    background: var(--bg-color);
+}
+
+.kk-type-btn {
+    min-width: 78px;
+    min-height: 36px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kk-type-btn.is-active {
+    background: var(--card-bg);
+    color: var(--text-main);
+    font-weight: 700;
+    box-shadow: var(--shadow-sm);
+}
+
+.kk-type-btn.is-active.is-expense { color: var(--danger-color); }
+.kk-type-btn.is-active.is-income { color: var(--success-color); }
+
+/* 金額：右對齊，上方算式、中間結果、下方錯誤提示（固定高度，不讓版面跳） */
+.kk-amount {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding: 4px 4px 2px;
+}
+
+.kk-amount-expr {
+    min-height: 1.3em;
+    font-family: var(--font-num);
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    white-space: pre;
+}
+
+.kk-amount-value {
+    font-family: var(--font-num);
+    font-size: 2.6rem;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--danger-color);
+}
+
+.kk-sheet.is-income .kk-amount-value { color: var(--success-color); }
+.kk-amount-value.is-empty,
+.kk-sheet.is-income .kk-amount-value.is-empty { color: var(--text-muted); }
+
+.kk-amount-currency {
+    margin-right: 3px;
+    font-size: 0.6em;
+    font-weight: 500;
+}
+
+.kk-amount-error {
+    min-height: 1.3em;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--danger-color);
+}
+
+/* 分類圖示格：4 欄；高度固定為 --kk-cat-rows 排（支出、收入取較多的一邊），切換類型時抽屜不伸縮；
+   放不下時這一區自己捲動，矮螢幕可再壓縮到最少一排 */
+.kk-cat-grid {
+    --kk-cat-row-h: 78px;
+    flex: 0 1 auto;
+    height: calc(var(--kk-cat-rows, 2) * var(--kk-cat-row-h) + (var(--kk-cat-rows, 2) - 1) * 4px + 10px);
+    min-height: calc(var(--kk-cat-row-h) + 10px);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: var(--kk-cat-row-h);
+    align-content: start;
+    gap: 4px;
+    padding: 4px 0 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+}
+
+.kk-cat-grid::-webkit-scrollbar { display: none; }
+
+.kk-cat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    padding: 6px 2px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.kk-cat-icon {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    color: #fff;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kk-cat-initial {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.kk-cat.is-active .kk-cat-icon {
+    box-shadow: 0 0 0 2.5px var(--card-bg), 0 0 0 4.5px var(--primary-color);
+    transform: scale(1.04);
+}
+
+.kk-cat-name {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.kk-cat.is-active .kk-cat-name {
+    color: var(--text-main);
+    font-weight: 700;
+}
+
+/* 日期／付款／備註膠囊 */
+.kk-pill-row,
+.kk-note-row {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    padding: 6px 0 10px;
+}
+
+.kk-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 42%;
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 9999px;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 0.86rem;
+    font-weight: 500;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.kk-pill i {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.kk-pill.is-note {
+    flex: 1 1 auto;
+    max-width: none;
+}
+
+.kk-pill.is-note:not(.has-value) .kk-pill-text { color: var(--text-muted); }
+
+.kk-pill-text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* 原生日期／下拉選擇器透明疊在膠囊上，點膠囊就叫出系統選擇器 */
+.kk-pill-native {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    font-size: 16px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.kk-pill:focus-within {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.kk-note-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px;
+    padding: 0 14px;
+    border: 1.5px solid var(--primary-color);
+    border-radius: 12px;
+    background: var(--input-bg);
+    color: var(--text-main);
+    font-size: 16px; /* iOS 小於 16px 會自動放大畫面 */
+}
+
+.kk-note-input:focus { outline: none; }
+
+.kk-note-done {
+    flex: 0 0 auto;
+    height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--primary-color);
+    color: var(--card-bg);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* 數字鍵盤 */
+.kk-keypad {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.kk-key {
+    height: 50px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: var(--bg-color);
+    color: var(--text-main);
+    font-family: var(--font-num);
+    font-size: 1.35rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.1s ease, transform 0.1s ease;
+}
+
+.kk-key:active {
+    background: var(--border-color);
+    transform: scale(0.96);
+}
+
+.kk-key.is-op {
+    background: color-mix(in srgb, var(--primary-color) 12%, var(--bg-color));
+    color: var(--primary-hover);
+    font-weight: 600;
+}
+
+.kk-key.is-back {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+}
+
+/* 儲存：加深的琥珀底，白字對比 ≥4.5:1 */
+.kk-key-save {
+    grid-column: 1 / -1;
+    height: 52px;
+    margin-top: 2px;
+    border: 0;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--accent-color) 78%, #000);
+    color: #fff;
+    font-size: 1.08rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(193, 123, 46, 0.28);
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.12s ease, opacity 0.15s ease;
+}
+
+.kk-key-save:active { transform: scale(0.98); }
+
+/* 金額 0 時看起來未就緒，但仍可按（按了會在金額下方提示原因） */
+.kk-key-save.is-empty {
+    opacity: 0.55;
+    box-shadow: none;
+}
+
+[data-theme="dark"] .kk-key-save {
+    background: var(--accent-color);
+    color: var(--bg-color);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+/* 類型切換的焦點框內縮，不要看起來像第二種「選取」外框 */
+.kk-type-btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--primary-color) 70%, transparent);
+    outline-offset: -3px;
+}
+
+.kk-sheet-icon:focus-visible,
+.kk-cat:focus-visible,
+.kk-pill.is-note:focus-visible,
+.kk-key:focus-visible,
+.kk-key-save:focus-visible,
+.kk-note-done:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* 矮螢幕（iPhone SE 等）：鍵盤與金額縮一點，分類區仍可捲 */
+@media (max-height: 700px) {
+    .kk-key { height: 44px; }
+    .kk-key-save { height: 48px; }
+    .kk-amount-value { font-size: 2.2rem; }
+}
+
+/* 桌面：抽屜浮在底部中央，四角圓 */
+@media (min-width: 769px) {
+    .kk-sheet {
+        bottom: 24px;
+        padding-bottom: 16px;
+        border-radius: 22px;
+        box-shadow: 0 18px 50px rgba(15, 22, 32, 0.28);
+    }
+}

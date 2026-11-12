@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppStore } from '../../store/appStore';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -13,6 +13,8 @@ import { computeSpendPace } from '../../lib/spendPace';
 import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
 import LifeEntryRow from './LifeEntryRow';
 import CalendarView from './CalendarView';
+import EntrySheet from './EntrySheet';
+import '../../entry-sheet.css';
 
 const localYm = () => {
   const d = new Date();
@@ -76,57 +78,6 @@ const LIFE_SECTIONS = [
 ];
 
 
-// ── Calculator hook ──────────────────────────────────────────────────────────
-function useCalc(initialVal = '0') {
-  const [cur,   setCur]   = useState(String(initialVal));
-  const [first, setFirst] = useState(null);
-  const [op,    setOp]    = useState(null);
-  const [fresh, setFresh] = useState(false);
-
-  const reset = useCallback((val = '0') => {
-    setCur(String(val)); setFirst(null); setOp(null); setFresh(false);
-  }, []);
-  const digit = useCallback((d) => {
-    setCur(prev => {
-      if (fresh) { setFresh(false); return d === '.' ? '0.' : d; }
-      if (prev === '0' && d !== '.') return d;
-      if (d === '.' && prev.includes('.')) return prev;
-      return prev + d;
-    });
-  }, [fresh]);
-  const operator = useCallback((o) => {
-    setFirst(parseFloat(cur)); setOp(o); setFresh(true);
-  }, [cur]);
-  const equal = useCallback(() => {
-    if (!op || first == null) return;
-    const b = parseFloat(cur);
-    let res = 0;
-    if (op === '+') res = first + b;
-    else if (op === '−') res = first - b;
-    else if (op === '×') res = first * b;
-    else if (op === '÷') res = b !== 0 ? first / b : 0;
-    setCur(String(parseFloat(res.toFixed(4))));
-    setOp(null); setFirst(null); setFresh(true);
-    if (navigator.vibrate) navigator.vibrate(50);
-  }, [op, first, cur]);
-  const back  = useCallback(() => {
-    setCur(p => {
-      if (p.length > 1) return p.slice(0, -1);
-      // If we backspace the last digit and there's no operation, clear everything just in case
-      if (!op) { setFirst(null); setOp(null); }
-      return '0';
-    });
-  }, [op]);
-  const clear = useCallback(() => {
-    setCur('0');
-    setFirst(null);
-    setOp(null);
-    setFresh(false);
-  }, []);
-
-  return { cur, first, op, reset, digit, operator, equal, back, clear };
-}
-
 // ── Salary Modal ─────────────────────────────────────────────────────────────
 function SalaryModal({ lifeIncomeCategories, lifeExpenses, updateLifeExpense, onSaved, onClose }) {
   const saved = (() => { try { return JSON.parse(localStorage.getItem(SALARY_DEFAULT_KEY)); } catch { return null; } })();
@@ -179,200 +130,6 @@ function SalaryModal({ lifeIncomeCategories, lifeExpenses, updateLifeExpense, on
           </button>
           <button className="btn btn-ghost" style={{ flex: 1 }} onClick={handleClear}>清除設定</button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Expense / Income Modal ────────────────────────────────────────────────────
-function ExpenseModal({ lifeCategories, lifeIncomeCategories, paymentMethods, currentMonth, initial, onClose, onSave, onDelete }) {
-  const isEdit   = !!(initial?.id && initial?.type);
-  const initType = initial?.type || 'expense';
-  
-  const lastSaved = !isEdit ? (() => { try { return JSON.parse(localStorage.getItem('LAST_EXPENSE_ENTRY')) || {}; } catch { return {}; } })() : {};
-  
-  const [type,     setType]     = useState(initType);
-  const [catId,    setCatId]    = useState(initType !== 'income' ? (initial?.categoryId || lastSaved.catId || lifeCategories[0]?.id || '') : (lifeCategories[0]?.id || ''));
-  const [incCatId, setIncCatId] = useState(initType === 'income' ? (initial?.categoryId || lastSaved.incCatId || lifeIncomeCategories[0]?.id || '') : (lifeIncomeCategories[0]?.id || ''));
-  const [date,     setDate]     = useState(initial?.date || currentMonth + '-' + String(new Date().getDate()).padStart(2, '0'));
-  const [note,     setNote]     = useState(initial?.note || '');
-  const [pmId,     setPmId]     = useState(initial?.paymentMethod || lastSaved.pmId || paymentMethods[0]?.id || 'cash');
-  const [showCalc, setShowCalc] = useState(false);
-  const calc = useCalc(initial?.amount || '0');
-
-  const amount = parseFloat(calc.cur) || 0;
-
-  const handleSubmit = () => {
-    if (!amount || amount <= 0 || !date) { showToast('請輸入金額', 'error'); return; }
-    if (navigator.vibrate) navigator.vibrate(50);
-    if (!isEdit) {
-      localStorage.setItem('LAST_EXPENSE_ENTRY', JSON.stringify({ catId, incCatId, pmId }));
-    }
-    const entry = {
-      id: initial?.id || crypto.randomUUID(),
-      type, amount,
-      categoryId: type === 'income' ? incCatId : catId,
-      date, note: note.trim(),
-      ...(type === 'expense' ? { paymentMethod: pmId } : {}),
-    };
-    onSave(entry);
-  };
-
-  return (
-    <div className="modal-overlay active" style={{ alignItems: 'flex-start', paddingTop: 0 }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 400, margin: '0 auto', height: '100vh', maxHeight: '100vh', overflowY: 'auto', borderRadius: 0 }} onPointerDown={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3 id="lifeExpModalTitle">
-            {isEdit ? (type === 'income' ? '編輯收入' : '編輯支出') : (type === 'income' ? '新增收入' : '新增支出')}
-          </h3>
-          <button className="icon-btn" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
-        </div>
-
-        {!isEdit && (
-          <div style={{ display: 'flex', background: 'var(--bg-color)', borderRadius: 'var(--radius)', padding: 4, marginBottom: 20, border: '1px solid var(--border-color)' }}>
-            <button style={{ flex: 1, padding: '10px 0', border: 'none', borderRadius: 6, background: type === 'expense' ? 'var(--card-bg)' : 'transparent', color: type === 'expense' ? 'var(--text-main)' : 'var(--text-muted)', boxShadow: type === 'expense' ? 'var(--shadow-sm)' : 'none', fontWeight: type === 'expense' ? 600 : 500, transition: 'all 0.2s', fontSize: '0.95rem' }} onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setType('expense'); }}>
-              支出
-            </button>
-            <button style={{ flex: 1, padding: '10px 0', border: 'none', borderRadius: 6, background: type === 'income' ? 'var(--card-bg)' : 'transparent', color: type === 'income' ? 'var(--text-main)' : 'var(--text-muted)', boxShadow: type === 'income' ? 'var(--shadow-sm)' : 'none', fontWeight: type === 'income' ? 600 : 500, transition: 'all 0.2s', fontSize: '0.95rem' }} onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setType('income'); }}>
-              收入
-            </button>
-          </div>
-        )}
-
-        <div className="form-group">
-          <label className="form-label">日期</label>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button className="icon-btn" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', width: 42, height: 42, flexShrink: 0 }} onClick={() => {
-              if (navigator.vibrate) navigator.vibrate(50);
-              const d = new Date(date); d.setDate(d.getDate() - 1);
-              setDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
-            }}>
-              <i className="fa-solid fa-chevron-left" style={{ color: 'var(--text-main)' }}></i>
-            </button>
-            <input className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ flex: 1, textAlign: 'center' }} />
-            <button className="icon-btn" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', width: 42, height: 42, flexShrink: 0 }} onClick={() => {
-              if (navigator.vibrate) navigator.vibrate(50);
-              const d = new Date(date); d.setDate(d.getDate() + 1);
-              setDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
-            }}>
-              <i className="fa-solid fa-chevron-right" style={{ color: 'var(--text-main)' }}></i>
-            </button>
-          </div>
-        </div>
-
-        {type === 'expense' ? (
-          <div className="form-group">
-            <label className="form-label">分類</label>
-            <select className="form-select" value={catId} onChange={e => setCatId(e.target.value)}>
-              {lifeCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-        ) : (
-          <div className="form-group">
-            <label className="form-label">收入類別</label>
-            <select className="form-select" value={incCatId} onChange={e => setIncCatId(e.target.value)}>
-              {lifeIncomeCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-        )}
-
-        <div className="form-group">
-          <label className="form-label">金額</label>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div className="form-input" style={{ flex: 1, cursor: 'pointer', fontFamily: 'monospace', fontSize: '1.1rem', minHeight: 40, display: 'flex', alignItems: 'center' }}
-              onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setShowCalc(v => !v); }}>
-              {parseFloat(calc.cur || 0).toLocaleString()}
-            </div>
-            <button className="icon-btn" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setShowCalc(v => !v); }} title="計算機">
-              <i className="fa-solid fa-calculator"></i>
-            </button>
-          </div>
-        </div>
-
-        {showCalc && (
-          <>
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(2px)' }} onClick={() => setShowCalc(false)} />
-            <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 320, zIndex: 10000, background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 16, padding: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }} onPointerDown={e => e.stopPropagation()}>
-              <div style={{ padding: '8px 12px', marginBottom: 16, background: 'var(--bg-color)', borderRadius: 8, border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 60, boxSizing: 'border-box', position: 'relative' }}>
-                <div style={{ position: 'absolute', top: 6, right: 12, fontSize: '0.75rem', color: 'var(--secondary-color)', fontFamily: 'monospace' }}>
-                  {calc.first != null && calc.op ? `${calc.first} ${calc.op}` : ''}
-                </div>
-                <div style={{ fontFamily: 'monospace', fontSize: '1.8rem', color: 'var(--text-main)', fontWeight: 600, lineHeight: 1 }}>
-                  {parseFloat(calc.cur || 0).toLocaleString()}
-                </div>
-              </div>
-              {[
-                ['7','8','9','÷'],
-                ['4','5','6','×'],
-                ['1','2','3','−'],
-                ['.','0','⌫','+'],
-              ].map((row, ri) => (
-                <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 6 }}>
-                  {row.map(k => {
-                    const isOp = ['÷','×','−','+'].includes(k);
-                    const isAction = k === '⌫';
-                    return (
-                      <button key={k} className="btn" style={{
-                          padding: '12px 0',
-                          fontFamily: 'monospace',
-                          fontSize: '1.2rem',
-                          background: isOp ? 'var(--card-bg)' : isAction ? 'var(--card-bg)' : 'var(--bg-color)',
-                          color: isOp ? 'var(--primary-color)' : isAction ? 'var(--secondary-color)' : 'var(--text-main)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: 8,
-                          fontWeight: 600,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}
-                        onClick={() => {
-                          if (navigator.vibrate) navigator.vibrate(20);
-                          if ('0123456789.'.includes(k)) calc.digit(k);
-                          else if (k === '⌫') calc.back();
-                          else calc.operator(k);
-                        }}>
-                        {k}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 6, marginTop: 8 }}>
-                <button className="btn" style={{ padding: '12px 0', background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--secondary-color)', fontWeight: 700, fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { if (navigator.vibrate) navigator.vibrate(20); calc.clear(); }}>C</button>
-                <button className="btn" style={{ padding: '12px 0', background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--primary-color)', fontWeight: 700, fontSize: '1.2rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={calc.equal}>=</button>
-                <button className="btn btn-primary" style={{ padding: '12px 0', borderRadius: 8, fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCalc(false)}>
-                  確認
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {type === 'expense' && (
-          <div className="form-group">
-            <label className="form-label">付款方式</label>
-            <select className="form-select" value={pmId} onChange={e => setPmId(e.target.value)}>
-              {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
-            </select>
-          </div>
-        )}
-
-        <div className="form-group">
-          <label className="form-label">備註（選填）</label>
-          <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="備註…" />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleSubmit}>
-            <i className="fa-solid fa-check"></i> {isEdit ? '儲存' : '新增'}
-          </button>
-          <button className="btn" style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }} onClick={onClose}>取消</button>
-        </div>
-
-        {/* 明細列不再放垃圾桶，刪除收在編輯視窗最下方 */}
-        {isEdit && onDelete && (
-          <button type="button" className="life-modal-delete" onClick={() => onDelete(initial.id)}>
-            <i className="fa-solid fa-trash" aria-hidden="true"></i> 刪除這筆
-          </button>
-        )}
       </div>
     </div>
   );
@@ -850,19 +607,22 @@ export default function LifeTab() {
         <i className="fa-solid fa-plus"></i>
       </button>
 
-      {/* Modals */}
-      {expModal !== null && (
-        <ExpenseModal
-          lifeCategories={lifeCategories}
-          lifeIncomeCategories={lifeIncomeCategories}
-          paymentMethods={paymentMethods}
-          currentMonth={ym}
-          initial={expModal.id ? expModal : { type: newType, ...(expModal.date ? { date: expModal.date } : {}) }}
-          onClose={() => setExpModal(null)}
-          onSave={handleSaveExp}
-          onDelete={async (id) => { if (await handleDelete(id)) setExpModal(null); }}
-        />
-      )}
+      {/* 記一筆／編輯：底部抽屜（AnimatePresence 讓關閉時能滑下去） */}
+      <AnimatePresence>
+        {expModal !== null && (
+          <EntrySheet
+            key="entry-sheet"
+            lifeCategories={lifeCategories}
+            lifeIncomeCategories={lifeIncomeCategories}
+            paymentMethods={paymentMethods}
+            currentMonth={ym}
+            initial={expModal.id ? expModal : { type: newType, ...(expModal.date ? { date: expModal.date } : {}) }}
+            onClose={() => setExpModal(null)}
+            onSave={handleSaveExp}
+            onDelete={async (id) => { if (await handleDelete(id)) setExpModal(null); }}
+          />
+        )}
+      </AnimatePresence>
       {showSalary && <SalaryModal lifeIncomeCategories={lifeIncomeCategories} lifeExpenses={lifeExpenses} updateLifeExpense={updateLifeExpense} onSaved={() => setSalaryVersion(v => v + 1)} onClose={() => setShowSalary(false)} />}
     </div>
   );
