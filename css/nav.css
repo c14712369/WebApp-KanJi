@@ -157,6 +157,53 @@
         display: flex;
     }
 
+    /* 中間「＋」：浮出導覽列上緣的圓鈕（參考 MOZE），外圈一道底色環像在導覽列上挖出缺口 */
+    .bottom-nav .nav-add-slot {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .bottom-nav .nav-add-btn {
+        display: grid;
+        place-items: center;
+        width: 54px;
+        height: 54px;
+        margin-top: -24px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: var(--accent-color);
+        color: #fff;
+        font-size: 1.35rem;
+        box-shadow: 0 0 0 5px var(--bg-color), 0 8px 18px rgba(193, 123, 46, 0.38);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.18s ease;
+    }
+
+    .bottom-nav .nav-add-btn:active {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 5px var(--bg-color), 0 3px 8px rgba(193, 123, 46, 0.3);
+    }
+
+    .bottom-nav .nav-add-btn:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 7px;
+    }
+
+    /* 深色主題的琥珀較亮，白色加號對比不足 → 改用深底色 */
+    [data-theme="dark"] .bottom-nav .nav-add-btn {
+        color: var(--bg-color);
+        box-shadow: 0 0 0 5px var(--bg-color), 0 8px 18px rgba(0, 0, 0, 0.45);
+    }
+
+    /* 新增入口統一到底部中間的「＋」，頁內浮動鈕在手機收起 */
+    .fab {
+        display: none !important;
+    }
+
     /* Add padding to body so content isn't hidden behind bottom nav */
     body {
         padding-bottom: calc(72px + env(safe-area-inset-bottom));

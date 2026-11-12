@@ -26,341 +26,842 @@
 }
 
 
+/* 按鈕預設不繼承字體（會落到 Arial／系統字），新元件一律跟著 App 字體，免得同一畫面兩種字 */
+.kakei-chip,
+.kakei-filter-btn,
+.kfp-seg-btn,
+.kakei-month-summary,
+.life-modal-delete,
+.nav-add-btn {
+    font-family: inherit;
+}
+
+/* ── 生活費月份切換列（桌面在頁內；手機搬進頁首，樣式見 css/life-sidebar.css） ── */
+.life-month-nav {
+    gap: 8px;
+}
+
+.life-month-input {
+    width: auto;
+    min-width: 130px;
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    color: var(--text-main);
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    cursor: pointer;
+}
+
+/* iOS Safari：日期值置中 */
+.life-month-input::-webkit-date-and-time-value {
+    text-align: center;
+}
+
+/* 深色主題：Chrome 的月曆小圖示跟著變淺 */
+[data-theme="dark"] .life-month-input {
+    color-scheme: dark;
+}
+
+.life-month-today {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 36px;
+    padding: 0 12px;
+    border-color: var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+
 /* ── Kakei Calendar View ───────────────────────────────────────── */
+/*
+ * 版面：上方月曆（可收成單週）＋把手，下方明細獨立捲動。
+ * 收合原理：viewport 高度從「N 列」動畫到「1 列」，網格同時位移到焦點那一週，
+ * 只動 height + transform，不重排日期格。
+ */
 .kakei-calendar-container {
+    --cal-cell-h: 44px;
+    --cal-row-gap: 6px;
+    --cal-pitch: calc(var(--cal-cell-h) + var(--cal-row-gap));
+    --cal-ease: cubic-bezier(0.32, 0.72, 0, 1);
+    --cal-dur: 0.34s;
+    /* 數字統一用系統字（SF / Segoe），避免粗細不同時一半落到明體、一半落到黑體 */
+    --font-num: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
     display: flex;
     flex-direction: column;
-    gap: 12px;
     width: 100%;
     flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    padding: 2px 4px 16px;
+}
+
+.kakei-cal-sheet {
+    flex: 0 0 auto;
+    position: relative;
+    /* 要壓過清單裡黏在頂端的日期標題，篩選選單才不會被蓋住 */
+    z-index: 5;
+    padding: 2px 4px 0;
+    /* 桌面在卡片裡用卡片色；手機版月曆直接放在頁面底色上（見 life-sidebar.css） */
+    background: var(--cal-surface, var(--card-bg));
+    transition: box-shadow 0.2s ease;
+}
+
+/* 明細捲動後，月曆底緣浮起一道柔和陰影，分出上下層次 */
+.kakei-calendar-container.is-list-scrolled .kakei-cal-sheet {
+    box-shadow: 0 10px 12px -10px rgba(39, 55, 77, 0.32);
+}
+
+[data-theme="dark"] .kakei-calendar-container.is-list-scrolled .kakei-cal-sheet {
+    box-shadow: 0 10px 12px -10px rgba(0, 0, 0, 0.7);
 }
 
 .kakei-cal-weekdays {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
+}
+
+.kakei-cal-viewport {
+    /* 上下 2px / 4px 的留白小於列距，收合時不會露出相鄰週的邊 */
+    padding: 2px 2px 4px;
+    height: calc(var(--cal-rows, 6) * var(--cal-pitch) - var(--cal-row-gap) + 6px);
+    overflow: hidden;
+    transition: height var(--cal-dur) var(--cal-ease);
+}
+
+.kakei-calendar-container.is-collapsed .kakei-cal-viewport {
+    height: calc(var(--cal-cell-h) + 6px);
+}
+
+.kakei-calendar-container.is-collapsed .kakei-cal-grid {
+    transform: translateY(calc(var(--cal-focus-row, 0) * var(--cal-pitch) * -1));
+}
+
+/* 把手：靜止是一條橫槓；收合時折成向下的 ∨，提示「往下拉可展開」 */
+.kakei-cal-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 26px;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 10px;
+    color: var(--text-muted);
+    cursor: grab;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.kakei-cal-handle:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.kakei-cal-handle-bar {
+    position: relative;
+    width: 36px;
+    height: 4px;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+.kakei-cal-handle:hover .kakei-cal-handle-bar,
+.kakei-cal-handle:focus-visible .kakei-cal-handle-bar {
+    opacity: 0.85;
+}
+
+.kakei-cal-handle-bar::before,
+.kakei-cal-handle-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    width: 20px; /* 兩段在中間重疊一個圓角直徑，接縫不會露出缺口 */
+    height: 4px;
+    border-radius: 9999px;
+    background: currentColor;
+    transition: transform var(--cal-dur) var(--cal-ease);
+}
+
+.kakei-cal-handle-bar::before {
+    left: 0;
+    transform-origin: right center;
+}
+
+.kakei-cal-handle-bar::after {
+    right: 0;
+    transform-origin: left center;
+}
+
+.kakei-calendar-container.is-collapsed .kakei-cal-handle-bar::before {
+    transform: rotate(14deg);
+}
+
+.kakei-calendar-container.is-collapsed .kakei-cal-handle-bar::after {
+    transform: rotate(-14deg);
+}
+
+/* 明細區：月曆以外的空間都給它（手機版在 life-sidebar.css 設為獨立捲動） */
+.kakei-cal-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 2px 4px 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kakei-cal-viewport,
+    .kakei-cal-grid,
+    .kakei-cal-handle-bar::before,
+    .kakei-cal-handle-bar::after {
+        transition: none;
+    }
 }
 
 .kakei-cal-weekday-cell {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    opacity: 0.85;
     padding: 2px 0;
+    font-size: 0.76rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
 }
+
+/* 週日偏紅、週六偏綠（同參考圖的月曆慣例） */
+.kakei-cal-weekday-cell.is-sun { color: var(--danger-color); }
+.kakei-cal-weekday-cell.is-sat { color: var(--success-color); }
 
 .kakei-cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 3px;
+    grid-auto-rows: var(--cal-cell-h);
+    column-gap: 3px;
+    row-gap: var(--cal-row-gap);
+    transition: transform var(--cal-dur) var(--cal-ease);
 }
 
+/* 日期格：整格可點，視覺是置中的圓（::before 畫圓、選取是外環、今天是實心淡底） */
 .kakei-cal-cell {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 46px;
-    padding: 4px 2px 3px;
+    display: grid;
+    place-items: center;
+    min-height: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
     background: transparent;
-    border: 1.5px solid transparent;
-    border-radius: 12px;
     color: var(--text-main);
     cursor: pointer;
     outline: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
-    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease, color 0.15s ease;
 }
 
-.kakei-cal-cell:hover:not(.is-pad):not(.is-selected) {
-    background: var(--hover-bg, rgba(39, 55, 77, 0.05));
+.kakei-cal-cell::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+@media (hover: hover) {
+    .kakei-cal-cell:not(.is-pad):not(.is-selected):hover::before {
+        background: var(--hover-bg);
+    }
+}
+
+.kakei-cal-cell:focus-visible::before {
+    box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+.kakei-cal-cell.is-today::before {
+    background: color-mix(in srgb, var(--primary-color) 16%, transparent);
+}
+
+.kakei-cal-cell.is-selected::before {
+    box-shadow: inset 0 0 0 2px var(--primary-color);
+}
+
+.kakei-cal-num {
+    position: relative;
+    font-family: var(--font-num);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.kakei-cal-cell.is-selected .kakei-cal-num {
+    font-weight: 700;
+    color: var(--primary-hover);
+}
+
+/* 有記帳的日子亮、沒記帳的退一階（參考圖的亮暗對比） */
+.kakei-cal-cell.is-quiet .kakei-cal-num {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.kakei-cal-cell.is-sun .kakei-cal-num { color: var(--danger-color); }
+.kakei-cal-cell.is-sat .kakei-cal-num { color: var(--success-color); }
+.kakei-cal-cell.is-quiet.is-sun .kakei-cal-num { color: color-mix(in srgb, var(--danger-color) 70%, var(--text-muted)); }
+.kakei-cal-cell.is-quiet.is-sat .kakei-cal-num { color: color-mix(in srgb, var(--success-color) 70%, var(--text-muted)); }
+
+/* 前後月補位：只當背景，不搶眼、不可點 */
 .kakei-cal-cell.is-pad {
     cursor: default;
     pointer-events: none;
 }
 
-.kakei-cal-cell.is-today:not(.is-selected) {
-    border-color: var(--primary-color);
+.kakei-cal-cell.is-pad .kakei-cal-num {
+    font-weight: 400;
+    color: var(--text-muted);
+    opacity: 0.38;
 }
 
-.kakei-cal-cell.is-selected {
-    background: var(--primary-color) !important;
-    color: #ffffff !important;
-    border-color: var(--primary-color);
-    box-shadow: 0 3px 10px rgba(39, 55, 77, 0.22);
+
+/* ── 把手列：左「看整月」｜中把手｜右當日合計＋篩選 ── */
+.kakei-cal-handle-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+    align-items: center;
+    min-height: 36px;
+    margin-top: 2px;
 }
 
-.kakei-cal-cell.is-selected .kakei-cal-num {
-    font-weight: 700;
-    color: #ffffff !important;
+.kakei-cal-handle-row .kakei-cal-handle {
+    width: 72px;
+    height: 32px;
 }
 
-.kakei-cal-num {
-    font-size: 0.92rem;
-    line-height: 1.1;
-    font-family: var(--font-sans);
-    font-variant-numeric: tabular-nums;
-}
-
-.kakei-cal-dots-wrap {
+.kakei-cal-handle-side {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 3px;
-    min-height: 6px;
-    margin-top: 3px;
+    gap: 6px;
+    min-width: 0;
 }
 
-.kakei-cal-dot {
-    display: inline-block;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    flex-shrink: 0;
+.kakei-cal-handle-side.is-right {
+    justify-content: flex-end;
 }
 
-.kakei-cal-dot.dot-expense {
-    background-color: var(--danger-color, #E05252);
-    box-shadow: 0 0 3px rgba(224, 82, 82, 0.5);
-}
-
-.kakei-cal-dot.dot-income {
-    background-color: var(--success-color, #2E8B57);
-    box-shadow: 0 0 3px rgba(46, 139, 87, 0.5);
-}
-
-.kakei-cal-cell.is-selected .kakei-cal-dot.dot-expense {
-    box-shadow: 0 0 0 1px #fff, 0 0 3px rgba(224, 82, 82, 0.6);
-}
-
-.kakei-cal-cell.is-selected .kakei-cal-dot.dot-income {
-    box-shadow: 0 0 0 1px #fff, 0 0 3px rgba(46, 139, 87, 0.6);
-}
-
-
-/* ── Calendar Controls Row (Filter Bar + Sort Button) ── */
-.kakei-cal-controls-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 4px 0 8px 0;
-}
-
-.kakei-cal-filter-bar {
-    flex: 1;
-    display: flex;
-    background: var(--bg-color);
-    border-radius: 9999px;
-    padding: 3px;
-    margin: 0;
-    border: 1px solid var(--border-color);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
-    gap: 4px;
-}
-
-.kakei-cal-sort-btn {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    padding: 0;
+.kakei-chip {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    background: var(--bg-color);
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
     border: 1px solid var(--border-color);
     border-radius: 9999px;
-    color: var(--text-main);
-    font-size: 0.9rem;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
     cursor: pointer;
-    transition: all 0.15s ease;
-    user-select: none;
     -webkit-tap-highlight-color: transparent;
-    flex-shrink: 0;
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.kakei-cal-sort-btn:hover {
+/* 圖示與文字都收成 1em 高的方塊再置中，兩者才會在同一條水平線上 */
+.kakei-chip i,
+.kakei-chip-label {
+    display: block;
+    line-height: 1;
+}
+
+.kakei-chip i { font-size: 0.72rem; }
+
+.kakei-chip:active { background: var(--hover-bg); }
+
+@media (hover: hover) {
+    .kakei-chip:hover { color: var(--text-main); border-color: var(--text-muted); }
+}
+
+.kakei-day-total {
+    font-family: var(--font-num);
+    display: inline-flex;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.kakei-day-total .is-expense { color: var(--danger-color); }
+.kakei-day-total .is-income { color: var(--success-color); }
+
+.kakei-filter-wrap {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.kakei-filter-btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.kakei-filter-btn:active,
+.kakei-filter-btn.is-open {
     background: var(--hover-bg);
-    color: var(--primary-color);
+    color: var(--text-main);
 }
 
-.kakei-cal-sort-btn:active {
-    transform: scale(0.92);
+.kakei-filter-btn:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
 }
 
-.kakei-cal-filter-btn {
+/* 有套用篩選或排序時，按鈕右上一顆點提醒 */
+.kakei-filter-btn.is-dirty::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    box-shadow: 0 0 0 2px var(--cal-surface, var(--card-bg));
+}
+
+.kakei-filter-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 236px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--card-bg);
+    box-shadow: var(--shadow-lg);
+    transform-origin: top right;
+}
+
+.kfp-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.kfp-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.kfp-seg {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--bg-color);
+}
+
+.kfp-seg-btn {
     flex: 1;
-    padding: 6px 0;
-    border: none;
-    border-radius: 9999px;
+    min-height: 32px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 8px;
     background: transparent;
     color: var(--text-muted);
     font-size: 0.84rem;
     font-weight: 500;
-    line-height: 1;
-    min-height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     cursor: pointer;
-    outline: none;
-    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
     -webkit-tap-highlight-color: transparent;
-    user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.kakei-cal-filter-btn.is-active {
+.kfp-seg-btn.is-active {
     background: var(--card-bg);
-    color: var(--primary-color);
+    color: var(--text-main);
     font-weight: 600;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), var(--shadow-sm);
+    box-shadow: var(--shadow-sm);
 }
 
-.kakei-cal-filter-btn.is-active.filter-expense {
-    color: var(--danger-color);
-}
+.kfp-seg-btn.is-active.is-expense { color: var(--danger-color); }
+.kfp-seg-btn.is-active.is-income { color: var(--success-color); }
 
-.kakei-cal-filter-btn.is-active.filter-income {
-    color: var(--success-color);
-}
 
-/* ── Calendar Day Detail Panel ─────────────────────────────────── */
-.kakei-day-detail-panel {
-    background: transparent;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    border-top: 1px solid var(--border-color);
-    padding-top: 8px;
-    margin-top: 2px;
-}
-
-.kakei-day-detail-header {
-    display: flex;
+/* ── 每月統計（清單頂端，點進總覽） ── */
+.kakei-month-summary {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
-    padding: 0 4px;
-    gap: 8px;
-    min-height: 28px;
+    gap: 12px;
+    width: 100%;
+    margin: 4px 0 6px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--card-bg);
+    box-shadow: var(--shadow-sm);
+    color: var(--text-main);
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.kakei-day-detail-date {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.92rem;
-    font-weight: 600;
+.kakei-month-summary:active {
+    transform: scale(0.985);
+}
+
+.kakei-month-summary:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* 小日曆圖示：上緣一條色帶＋月份數字 */
+.kms-icon {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-color);
+}
+
+.kms-icon-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 11px;
+    background: var(--accent-color);
+}
+
+.kms-icon-num {
+    margin-top: 9px;
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 700;
     line-height: 1;
     color: var(--text-main);
-    white-space: nowrap;
-    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
 }
 
-.kakei-day-detail-date i {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.92rem;
-    line-height: 1;
+.kms-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
 }
 
-.kakei-pill-tag {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    height: 24px;
-    padding: 0 8px;
-    border-radius: 9999px;
-    font-size: 0.75rem;
+.kms-title {
+    font-size: 1rem;
     font-weight: 600;
-    line-height: 1;
-    color: var(--primary-color);
-    background: rgba(39, 55, 77, 0.08);
-    border: 1px solid rgba(39, 55, 77, 0.15);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    margin-left: 2px;
-    box-sizing: border-box;
-    vertical-align: middle;
+    line-height: 1.2;
 }
 
-.kakei-pill-tag:hover {
-    background: var(--primary-color);
-    color: #fff;
+.kms-sub {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
 }
 
-.kakei-day-detail-badges {
+.kms-sub b {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.kms-sub b.is-pos { color: var(--success-color); }
+.kms-sub b.is-neg { color: var(--danger-color); }
+
+.kms-side {
+    font-family: var(--font-num);
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 4px;
-    flex-wrap: nowrap;
-}
-
-.kakei-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 24px;
-    padding: 0 8px;
-    border-radius: 6px;
-    font-size: 0.78rem;
+    gap: 5px;
+    font-size: 1rem;
     font-weight: 600;
-    line-height: 1;
-    white-space: nowrap !important;
     font-variant-numeric: tabular-nums;
-    box-sizing: border-box;
-    vertical-align: middle;
+    white-space: nowrap;
 }
 
-.kakei-badge.badge-expense {
-    background: rgba(178, 64, 64, 0.12);
-    color: var(--danger-color);
+.kms-side .is-expense { color: var(--danger-color); }
+.kms-side .is-income { color: var(--success-color); }
+
+.kms-dot {
+    color: var(--text-muted);
+    font-weight: 400;
 }
 
-.kakei-badge.badge-income {
-    background: rgba(61, 122, 90, 0.12);
-    color: var(--success-color);
+.kms-chevron {
+    margin-left: 2px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
 }
 
+
+/* ── 明細列（參考 MOZE：大圓圖示＋標題，右側金額＋標籤） ── */
+.kakei-day-detail-panel {
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+}
 
 .kakei-day-entries-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
 }
 
 .kakei-day-group-section {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
+/* 整月檢視的日期標題：仍黏在頂端，但底色跟著頁面走（不再是一條白帶），層級低於月曆 */
+.kakei-calendar-container .life-day-header {
+    z-index: 1;
+    padding: 12px 10px 6px;
+    border-bottom: 0;
+    background: var(--cal-surface, var(--card-bg));
+}
+
+/* 當日合計：支出、收入分開列，只有收入的日子不會出現「$0」 */
+.kakei-calendar-container .life-day-header .ldh-total {
+    display: inline-flex;
+    gap: 8px;
+    font-family: var(--font-num);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.kakei-calendar-container .ldh-total .is-expense { color: var(--text-muted); }
+.kakei-calendar-container .ldh-total .is-income { color: var(--success-color); }
+
+/* 明細捲動條：桌面用細的主題色並預留位置（換頁時內容不會左右跳）；觸控裝置隱藏，同原生 App */
+.kakei-cal-list {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text-muted) 40%, transparent) transparent;
+    scrollbar-gutter: stable;
+}
+
+@media (pointer: coarse) {
+    .kakei-cal-list {
+        scrollbar-width: none;
+        scrollbar-gutter: auto;
+    }
+
+    .kakei-cal-list::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+.kk-entry {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 64px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.15s ease;
+}
+
+.kk-entry:active {
+    background: var(--hover-bg);
+}
+
+@media (hover: hover) {
+    .kk-entry:hover { background: var(--hover-bg); }
+}
+
+.kk-entry:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.kk-entry-icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.kk-entry-initial {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.kk-entry-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.kk-entry-title {
+    overflow: hidden;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--text-main);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.kk-entry-sub {
+    overflow: hidden;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.kk-entry-sub.is-reward { color: var(--success-color); }
+.kk-entry-sub.is-reward i { font-size: 0.7rem; }
+
+.kk-entry-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+    min-width: 0;
+}
+
+.kk-entry-amount {
+    font-family: var(--font-num);
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.kk-entry-amount.is-expense { color: var(--danger-color); }
+.kk-entry-amount.is-income { color: var(--success-color); }
+
+.kk-entry-tags {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    max-width: 52vw;
+}
+
+.kk-tag {
+    overflow: hidden;
+    max-width: 7.5em;
+    padding: 2px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    line-height: 1.3;
+    color: var(--text-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* 空狀態 */
 .kakei-day-empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 8px;
+    margin-top: 4px;
     padding: 24px 16px;
-    background: var(--card-bg);
     border: 1px dashed var(--border-color);
     border-radius: var(--radius-lg, 16px);
     text-align: center;
     color: var(--text-muted);
 }
+
+.kakei-empty-icon {
+    font-size: 1.3rem;
+    opacity: 0.65;
+}
+
+.kakei-empty-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.kakei-day-empty-state .kakei-empty-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    padding: 6px 14px;
+    border-color: var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-main);
+    font-size: 0.84rem;
+    cursor: pointer;
+}
+
+.kakei-day-empty-state .kakei-empty-action i { color: var(--primary-color); }
+
+/* 編輯視窗底部的刪除 */
+.life-modal-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 12px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--danger-color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.life-modal-delete:active { background: rgba(178, 64, 64, 0.08); }
+
 
 
 /* ── Pagination bar (Single row, centered, placed at top of list) ── */

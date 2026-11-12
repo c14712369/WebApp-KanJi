@@ -61,39 +61,38 @@ export default function Header() {
         </div>
       </aside>
 
-      {/* 手機/平板：沿用原本頂部 header，分頁切換交給 BottomNav */}
+      {/* 手機/平板：單列頁首（參考 MOZE）—— 左隱藏金額、中間標題/月份、右設定；分頁切換交給 BottomNav。
+          中間的 #mobileHeaderSlot 由生活費頁把月份切換列 portal 進來，其他分頁顯示分頁名稱。
+          登入入口收在「設定 → 帳號」。 */}
       <header className="mobile-header">
-        <div className="header-title">
-          <h1>
-            <i className="fa-solid fa-vault title-icon"></i>
-            <span id="appDisplayName">Kakei</span>
-          </h1>
-          <span className="subtitle">記錄每一筆固定支出與日常生活費</span>
+        <button
+          type="button"
+          className="icon-btn header-side-btn"
+          onClick={() => { if (navigator.vibrate) navigator.vibrate(20); togglePrivacy(); }}
+          title={isPrivacyMode ? '顯示金額' : '隱藏金額'}
+          aria-label={isPrivacyMode ? '顯示金額' : '隱藏金額'}
+          aria-pressed={isPrivacyMode}
+        >
+          <i className={`fa-solid ${isPrivacyMode ? 'fa-eye-slash' : 'fa-eye'}`} id="privacyIcon" aria-hidden="true"></i>
+        </button>
+
+        <div className="header-center">
+          {activeTab !== 'life' && (
+            <h1 className="header-tab-title">{TABS.find(t => t.id === activeTab)?.label || 'Kakei'}</h1>
+          )}
+          <div id="mobileHeaderSlot" className="header-slot"></div>
         </div>
 
-        <div className="header-controls">
-          <div className="header-controls-top">
-            {currentUser && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: '0.85rem' }}>
-                <span id="authUserEmail" style={{ fontWeight: 600 }}>{currentUser.email}</span>
-              </div>
-            )}
-            <div className="header-icons">
-              {isSyncing && <i className="fa-solid fa-rotate fa-spin" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}></i>}
-              <button className="icon-btn" onClick={togglePrivacy} title={isPrivacyMode ? '顯示金額' : '隱藏金額'}>
-                <i className={`fa-solid ${isPrivacyMode ? 'fa-eye-slash' : 'fa-eye'}`} id="privacyIcon"></i>
-              </button>
-              <button className="icon-btn" onClick={openSettings} title="設定" aria-label="設定">
-                <i className="fa-solid fa-gear"></i>
-              </button>
-            </div>
-          </div>
-          {!currentUser && (
-            <button className="btn btn-outline btn-sm" id="authLoginBtn" onClick={() => setShowAuth(true)}>
-              <i className="fa-solid fa-user"></i> 登入 / 註冊
-            </button>
-          )}
-        </div>
+        <button
+          type="button"
+          className={`icon-btn header-side-btn${isSyncing ? ' is-syncing' : ''}`}
+          onClick={openSettings}
+          title={isSyncing ? '設定（同步中）' : '設定'}
+          aria-label={isSyncing ? '設定，資料同步中' : '設定'}
+        >
+          <i className={`fa-solid ${isSyncing ? 'fa-rotate fa-spin' : 'fa-gear'}`} aria-hidden="true"></i>
+          {!currentUser && <span className="header-badge" aria-hidden="true"></span>}
+        </button>
       </header>
 
       {showAuth     && <AuthModal     onClose={() => setShowAuth(false)} />}

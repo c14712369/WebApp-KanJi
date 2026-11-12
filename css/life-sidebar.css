@@ -141,95 +141,126 @@
         padding-top: calc(max(8px, env(safe-area-inset-top)) + 16px); /* +16px 避開 iOS 26 狀態列下方的系統模糊帶 */
     }
 
-    /* 手機精簡頁首（所有分頁共用）：品牌與圖示同一列，副標題在下 */
+    /* 手機單列頁首（所有分頁共用，參考 MOZE）：左「隱藏金額」、中間標題或月份、右「設定」。
+       品牌名與副標題拿掉，省下一整段高度給內容。 */
     body .app-shell .mobile-header {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-areas:
-            "brand controls"
-            "subtitle subtitle";
+        grid-template-columns: 40px minmax(0, 1fr) 40px;
         align-items: center;
+        column-gap: 4px;
         flex: 0 0 auto;
-        column-gap: 8px;
-        row-gap: 1px;
-        margin-bottom: 10px;
-        padding-bottom: 8px;
+        min-height: 44px;
+        margin: 0 0 8px;
+        padding: 0;
+        border-bottom: 0;
     }
 
-    body .app-shell .mobile-header .header-title {
-        display: contents;
+    body .app-shell .mobile-header::before {
+        display: none;
+    }
+
+    body .app-shell .mobile-header .header-side-btn {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 40px;
+        min-width: 40px;
+        height: 40px;
+        padding: 0;
+        border: 0;
+        border-radius: 12px;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 1.02rem;
+    }
+
+    body .app-shell .mobile-header .header-side-btn:active {
+        background: var(--hover-bg);
+    }
+
+    body .app-shell .mobile-header .header-side-btn.is-syncing {
+        color: var(--primary-color);
+    }
+
+    /* 未登入：設定鈕上一顆小點，提示「設定 → 帳號」可登入同步 */
+    body .app-shell .mobile-header .header-badge {
+        position: absolute;
+        top: 9px;
+        right: 9px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent-color);
+        box-shadow: 0 0 0 2px var(--bg-color);
+    }
+
+    body .app-shell .mobile-header .header-center {
+        display: flex;
+        align-items: center;
+        justify-content: center;
         min-width: 0;
     }
 
-    body .app-shell .mobile-header h1 {
-        grid-area: brand;
-        gap: 7px;
-        font-size: 1.35rem;
-        line-height: 1.25;
-    }
-
-    body .app-shell .mobile-header h1 .title-icon {
-        font-size: 1rem;
-        transform: translateY(2px);
-    }
-
-    body .app-shell .mobile-header .subtitle {
-        grid-area: subtitle;
-        font-size: 0.72rem;
-        line-height: 1.4;
-        letter-spacing: 0.03em;
+    body .app-shell .mobile-header .header-tab-title {
+        margin: 0;
+        overflow: hidden;
+        font-family: var(--font-serif);
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1.2;
+        color: var(--text-main);
         white-space: nowrap;
+        text-overflow: ellipsis;
     }
 
-    body .app-shell .mobile-header .header-controls {
-        grid-area: controls;
-        flex-direction: row;
-        align-items: center;
-        justify-content: flex-end;
+    body .app-shell .mobile-header .header-slot {
+        display: flex;
+        justify-content: center;
+        min-width: 0;
+    }
+
+    body .app-shell .mobile-header .header-slot:empty {
+        display: none;
+    }
+
+    /* 月份列在頁首：無框標題感，箭頭輕量 */
+    body .app-shell .life-month-nav.is-in-header {
+        flex-wrap: nowrap;
+        gap: 0;
         width: auto;
-        gap: 0;
+        max-width: none;
+        margin: 0;
     }
 
-    body .app-shell .mobile-header .header-controls-top {
-        flex: 0 0 auto;
-        width: auto;
-        gap: 0;
-    }
-
-    body .app-shell .mobile-header .header-icons {
-        align-items: center;
-        gap: 0;
-    }
-
-    body .app-shell .mobile-header .header-icons i,
-    body .app-shell .mobile-header #authLoginBtn i {
-        display: grid;
-        place-items: center;
-        width: 16px;
-        height: 16px;
-        font-size: 0.9rem;
-        line-height: 1;
-        transform: translateY(3px);
-    }
-
-    body .app-shell .mobile-header .icon-btn,
-    body .app-shell .mobile-header #authLoginBtn {
+    body .app-shell .life-month-nav.is-in-header .icon-btn {
         width: 36px;
         min-width: 36px;
-        height: 36px;
+        height: 40px;
         padding: 0;
-        justify-content: center;
-    }
-
-    body .app-shell .mobile-header #authLoginBtn {
-        gap: 0;
         border: 0;
-        font-size: 0;
+        background: transparent;
+        color: var(--text-muted);
     }
 
-    /* 精簡頁首只留一列：Email 已在桌面側欄顯示，手機收起 */
-    body .app-shell .mobile-header #authUserEmail {
-        display: none;
+    body .app-shell .life-month-nav.is-in-header .life-month-input {
+        width: 7.4em;
+        min-width: 0;
+        height: 40px;
+        padding: 0 2px;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        font-size: 1.15rem;
+    }
+
+    body .app-shell .life-month-nav.is-in-header .life-month-today {
+        height: 28px;
+        min-height: 28px;
+        margin-left: 2px;
+        padding: 0 10px;
+        border-radius: 9999px;
+        font-size: 0.78rem;
     }
 
     body.life-page-active .app-main {
@@ -298,14 +329,46 @@
         overflow: hidden;
     }
 
+    /* 收支明細（參考 MOZE）：拿掉分頁切換列與外框卡片，月曆和清單直接放在頁面底色上 */
+    body.life-page-active .life-section-nav.is-exp-view {
+        display: none;
+    }
+
+    body.life-page-active .life-shared-container.life-shared-exp {
+        --cal-surface: var(--bg-color);
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    body.life-page-active .life-shared-exp .life-detail-panel {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    /* 月曆固定在上方（可收成單週），只有下方明細捲動 */
     body.life-page-active .kakei-calendar-container {
         flex: 1 1 auto;
         height: 100% !important;
         max-height: none !important;
         min-height: 0;
-        overflow-y: auto !important;
+        overflow: hidden;
+    }
+
+    /* 月曆區交給上下滑動手勢（收合／展開），不讓瀏覽器拿去捲動 */
+    body.life-page-active .kakei-cal-sheet {
+        touch-action: none;
+    }
+
+    body.life-page-active .kakei-cal-list {
+        overflow-y: auto;
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
+        /* 底部留白讓最後一筆能捲到底部導覽中間凸起的「＋」上方 */
+        padding-bottom: 32px;
     }
 
     body.life-page-active #lifeExpList,

@@ -374,6 +374,7 @@ export default function FixedTab() {
     items, categories, fixedSortMode,
     addItem, updateItem, deleteItem,
     setFixedSortMode,
+    pendingAdd, setPendingAdd,
   } = useAppStore();
 
   const [statusFilter, setStatus]   = useState('active');
@@ -468,6 +469,13 @@ export default function FixedTab() {
   };
 
   const openNew = () => { vibrate(50); setOpenRowId(null); setModalItem({ ...EMPTY_FORM, categoryId: categories[0]?.id || '', startDate: toYmd(new Date()) }); };
+
+  // 底部導覽中間「＋」在固定支出頁 → 新增固定支出
+  useEffect(() => {
+    if (pendingAdd !== 'fixed') return;
+    setPendingAdd(null);
+    openNew();
+  }, [pendingAdd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openEdit = (item) => {
     vibrate(20);

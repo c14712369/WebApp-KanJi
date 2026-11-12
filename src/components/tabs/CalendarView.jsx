@@ -1,24 +1,29 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { buildMonthCalendar, groupEntriesByDay, paginateGroups, findEntryPage } from '../../lib/lifeGrouping';
+import { buildMonthCalendar, groupEntriesByDay, calendarFocusRow, noteDisplayMap } from '../../lib/lifeGrouping';
 import { formatAmount } from '../../lib/utils';
+import AnimatedNumber from '../../lib/AnimatedNumber';
 import LifeEntryRow from './LifeEntryRow';
 
-const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const PAGE_SIZE = 5; // 每頁約 5 筆，行動端無需長滑即可看到完整細項
+// 金額一律走 AnimatedNumber：按「隱藏金額」時，所有收入同一種淡出／淡入節奏，不會有的瞬間換、有的慢半拍
+const fmtIncome = (v) => formatAmount(v, 'income');
+const fmtExpense = (v) => formatAmount(v, 'expense');
 
-function getPaginationItems(current, total) {
-  if (total <= 6) {
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }
-  if (current <= 3) {
-    return [1, 2, 3, 4, '...', total];
-  }
-  if (current >= total - 2) {
-    return [1, '...', total - 3, total - 2, total - 1, total];
-  }
-  return [1, '...', current - 1, current, current + 1, '...', total];
-}
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+const COLLAPSE_SCROLL_PX = 24; // 明細往下捲超過此距離 → 月曆收成單週
+const EXPAND_PULL_PX = 56;     // 收合時明細已在頂端、再往下拉超過此距離 → 展開整月
+const SWIPE_PX = 28;           // 在月曆上上下滑動的判定距離
+const TYPE_OPTIONS = [
+  { key: 'all', label: '全部' },
+  { key: 'expense', label: '支出' },
+  { key: 'income', label: '收入' },
+];
+const SORT_OPTIONS = [
+  { key: 'date-desc', label: '新到舊' },
+  { key: 'date-asc', label: '舊到新' },
+];
+const buzz = (ms = 12) => { if (navigator.vibrate) navigator.vibrate(ms); };
+const pad2 = (n) => String(n).padStart(2, '0');
 
 export default function CalendarView({
   ym,
@@ -32,25 +37,67 @@ export default function CalendarView({
   rewardMap = {},
   justSavedId = null,
   onEdit,
-  onDelete,
   filterType = 'all',
   setFilterType,
   sortMode = 'date-desc',
   setSortMode,
+  monthSummary = null,   // { expense, income, remain, isCurrentMonth }
+  onOpenOverview,
 }) {
-  const [page, setPage] = useState(1);
+  const [collapsed, setCollapsed] = useState(false);   // 月曆收合成單週，讓出空間給明細
+  const [listScrolled, setListScrolled] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const collapsedRef = useRef(false);
+  const listRef = useRef(null);
+  const filterWrapRef = useRef(null);
+  const lastScrollTopRef = useRef(0);
+  const pullStartYRef = useRef(null);
+  const panEndAtRef = useRef(0);
   const today = new Date();
-  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayIso = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
 
-  // 當月份、收支類型或單日選取變更時，重設分頁
+  // 整月改成一路往下捲（不分頁，免得筆數多時狂按頁碼）；換月份、篩選、排序或選日時回到清單頂端
   useEffect(() => {
-    setPage(1);
-  }, [ym, filterType, selectedDate]);
+    const el = listRef.current;
+    if (el) el.scrollTop = 0;
+    lastScrollTopRef.current = 0;
+  }, [ym, filterType, sortMode, selectedDate]);
 
-  // 月曆網格與紅綠點資料
+  // 篩選選單：點外面或按 Esc 關閉
+  useEffect(() => {
+    if (!filterOpen) return undefined;
+    const onDown = (e) => { if (!filterWrapRef.current?.contains(e.target)) setFilterOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setFilterOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [filterOpen]);
+
+  // 月曆網格資料
   const { paddingDays, days } = useMemo(() => {
     return buildMonthCalendar(ym, entries);
   }, [ym, entries]);
+
+  // 前後月補位的日期數字（淡色、不可點），讓每一列都是完整一週
+  const { leadNums, trailNums, monthNum } = useMemo(() => {
+    const [y, m] = (ym || '').split('-').map(Number);
+    if (!y || !m) return { leadNums: [], trailNums: [], monthNum: 0 };
+    const prevMonthDays = new Date(y, m - 1, 0).getDate();
+    const lead = Array.from({ length: paddingDays }, (_, i) => prevMonthDays - paddingDays + 1 + i);
+    const trailCount = (7 - ((paddingDays + days.length) % 7)) % 7;
+    const trail = Array.from({ length: trailCount }, (_, i) => i + 1);
+    return { leadNums: lead, trailNums: trail, monthNum: m };
+  }, [ym, paddingDays, days.length]);
+
+  // 收合時顯示的那一週：選取日 → 今天（本月）→ 第一週
+  const focusDate = selectedDate || (todayIso.startsWith(ym) ? todayIso : null);
+  const { rows: calRows, row: focusRow } = useMemo(
+    () => calendarFocusRow({ paddingDays, days }, focusDate),
+    [paddingDays, days, focusDate]
+  );
 
   // 選中日期的所有明細（若 selectedDate 為 null 則不需單日明細）
   const selectedEntries = useMemo(() => {
@@ -68,11 +115,8 @@ export default function CalendarView({
     let exp = 0, inc = 0;
     for (const e of selectedEntries) {
       const amt = Number(e.amount) || 0;
-      if (e.type === 'income') {
-        inc += amt;
-      } else {
-        exp += amt;
-      }
+      if (e.type === 'income') inc += amt;
+      else exp += amt;
     }
     return { dayExpense: exp, dayIncome: inc };
   }, [selectedEntries, selectedDate]);
@@ -83,34 +127,11 @@ export default function CalendarView({
     return groupEntriesByDay(entries);
   }, [entries, selectedDate]);
 
-  // 全月分頁計算（整天不切斷）
-  const { totalPages, pageGroups } = useMemo(() => {
-    if (selectedDate !== null) return { totalPages: 1, pageGroups: [] };
-    return paginateGroups(dayGroups, page, PAGE_SIZE);
-  }, [dayGroups, page, selectedDate]);
-
-  // 存檔後若在全月模式，自動跳到新資料所在的頁數
-  useEffect(() => {
-    if (!justSavedId || selectedDate !== null) return;
-    const targetPage = findEntryPage(dayGroups, justSavedId, PAGE_SIZE);
-    if (targetPage && targetPage !== page) {
-      setPage(targetPage);
-    }
-  }, [justSavedId, dayGroups, selectedDate, page]);
-
-
-  // 格式化選定日期標題（如 10月15日 週四）
-  const selectedDateLabel = useMemo(() => {
-    if (!selectedDate) return '';
-    const parts = selectedDate.split('-');
-    if (parts.length !== 3) return selectedDate;
-    const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-    const w = WEEKDAYS[d.getDay()];
-    return `${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日 週${w}`;
-  }, [selectedDate]);
 
   // 點擊日期格子：選中則取消（還原為全月），未選中則切換為該日
   const handleCellClick = (dateStr) => {
+    // 剛在月曆上滑動收合/展開，放開手指時不要順便選到日期
+    if (performance.now() - panEndAtRef.current < 350) return;
     if (navigator.vibrate) navigator.vibrate(20);
     if (selectedDate === dateStr) {
       onSelectDate(null);
@@ -119,306 +140,357 @@ export default function CalendarView({
     }
   };
 
+  // 用 ref 鏡像目前狀態：連續 scroll 事件在重繪前也不會重複觸發開合與震動
+  const toggleCollapsed = (next) => {
+    const value = typeof next === 'boolean' ? next : !collapsedRef.current;
+    if (value === collapsedRef.current) return;
+    collapsedRef.current = value;
+    buzz();
+    setCollapsed(value);
+  };
+
+  // 在月曆上往上滑 → 收成單週；往下滑 → 展開整月
+  const handleSheetPanEnd = (_, info) => {
+    panEndAtRef.current = performance.now();
+    const { x, y } = info.offset;
+    if (Math.abs(y) < SWIPE_PX || Math.abs(y) < Math.abs(x)) return;
+    toggleCollapsed(y < 0);
+  };
+
+  // 明細往下捲 → 月曆自動收合；只看往下的方向，往回捲或程式回到頂端不會反覆開合
+  const handleListScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    const top = el.scrollTop;
+    setListScrolled(top > 2);
+    if (!collapsedRef.current && top > COLLAPSE_SCROLL_PX && top > lastScrollTopRef.current) {
+      toggleCollapsed(true);
+    }
+    lastScrollTopRef.current = top;
+  };
+
+  // 明細區手勢（不用特地抓把手）：
+  // - 展開時往上滑，清單已到底或內容太少捲不動 → 直接收成單週
+  // - 收合時從清單最頂端往下拉 → 展開整月（同 iOS 行事曆手感）
+  const canScrollDown = (el) => el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+  const handleListTouchStart = (e) => {
+    const el = listRef.current;
+    pullStartYRef.current = el ? { y: e.touches[0].clientY, atTop: el.scrollTop <= 0 } : null;
+  };
+  const handleListTouchMove = (e) => {
+    const start = pullStartYRef.current;
+    const el = listRef.current;
+    if (!start || !el) return;
+    const dy = e.touches[0].clientY - start.y;
+    if (!collapsedRef.current && dy < -SWIPE_PX && !canScrollDown(el)) {
+      pullStartYRef.current = null;
+      toggleCollapsed(true);
+    } else if (collapsedRef.current && start.atTop && el.scrollTop <= 0 && dy > EXPAND_PULL_PX) {
+      pullStartYRef.current = null;
+      toggleCollapsed(false);
+    }
+  };
+  // 滑鼠滾輪比照：捲不動時往下滾收合、在頂端往上滾展開
+  const handleListWheel = (e) => {
+    const el = listRef.current;
+    if (!el || Math.abs(e.deltaY) < 8) return;
+    if (e.deltaY > 0 && !collapsedRef.current && !canScrollDown(el)) toggleCollapsed(true);
+    else if (e.deltaY < 0 && collapsedRef.current && el.scrollTop <= 0) toggleCollapsed(false);
+  };
+
+  // 同一家店大小寫不同（7-ELEVEN / 7-Eleven）時統一顯示，不改資料
+  const noteLabels = useMemo(() => noteDisplayMap(entries), [entries]);
+
+  const filterDirty = filterType !== 'all' || sortMode !== 'date-desc';
+  const showFilter = !!(setFilterType || setSortMode);
+
+  const renderRow = (e, idx) => (
+    <LifeEntryRow
+      key={e.id}
+      entry={e}
+      idx={idx}
+      noteLabel={noteLabels.get(String(e.note || '').trim().toLowerCase())}
+      isJustSaved={e.id === justSavedId}
+      reward={rewardMap[e.id]}
+      lifeCategories={lifeCategories}
+      lifeIncomeCategories={lifeIncomeCategories}
+      paymentMethods={paymentMethods}
+      onEdit={onEdit}
+    />
+  );
+
+  const renderEmpty = (icon, text, actionLabel, onAction) => (
+    <div className="kakei-day-empty-state">
+      <span className="kakei-empty-icon" aria-hidden="true"><i className={icon}></i></span>
+      <div className="kakei-empty-text">{text}</div>
+      <button
+        type="button"
+        className="btn btn-outline btn-sm kakei-empty-action"
+        onClick={() => { buzz(20); onAction(); }}
+      >
+        <i className="fa-solid fa-plus" aria-hidden="true"></i>
+        {actionLabel}
+      </button>
+    </div>
+  );
+
   return (
-    <div className="kakei-calendar-container">
-      {/* 星期標頭 */}
-      <div className="kakei-cal-weekdays">
-        {WEEKDAYS.map((w) => (
-          <div key={w} className="kakei-cal-weekday-cell">
-            {w}
-          </div>
-        ))}
-      </div>
-
-      {/* 日期網格 */}
-      <div className="kakei-cal-grid">
-        {/* 前置佔位格 */}
-        {Array.from({ length: paddingDays }).map((_, i) => (
-          <div key={`pad-${i}`} className="kakei-cal-cell is-pad" aria-hidden="true" />
-        ))}
-
-        {/* 各天儲存格 */}
-        {days.map((dayItem) => {
-          const isToday = dayItem.date === todayIso;
-          const isSelected = dayItem.date === selectedDate;
-
-          return (
-            <motion.button
-              key={dayItem.date}
-              type="button"
-              whileTap={{ scale: 0.92 }}
-              onClick={() => handleCellClick(dayItem.date)}
-              className={`kakei-cal-cell${isSelected ? ' is-selected' : ''}${isToday ? ' is-today' : ''}`}
-              aria-label={`${dayItem.date} ${dayItem.hasExpense ? '有支出' : ''} ${dayItem.hasIncome ? '有收入' : ''}`}
-              title={isSelected ? '再次點擊取消篩選，看整月' : dayItem.date}
-            >
-              <span className="kakei-cal-num">{dayItem.day}</span>
-              <div className="kakei-cal-dots-wrap">
-                {dayItem.hasExpense && <span className="kakei-cal-dot dot-expense" />}
-                {dayItem.hasIncome && <span className="kakei-cal-dot dot-income" />}
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
-
-
-      {/* 全部 / 支出 / 收入 快速過濾膠囊列 + 排序開關 */}
-      {(setFilterType || setSortMode) && (
-        <div className="kakei-cal-controls-row">
-          {setFilterType && (
-            <div className="kakei-cal-filter-bar">
-              {[
-                { key: 'all', label: '全部' },
-                { key: 'expense', label: '支出' },
-                { key: 'income', label: '收入' }
-              ].map(opt => {
-                const isActive = filterType === opt.key;
-                return (
-                  <motion.button
-                    key={opt.key}
-                    type="button"
-                    whileTap={{ scale: 0.96 }}
-                    className={`kakei-cal-filter-btn${isActive ? ' is-active' : ''}${isActive ? ` filter-${opt.key}` : ''}`}
-                    onClick={() => {
-                      if (navigator.vibrate) navigator.vibrate(20);
-                      setFilterType(opt.key);
-                    }}
-                  >
-                    {opt.label}
-                  </motion.button>
-                );
-              })}
+    <div className={`kakei-calendar-container${collapsed ? ' is-collapsed' : ''}${listScrolled ? ' is-list-scrolled' : ''}`}>
+      <motion.div className="kakei-cal-sheet" onPanEnd={handleSheetPanEnd}>
+        {/* 星期標頭 */}
+        <div className="kakei-cal-weekdays" aria-hidden="true">
+          {WEEKDAYS.map((w, i) => (
+            <div key={w} className={`kakei-cal-weekday-cell${i === 0 ? ' is-sun' : i === 6 ? ' is-sat' : ''}`}>
+              週{w}
             </div>
-          )}
-
-          {setSortMode && (
-            <button
-              type="button"
-              className="kakei-cal-sort-btn"
-              title={sortMode === 'date-desc' ? '由新到舊排序（點擊改由舊到新）' : '由舊到新排序（點擊改由新到舊）'}
-              aria-label={sortMode === 'date-desc' ? '由新到舊排序' : '由舊到新排序'}
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(20);
-                setSortMode(s => s === 'date-desc' ? 'date-asc' : 'date-desc');
-              }}
-            >
-              <i className={`fa-solid ${sortMode === 'date-desc' ? 'fa-arrow-down-short-wide' : 'fa-arrow-up-short-wide'}`}></i>
-            </button>
-          )}
+          ))}
         </div>
-      )}
 
-      {/* 明細清單區塊：依 selectedDate 顯示單日或全月 */}
-      <div className="kakei-day-detail-panel">
-        {selectedDate && (
-          <div className="kakei-day-detail-header">
-            <div className="kakei-day-detail-date">
-              <i className="fa-regular fa-calendar-check" style={{ color: 'var(--primary-color)' }}></i>
-              <span>{selectedDateLabel}</span>
+        {/* 日期網格：收合時只露出焦點那一週，其餘列以位移帶出／帶入 */}
+        <div
+          className="kakei-cal-viewport"
+          style={{ '--cal-rows': calRows, '--cal-focus-row': focusRow }}
+        >
+          <div className="kakei-cal-grid">
+            {/* 上個月補位 */}
+            {leadNums.map((n, i) => (
+              <div key={`lead-${n}`} className={`kakei-cal-cell is-pad${i === 0 ? ' is-sun' : ''}`} aria-hidden="true">
+                <span className="kakei-cal-num">{pad2(n)}</span>
+              </div>
+            ))}
+
+            {/* 本月各天 */}
+            {days.map((dayItem, i) => {
+              const col = (paddingDays + i) % 7;
+              const isToday = dayItem.date === todayIso;
+              const isSelected = dayItem.date === selectedDate;
+              const hasEntries = dayItem.hasExpense || dayItem.hasIncome;
+              const offscreen = collapsed && Math.floor((paddingDays + i) / 7) !== focusRow;
+
+              return (
+                <motion.button
+                  key={dayItem.date}
+                  type="button"
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => handleCellClick(dayItem.date)}
+                  className={`kakei-cal-cell${isSelected ? ' is-selected' : ''}${isToday ? ' is-today' : ''}${hasEntries ? '' : ' is-quiet'}${col === 0 ? ' is-sun' : col === 6 ? ' is-sat' : ''}`}
+                  aria-label={`${dayItem.date}${dayItem.hasExpense ? ' 有支出' : ''}${dayItem.hasIncome ? ' 有收入' : ''}${hasEntries ? '' : ' 無紀錄'}`}
+                  aria-pressed={isSelected}
+                  aria-hidden={offscreen || undefined}
+                  tabIndex={offscreen ? -1 : undefined}
+                  title={isSelected ? '再次點擊取消篩選，看整月' : dayItem.date}
+                >
+                  {/* 1 號照樣顯示 01：月份已在頁首，不在格子裡重複 */}
+                  <span className="kakei-cal-num">{pad2(dayItem.day)}</span>
+                </motion.button>
+              );
+            })}
+
+            {/* 下個月補位 */}
+            {trailNums.map((n, i) => (
+              <div
+                key={`trail-${n}`}
+                className={`kakei-cal-cell is-pad${(paddingDays + days.length + i) % 7 === 6 ? ' is-sat' : ''}`}
+                aria-hidden="true"
+              >
+                <span className="kakei-cal-num">{pad2(n)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 把手列：左「看整月」＋當日合計｜中把手｜右篩選 */}
+        <div className="kakei-cal-handle-row">
+          <div className="kakei-cal-handle-side is-left">
+            {selectedDate && (
               <button
                 type="button"
-                className="kakei-pill-tag"
-                onClick={() => {
-                  if (navigator.vibrate) navigator.vibrate(20);
-                  onSelectDate(null);
-                }}
+                className="kakei-chip"
+                onClick={() => { buzz(20); onSelectDate(null); }}
                 title="回到整月明細"
               >
-                <i className="fa-solid fa-list-ul"></i>
-                <span>看整月</span>
+                <i className="fa-solid fa-list-ul" aria-hidden="true"></i>
+                <span className="kakei-chip-label">看整月</span>
               </button>
-            </div>
-
-            <div className="kakei-day-detail-badges">
-              {dayExpense > 0 && (
-                <span className="kakei-badge badge-expense">
-                  - NT$ {formatAmount(dayExpense, 'expense')}
-                </span>
-              )}
-              {dayIncome > 0 && (
-                <span className="kakei-badge badge-income">
-                  + NT$ {formatAmount(dayIncome, 'income')}
-                </span>
-              )}
-              {dayExpense === 0 && dayIncome === 0 && (
-                <span className="text-muted" style={{ fontSize: '0.8rem' }}>無收支</span>
-              )}
-            </div>
+            )}
           </div>
+
+          <button
+            type="button"
+            className="kakei-cal-handle"
+            onClick={() => toggleCollapsed()}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? '展開整月月曆' : '月曆收成單週，騰出明細空間'}
+            title={collapsed ? '展開整月' : '收成單週'}
+          >
+            <span className="kakei-cal-handle-bar" aria-hidden="true" />
+          </button>
+
+          {/* 把手列只放操作；當日花費改到當天明細最上面的「當日小計」 */}
+          <div className="kakei-cal-handle-side is-right">
+            {showFilter && (
+              <div className="kakei-filter-wrap" ref={filterWrapRef}>
+                <button
+                  type="button"
+                  className={`kakei-filter-btn${filterDirty ? ' is-dirty' : ''}${filterOpen ? ' is-open' : ''}`}
+                  onClick={() => { buzz(20); setFilterOpen(v => !v); }}
+                  aria-haspopup="true"
+                  aria-expanded={filterOpen}
+                  aria-label={filterDirty ? '篩選與排序（已套用）' : '篩選與排序'}
+                  title="篩選與排序"
+                >
+                  <i className="fa-solid fa-sliders" aria-hidden="true"></i>
+                </button>
+                <AnimatePresence>
+                  {filterOpen && (
+                    <motion.div
+                      className="kakei-filter-pop"
+                      role="dialog"
+                      aria-label="篩選與排序"
+                      initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
+                    >
+                      {setFilterType && (
+                        <div className="kfp-group">
+                          <div className="kfp-label">類型</div>
+                          <div className="kfp-seg" role="radiogroup" aria-label="類型">
+                            {TYPE_OPTIONS.map(opt => (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                role="radio"
+                                aria-checked={filterType === opt.key}
+                                className={`kfp-seg-btn${filterType === opt.key ? ` is-active is-${opt.key}` : ''}`}
+                                onClick={() => { buzz(20); setFilterType(opt.key); }}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {setSortMode && (
+                        <div className="kfp-group">
+                          <div className="kfp-label">排序</div>
+                          <div className="kfp-seg" role="radiogroup" aria-label="排序">
+                            {SORT_OPTIONS.map(opt => (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                role="radio"
+                                aria-checked={sortMode === opt.key}
+                                className={`kfp-seg-btn${sortMode === opt.key ? ' is-active' : ''}`}
+                                onClick={() => { buzz(20); setSortMode(opt.key); }}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* 明細捲動區：月曆以外的空間全部給它 */}
+      <div
+        ref={listRef}
+        className="kakei-cal-list"
+        onScroll={handleListScroll}
+        onTouchStart={handleListTouchStart}
+        onTouchMove={handleListTouchMove}
+        onWheel={handleListWheel}
+      >
+        {/* 每月統計：本月支出・收入；點進去看總覽與分類 */}
+        {monthSummary && (
+          <button
+            type="button"
+            className="kakei-month-summary"
+            onClick={() => { buzz(20); onOpenOverview && onOpenOverview(); }}
+            aria-label={`每月統計：支出 ${formatAmount(monthSummary.expense, 'expense')} 元，收入 ${formatAmount(monthSummary.income, 'income')} 元。點一下看本月總覽與分類`}
+          >
+            <span className="kms-icon" aria-hidden="true">
+              <span className="kms-icon-top" />
+              <span className="kms-icon-num">{monthNum}</span>
+            </span>
+            <span className="kms-main">
+              <span className="kms-title">每月統計</span>
+              <span className="kms-sub">
+                {monthSummary.isCurrentMonth ? '還能花' : '結餘'}
+                <b className={monthSummary.remain < 0 ? 'is-neg' : 'is-pos'}>
+                  {monthSummary.remain < 0 ? '−' : ''}$<AnimatedNumber value={Math.abs(Math.round(monthSummary.remain))} format={fmtIncome} />
+                </b>
+              </span>
+            </span>
+            <span className="kms-side">
+              <span className="is-expense">$<AnimatedNumber value={Math.round(monthSummary.expense)} format={fmtExpense} /></span>
+              <span className="kms-dot" aria-hidden="true">•</span>
+              <span className="is-income">$<AnimatedNumber value={Math.round(monthSummary.income)} format={fmtIncome} /></span>
+              <i className="fa-solid fa-chevron-right kms-chevron" aria-hidden="true"></i>
+            </span>
+          </button>
         )}
 
-        <div className="kakei-day-entries-list">
-          {selectedDate ? (
-            /* ── 單日檢視 ── */
-            selectedEntries.length === 0 ? (
-              <div className="kakei-day-empty-state">
-                <span className="empty-icon" style={{ fontSize: '1.3rem', opacity: 0.65 }}>
-                  <i className="fa-solid fa-mug-hot"></i>
-                </span>
-                <div style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-muted)' }}>
-                  本日尚無記帳紀錄
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  style={{
-                    marginTop: 4,
-                    borderRadius: 'var(--radius)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 14px',
-                    fontSize: '0.84rem',
-                    borderColor: 'var(--border-color)',
-                    color: 'var(--text-main)',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => {
-                    if (navigator.vibrate) navigator.vibrate(20);
-                    onQuickAdd(selectedDate);
-                  }}
-                >
-                  <i className="fa-solid fa-plus" style={{ color: 'var(--primary-color)' }}></i>
-                  補記此日收支
-                </button>
-              </div>
+        <div className="kakei-day-detail-panel">
+          <div className="kakei-day-entries-list">
+            {selectedDate ? (
+              /* ── 單日檢視 ── */
+              selectedEntries.length === 0 ? (
+                renderEmpty('fa-solid fa-mug-hot', '這天還沒有記帳', '補記這天的收支', () => onQuickAdd(selectedDate))
+              ) : (
+                <>
+                  {/* 當日小計：樣式同整月清單的日期列，但不寫日期（月曆上已選中，不重複） */}
+                  <div className="life-day-header kakei-day-subtotal">
+                    <span className="ldh-date">當日小計</span>
+                    <span className="ldh-total">
+                      {dayExpense > 0 && <span className="is-expense">−$<AnimatedNumber value={dayExpense} format={fmtExpense} /></span>}
+                      {dayIncome > 0 && <span className="is-income">+$<AnimatedNumber value={dayIncome} format={fmtIncome} /></span>}
+                    </span>
+                  </div>
+                  <AnimatePresence mode="popLayout">
+                    {selectedEntries.map(renderRow)}
+                  </AnimatePresence>
+                </>
+              )
             ) : (
-              <AnimatePresence mode="popLayout">
-                {selectedEntries.map((e, idx) => (
-                  <LifeEntryRow
-                    key={e.id}
-                    entry={e}
-                    idx={idx}
-                    isJustSaved={e.id === justSavedId}
-                    reward={rewardMap[e.id]}
-                    lifeCategories={lifeCategories}
-                    lifeIncomeCategories={lifeIncomeCategories}
-                    paymentMethods={paymentMethods}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                  />
-                ))}
-              </AnimatePresence>
-            )
-          ) : (
-            /* ── 全月檢視（依日期分組 + 分頁） ── */
-            dayGroups.length === 0 ? (
-              <div className="kakei-day-empty-state">
-                <span className="empty-icon" style={{ fontSize: '1.3rem', opacity: 0.65 }}>
-                  <i className="fa-regular fa-note-sticky"></i>
-                </span>
-                <div style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-muted)' }}>
-                  本月尚無任何記帳記錄
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  style={{
-                    marginTop: 4,
-                    borderRadius: 'var(--radius)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 14px',
-                    fontSize: '0.84rem',
-                    borderColor: 'var(--border-color)',
-                    color: 'var(--text-main)',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => {
-                    if (navigator.vibrate) navigator.vibrate(20);
-                    onQuickAdd(`${ym}-01`);
-                  }}
-                >
-                  <i className="fa-solid fa-plus" style={{ color: 'var(--primary-color)' }}></i>
-                  新增本月第一筆收支
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* 全月分頁列（置於清單上方，便於快速切換且不需向下滑動） */}
-                {totalPages > 1 && (
-                  <div className="life-pagination-bar">
-                    <button
-                      type="button"
-                      className="pagination-btn pagination-arrow"
-                      disabled={page === 1}
-                      onClick={() => {
-                        if (navigator.vibrate) navigator.vibrate(50);
-                        setPage(p => Math.max(p - 1, 1));
-                      }}
-                      aria-label="上一頁"
-                    >
-                      <i className="fa-solid fa-chevron-left"></i>
-                    </button>
-                    {getPaginationItems(page, totalPages).map((item, idx) => {
-                      if (item === '...') {
-                        return <span key={`ellipsis-${idx}`} className="pagination-ellipsis">…</span>;
-                      }
+              /* ── 全月檢視（依日期分組 + 分頁） ── */
+              dayGroups.length === 0 ? (
+                renderEmpty('fa-regular fa-note-sticky', '這個月還沒有記帳', '新增本月第一筆', () => onQuickAdd(`${ym}-01`))
+              ) : (
+                <>
+                  {/* 整月一路往下捲：日期標題黏在頂端，捲動時月曆自動收成單週 */}
+                  <AnimatePresence mode="popLayout">
+                    {dayGroups.map(group => {
+                      const gParts = (group.date || '').split('-');
+                      const gWeek = group.date ? WEEKDAYS[new Date(group.date + 'T00:00:00').getDay()] : '';
                       return (
-                        <button
-                          key={item}
-                          type="button"
-                          className={`pagination-btn${page === item ? ' active' : ''}`}
-                          onClick={() => {
-                            if (navigator.vibrate) navigator.vibrate(50);
-                            setPage(item);
-                          }}
-                        >
-                          {item}
-                        </button>
+                        <div key={group.date} className="kakei-day-group-section">
+                          <div className="life-day-header">
+                            <span className="ldh-date">
+                              {parseInt(gParts[1], 10)}/{parseInt(gParts[2], 10)}
+                              <span className="ldh-week">（{gWeek}）</span>
+                            </span>
+                            <span className="ldh-total">
+                              {group.total > 0 && <span className="is-expense">−$<AnimatedNumber value={group.total} format={fmtExpense} /></span>}
+                              {group.incomeTotal > 0 && <span className="is-income">+$<AnimatedNumber value={group.incomeTotal} format={fmtIncome} /></span>}
+                            </span>
+                          </div>
+                          {group.entries.map(renderRow)}
+                        </div>
                       );
                     })}
-                    <button
-                      type="button"
-                      className="pagination-btn pagination-arrow"
-                      disabled={page === totalPages}
-                      onClick={() => {
-                        if (navigator.vibrate) navigator.vibrate(50);
-                        setPage(p => Math.min(p + 1, totalPages));
-                      }}
-                      aria-label="下一頁"
-                    >
-                      <i className="fa-solid fa-chevron-right"></i>
-                    </button>
-                  </div>
-                )}
-
-                <AnimatePresence mode="popLayout">
-                  {pageGroups.map(group => {
-                    const gParts = (group.date || '').split('-');
-                    const gWeek = group.date ? WEEKDAYS[new Date(group.date + 'T00:00:00').getDay()] : '';
-                    return (
-                      <div key={group.date} className="kakei-day-group-section">
-                        <div className="life-day-header">
-                          <span className="ldh-date">
-                            {parseInt(gParts[1], 10)}/{parseInt(gParts[2], 10)}
-                            <span className="ldh-week">（{gWeek}）</span>
-                          </span>
-                          <span className="ldh-total">合計 NT$ {formatAmount(group.total, 'expense')}</span>
-                        </div>
-                        {group.entries.map((e, idx) => (
-                          <LifeEntryRow
-                            key={e.id}
-                            entry={e}
-                            idx={idx}
-                            isJustSaved={e.id === justSavedId}
-                            reward={rewardMap[e.id]}
-                            lifeCategories={lifeCategories}
-                            lifeIncomeCategories={lifeIncomeCategories}
-                            paymentMethods={paymentMethods}
-                            onEdit={onEdit}
-                            onDelete={onDelete}
-                          />
-                        ))}
-                      </div>
-                    );
-                  })}
-                </AnimatePresence>
-              </>
-            )
-          )}
+                  </AnimatePresence>
+                </>
+              )
+            )}
+          </div>
         </div>
       </div>
     </div>

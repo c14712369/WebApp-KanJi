@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppStore } from '../../store/appStore';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { lifeMonthLabel, formatAmount, showToast, getFixedLifeMonthly, confirmDialog } from '../../lib/utils';
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
@@ -183,7 +185,7 @@ function SalaryModal({ lifeIncomeCategories, lifeExpenses, updateLifeExpense, on
 }
 
 // ── Expense / Income Modal ────────────────────────────────────────────────────
-function ExpenseModal({ lifeCategories, lifeIncomeCategories, paymentMethods, currentMonth, initial, onClose, onSave }) {
+function ExpenseModal({ lifeCategories, lifeIncomeCategories, paymentMethods, currentMonth, initial, onClose, onSave, onDelete }) {
   const isEdit   = !!(initial?.id && initial?.type);
   const initType = initial?.type || 'expense';
   
@@ -364,6 +366,13 @@ function ExpenseModal({ lifeCategories, lifeIncomeCategories, paymentMethods, cu
           </button>
           <button className="btn" style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }} onClick={onClose}>取消</button>
         </div>
+
+        {/* 明細列不再放垃圾桶，刪除收在編輯視窗最下方 */}
+        {isEdit && onDelete && (
+          <button type="button" className="life-modal-delete" onClick={() => onDelete(initial.id)}>
+            <i className="fa-solid fa-trash" aria-hidden="true"></i> 刪除這筆
+          </button>
+        )}
       </div>
     </div>
   );
@@ -379,7 +388,13 @@ export default function LifeTab() {
     addLifeExpense, updateLifeExpense, deleteLifeExpense, setLifeCurrentMonth,
     setLifePendingCatId,
     setLifeCategories, learnLifeCategory,
+    activeTab, pendingAdd, setPendingAdd,
   } = useAppStore();
+
+  // 手機版：月份切換列放進單列頁首（Header 的 #mobileHeaderSlot），不另外佔一列
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const [headerSlot, setHeaderSlot] = useState(null);
+  useEffect(() => { setHeaderSlot(document.getElementById('mobileHeaderSlot')); }, []);
 
   const [selectedCatId, setSelectedCatId] = useState(null);
   const [sortMode,      setSortMode]      = useState('date-desc');
@@ -410,6 +425,14 @@ export default function LifeTab() {
       setSelectedCalDate(null);
     }
   }, [ym]);
+
+  // 底部導覽中間「＋」→ 開新增支出視窗（從其他分頁按也會先切過來再開）
+  useEffect(() => {
+    if (pendingAdd !== 'life') return;
+    setPendingAdd(null);
+    setNewType('expense');
+    setExpModal({});
+  }, [pendingAdd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleQuickAdd = (targetDate) => {
     if (navigator.vibrate) navigator.vibrate(50);
@@ -572,77 +595,63 @@ export default function LifeTab() {
     setJustSavedId(entry.id);
     setExpModal(null);
   };
+  // 回傳是否真的刪了，讓編輯視窗決定要不要關閉
   const handleDelete = async (id) => {
-    if (!await confirmDialog({ title: '刪除明細', message: '確定要刪除這筆紀錄嗎？此動作無法復原。', confirmText: '刪除' })) return;
+    if (!await confirmDialog({ title: '刪除明細', message: '確定要刪除這筆紀錄嗎？此動作無法復原。', confirmText: '刪除' })) return false;
     if (navigator.vibrate) navigator.vibrate(50);
     deleteLifeExpense(id);
     showToast('已刪除');
+    return true;
   };
   const openEdit = (entry) => { if (navigator.vibrate) navigator.vibrate(50); setExpModal(entry); };
   const openNew  = (type)  => { if (navigator.vibrate) navigator.vibrate(50); setNewType(type); setExpModal({}); };
 
-  return (
-    <div className="tab-content life-tab-content">
-      {/* Month nav */}
-      <div className="month-nav" style={{ gap: '8px' }}>
-        <button className="icon-btn" onClick={() => changeMonth(-1)}><i className="fa-solid fa-chevron-left"></i></button>
-        <input 
-          type="month" 
-          className="form-input" 
-          id="lifeMonthDisplay" 
-          value={ym} 
-          onChange={e => {
-            if (e.target.value) {
-              setLifeCurrentMonth(e.target.value);
-              setSelectedCatId(null);
-            }
-          }}
-          style={{ 
-            width: 'auto', 
-            height: '36px', 
-            minWidth: '130px', 
-            padding: '0 8px', 
-            border: '1px solid var(--border-color)', 
-            borderRadius: 'var(--radius-sm)', 
-            background: 'var(--input-bg)',
-            color: 'var(--text-main)',
-            fontFamily: 'var(--font-serif)',
-            fontWeight: 700,
-            textAlign: 'center',
-            cursor: 'pointer'
-          }} 
-        />
-        <button className="icon-btn" onClick={() => changeMonth(1)}><i className="fa-solid fa-chevron-right"></i></button>
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => {
-            // 用本地時間，避免 UTC 在每月 1 號早上 8 點前算成上個月
-            const d = new Date();
-            const thisMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            setLifeCurrentMonth(thisMonth);
+  // 月份切換列：桌面在頁內；手機搬進單列頁首，「本月」只在看別的月份時出現
+  const inHeader = isMobile && !!headerSlot;
+  const isThisMonth = ym === localYm();
+  const monthNav = (
+    <div className={`month-nav life-month-nav${inHeader ? ' is-in-header' : ''}`}>
+      <button className="icon-btn" onClick={() => changeMonth(-1)} aria-label="上個月"><i className="fa-solid fa-chevron-left"></i></button>
+      <input
+        type="month"
+        className="form-input life-month-input"
+        id="lifeMonthDisplay"
+        aria-label="選擇月份"
+        value={ym}
+        onChange={e => {
+          if (e.target.value) {
+            setLifeCurrentMonth(e.target.value);
             setSelectedCatId(null);
-          }}
-          style={{
-            height: '36px',
-            padding: '0 12px',
-            fontSize: '0.85rem',
-            fontWeight: 500,
-            borderColor: 'var(--border-color)',
-            color: 'var(--text-main)',
-            borderRadius: 'var(--radius-sm)',
-            whiteSpace: 'nowrap',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
+          }
+        }}
+      />
+      <button className="icon-btn" onClick={() => changeMonth(1)} aria-label="下個月"><i className="fa-solid fa-chevron-right"></i></button>
+      {(!inHeader || !isThisMonth) && (
+        <button
+          className="btn btn-outline btn-sm life-month-today"
+          onClick={() => {
+            if (navigator.vibrate) navigator.vibrate(20);
+            // 用本地時間，避免 UTC 在每月 1 號早上 8 點前算成上個月
+            setLifeCurrentMonth(localYm());
+            setSelectedCatId(null);
           }}
           title="回到本月"
         >
-          <i className="fa-solid fa-calendar-day"></i> 本月
+          <i className="fa-solid fa-calendar-day" aria-hidden="true"></i> 本月
         </button>
-      </div>
+      )}
+    </div>
+  );
 
-      <div className="life-section-nav" role="tablist" aria-label="生活費檢視">
+  return (
+    <div className="tab-content life-tab-content">
+      {/* Month nav：手機 portal 進頁首；離開生活頁的轉場期間不渲染，避免和下一頁標題疊在一起 */}
+      {isMobile
+        ? (headerSlot && activeTab === 'life' ? createPortal(monthNav, headerSlot) : null)
+        : monthNav}
+
+      {/* 手機看明細時收起（改由清單頂端「每月統計」進總覽／分類）；在總覽、分類時才出現，用來切回明細 */}
+      <div className={`life-section-nav${lifeView === 'exp' ? ' is-exp-view' : ''}`} role="tablist" aria-label="生活費檢視">
         {LIFE_SECTIONS.map(section => {
           const active = lifeView === section.id;
           return (
@@ -769,11 +778,12 @@ export default function LifeTab() {
                   rewardMap={rewardMap}
                   justSavedId={justSavedId}
                   onEdit={openEdit}
-                  onDelete={handleDelete}
                   filterType={filterType}
                   setFilterType={setFilterType}
                   sortMode={sortMode}
                   setSortMode={setSortMode}
+                  monthSummary={{ expense: tExp, income: tInc, remain, isCurrentMonth: pace.isCurrentMonth }}
+                  onOpenOverview={() => setLifeView('overview')}
                 />
               </div>
             </motion.div>
@@ -850,6 +860,7 @@ export default function LifeTab() {
           initial={expModal.id ? expModal : { type: newType, ...(expModal.date ? { date: expModal.date } : {}) }}
           onClose={() => setExpModal(null)}
           onSave={handleSaveExp}
+          onDelete={async (id) => { if (await handleDelete(id)) setExpModal(null); }}
         />
       )}
       {showSalary && <SalaryModal lifeIncomeCategories={lifeIncomeCategories} lifeExpenses={lifeExpenses} updateLifeExpense={updateLifeExpense} onSaved={() => setSalaryVersion(v => v + 1)} onClose={() => setShowSalary(false)} />}

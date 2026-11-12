@@ -73,6 +73,8 @@ const initState = {
   // UI
   activeTab: 'life',
   lifePendingCatId: null,
+  // 底部導覽中間「＋」：要哪個分頁開新增視窗（'life' | 'fixed'），該分頁開完即清空
+  pendingAdd: null,
 };
 
 // ─── store ─────────────────────────────────────────────────────────────────
@@ -89,6 +91,7 @@ export const useAppStore = create((set, get) => {
     // ── UI ──
     setActiveTab: (tab) => set({ activeTab: tab }),
     setLifePendingCatId: (id) => set({ lifePendingCatId: id }),
+    setPendingAdd: (target) => set({ pendingAdd: target }),
 
     togglePrivacy: () => {
       const next = !get().isPrivacyMode;

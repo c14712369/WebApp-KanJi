@@ -13,9 +13,11 @@ export function groupEntriesByDay(entries = []) {
   const map = {};
   for (const e of arr) {
     const d = (e && e.date) || '';
-    if (!map[d]) { map[d] = { date: d, entries: [], total: 0 }; order.push(d); }
+    if (!map[d]) { map[d] = { date: d, entries: [], total: 0, incomeTotal: 0 }; order.push(d); }
     map[d].entries.push(e);
+    // total 維持「當日支出」（既有語意）；收入另計，只有收入的日子才不會顯示「合計 $0」
     if (e && e.type !== 'income') map[d].total += (Number(e.amount) || 0);
+    else if (e) map[d].incomeTotal += (Number(e.amount) || 0);
   }
   return order.map(d => map[d]);
 }
@@ -146,5 +148,44 @@ export function buildMonthCalendar(ym, entries = []) {
     paddingDays: firstDayOfWeek,
     days: Object.values(dayMap),
   };
+}
+
+/**
+ * 同一家店備註大小寫不一（刷卡匯入「7-ELEVEN」、手記或捷徑「7-Eleven」）時統一顯示。
+ * 回傳 Map：小寫鍵 → 顯示用寫法。優先取非全大寫的寫法（較好讀），同級取出現最多次；
+ * 只有一種寫法就原樣（IKEA 不會變 Ikea）。只影響顯示，不改資料。
+ */
+export function noteDisplayMap(entries = []) {
+  const arr = Array.isArray(entries) ? entries : [];
+  const variants = new Map(); // key → Map(寫法 → 次數)
+  for (const e of arr) {
+    const note = String((e && e.note) || '').trim();
+    if (!note) continue;
+    const key = note.toLowerCase();
+    if (!variants.has(key)) variants.set(key, new Map());
+    const v = variants.get(key);
+    v.set(note, (v.get(note) || 0) + 1);
+  }
+  const isAllCaps = (s) => /[A-Z]/.test(s) && s === s.toUpperCase();
+  const out = new Map();
+  for (const [key, v] of variants) {
+    const best = [...v.entries()].sort((a, b) => {
+      const capsDiff = Number(isAllCaps(a[0])) - Number(isAllCaps(b[0]));
+      return capsDiff !== 0 ? capsDiff : b[1] - a[1];
+    })[0][0];
+    out.set(key, best);
+  }
+  return out;
+}
+
+/**
+ * 月曆收合成單週時，計算總列數與焦點日期所在列（0 起算）。
+ * 焦點日期不在本月或為空時回到第一列。
+ */
+export function calendarFocusRow({ paddingDays = 0, days = [] } = {}, focusDate) {
+  const rows = Math.max(1, Math.ceil((paddingDays + days.length) / 7));
+  const idx = focusDate ? days.findIndex(d => d.date === focusDate) : -1;
+  const row = idx < 0 ? 0 : Math.floor((paddingDays + idx) / 7);
+  return { rows, row };
 }
 

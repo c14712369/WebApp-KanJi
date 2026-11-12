@@ -3,7 +3,7 @@
  * 驗證「依日期分組」與「分頁時整天不切斷」邏輯。
  */
 import assert from 'node:assert';
-import { groupEntriesByDay, paginateGroups, findEntryPage, noteGroupKey, sortEntries, buildMonthCalendar } from './lifeGrouping.js';
+import { groupEntriesByDay, paginateGroups, findEntryPage, noteGroupKey, sortEntries, buildMonthCalendar, calendarFocusRow, noteDisplayMap } from './lifeGrouping.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -205,6 +205,61 @@ test('同一天同時有支出與真實收入', () => {
 test('空輸入或格式錯誤安全回退', () => {
   assert.deepEqual(buildMonthCalendar('', []), { paddingDays: 0, days: [] });
   assert.deepEqual(buildMonthCalendar(null, null), { paddingDays: 0, days: [] });
+});
+
+console.log('\n[groupEntriesByDay — 收入另計，只有收入的日子不再顯示「合計 $0」]');
+test('支出與收入分開加總', () => {
+  const g = groupEntriesByDay([
+    { id: 's', date: '2026-11-13', amount: 54000, type: 'income' },
+    { id: 'x', date: '2026-11-12', amount: 104, type: 'expense' },
+    { id: 'y', date: '2026-11-12', amount: 3000, type: 'income' },
+  ]);
+  assert.equal(g[0].total, 0);
+  assert.equal(g[0].incomeTotal, 54000);
+  assert.equal(g[1].total, 104);
+  assert.equal(g[1].incomeTotal, 3000);
+});
+
+console.log('\n[noteDisplayMap — 同一家店大小寫不同時統一顯示（只改顯示，不動資料）]');
+test('大小寫混用 → 統一用非全大寫的寫法', () => {
+  const m = noteDisplayMap([
+    { note: '7-ELEVEN' }, { note: '7-ELEVEN' }, { note: '7-Eleven' }, { note: '7-eleven ' },
+  ]);
+  assert.equal(m.get('7-eleven'), '7-Eleven');
+});
+test('只有一種寫法 → 原樣（IKEA 不會被改成 Ikea）', () => {
+  const m = noteDisplayMap([{ note: 'IKEA' }, { note: 'IKEA' }]);
+  assert.equal(m.get('ikea'), 'IKEA');
+});
+test('都是非全大寫時取出現最多次的', () => {
+  const m = noteDisplayMap([{ note: 'Uber Eats' }, { note: 'uber eats' }, { note: 'Uber Eats' }]);
+  assert.equal(m.get('uber eats'), 'Uber Eats');
+});
+test('空備註與非陣列安全', () => {
+  assert.equal(noteDisplayMap([{ note: '' }, {}]).size, 0);
+  assert.equal(noteDisplayMap(null).size, 0);
+});
+
+console.log('\n[calendarFocusRow — 月曆收合成單週時要顯示哪一列]');
+// 2026-10：1 號週四（padding 4）、31 天 → 共 5 列
+const oct = buildMonthCalendar('2026-10', []);
+test('總列數 = ceil((前置空格 + 天數) / 7)', () => {
+  assert.equal(calendarFocusRow(oct, '2026-10-01').rows, 5);
+  // 2026-08：1 號週六（padding 6）+ 31 天 = 37 → 6 列
+  assert.equal(calendarFocusRow(buildMonthCalendar('2026-08', []), null).rows, 6);
+});
+test('焦點日期所在列（0 起算）', () => {
+  assert.equal(calendarFocusRow(oct, '2026-10-01').row, 0);
+  assert.equal(calendarFocusRow(oct, '2026-10-03').row, 0); // 週六，第一列最後一格
+  assert.equal(calendarFocusRow(oct, '2026-10-04').row, 1); // 週日換列
+  assert.equal(calendarFocusRow(oct, '2026-10-31').row, 4);
+});
+test('焦點不在本月或為空 → 第一列', () => {
+  assert.equal(calendarFocusRow(oct, null).row, 0);
+  assert.equal(calendarFocusRow(oct, '2026-11-15').row, 0);
+});
+test('空月曆安全回退', () => {
+  assert.deepEqual(calendarFocusRow({ paddingDays: 0, days: [] }, null), { rows: 1, row: 0 });
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);
