@@ -715,24 +715,24 @@
     flex-direction: column;
 }
 
+/* 分組間距全由日期色帶上下的 6px 負責，這裡不另加，免得色帶上方比下方高 */
 .kakei-day-group-section {
     display: flex;
     flex-direction: column;
-    margin-bottom: 6px;
 }
 
 /* 日期分組列＝一條圓角色帶，合計緊貼在日期右邊：
    右側那一欄只留給明細金額，當日合計不會被看成又一筆明細。
    色帶用卡片色（比頁面淺）：收支文字在上面對比反而更高（支出紅 5.4:1）；改用較深的底會跌破 4.5:1。
    外層仍是頁面底色並黏在頂端，色帶畫在 ::before：捲上去的明細被外層蓋住，不會從圓角露出來。
-   上留白 16px、下 4px：分組之間拉開，色帶貼著自己那天的明細。 */
+   色帶上下各留 6px（分組區塊本身不再加 margin）：上一天最後一筆到色帶、色帶到這天第一筆，距離相同。
+   內距 8px 上下對稱，文字在色帶裡垂直置中。 */
 .kakei-calendar-container .life-day-header {
     z-index: 1;
     justify-content: flex-start;
-    align-items: center;
+    align-items: baseline;
     gap: 12px;
-    min-height: 46px;
-    padding: 10px 12px 4px;
+    padding: 14px 12px;
     border-bottom: 0;
     background: var(--cal-surface, var(--card-bg));
 }
@@ -740,21 +740,18 @@
 .kakei-calendar-container .life-day-header::before {
     content: '';
     position: absolute;
-    inset: 10px 0 4px;
+    inset: 6px 0;
     z-index: -1;
     border-radius: 10px;
     background: var(--card-bg);
 }
 
-/* 日期（11/12 週四）和合計都收成 line-height 1 的方塊再置中，同一列誤差 ≤1px */
-.kakei-calendar-container .life-day-header .ldh-date {
-    display: inline-flex;
-    align-items: center;
-    line-height: 1;
-}
-
+/* 日期、星期、合計字級與字型都不同（數字系統字、中文落到黑體）：
+   用「基線對齊」而不是框置中，字的底線才會在同一條水平線上（框置中時框對齊、字卻高低不一） */
+.kakei-calendar-container .life-day-header .ldh-date,
 .kakei-calendar-container .life-day-header .ldh-total {
-    align-items: center;
+    display: inline-flex;
+    align-items: baseline;
     line-height: 1;
 }
 

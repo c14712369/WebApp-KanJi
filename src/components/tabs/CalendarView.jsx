@@ -132,16 +132,16 @@ export default function CalendarView({
   }, [entries, selectedDate]);
 
   // 單日合計（當有選取日期時）
-  // 只在同類 ≥2 筆時顯示合計：只有 1 筆時合計就等於那筆金額，不重複顯示
+  // 只有 1 筆也顯示合計（2026-11-13 使用者定）：每天的合計固定出現在同一個位置，往下掃不會時有時無
   const { dayExpense, dayIncome, showDayExpense, showDayIncome } = useMemo(() => {
     if (!selectedDate) return { dayExpense: 0, dayIncome: 0, showDayExpense: false, showDayIncome: false };
-    let exp = 0, inc = 0, expN = 0, incN = 0;
+    let exp = 0, inc = 0;
     for (const e of selectedEntries) {
       const amt = Number(e.amount) || 0;
-      if (e.type === 'income') { inc += amt; incN++; }
-      else { exp += amt; expN++; }
+      if (e.type === 'income') inc += amt;
+      else exp += amt;
     }
-    return { dayExpense: exp, dayIncome: inc, showDayExpense: expN > 1 && exp > 0, showDayIncome: incN > 1 && inc > 0 };
+    return { dayExpense: exp, dayIncome: inc, showDayExpense: exp > 0, showDayIncome: inc > 0 };
   }, [selectedEntries, selectedDate]);
 
   // 全月依日期分組（當未選取單日 / 看整月時）
@@ -557,8 +557,7 @@ export default function CalendarView({
                   : renderEmpty('fa-solid fa-mug-hot', '這天還沒有記帳', '補記這天的收支', () => onQuickAdd(selectedDate))
               ) : (
                 <>
-                  {/* 當日小計：樣式同整月清單的日期列，但不寫日期（月曆上已選中，不重複）；
-                      同類只有 1 筆時合計等於那筆金額，整列不出現 */}
+                  {/* 當日小計：樣式同整月清單的日期列，但不寫日期（月曆上已選中，不重複）；只有 1 筆也顯示 */}
                   {(showDayExpense || showDayIncome) && (
                     <div className="life-day-header kakei-day-subtotal">
                       <span className="ldh-date">當日小計</span>
@@ -594,9 +593,9 @@ export default function CalendarView({
                               <span className="ldh-week">週{gWeek}</span>
                             </span>
                             <span className="ldh-total">
-                              {/* 同類只有 1 筆時不顯示合計（就是那筆金額，不重複） */}
-                              {group.expenseCount > 1 && group.total > 0 && <span className="is-expense">−$<AnimatedNumber value={group.total} format={fmtExpense} /></span>}
-                              {group.incomeCount > 1 && group.incomeTotal > 0 && <span className="is-income">+$<AnimatedNumber value={group.incomeTotal} format={fmtIncome} /></span>}
+                              {/* 只有 1 筆也顯示合計，每天的日期旁固定有當日收支 */}
+                              {group.total > 0 && <span className="is-expense">−$<AnimatedNumber value={group.total} format={fmtExpense} /></span>}
+                              {group.incomeTotal > 0 && <span className="is-income">+$<AnimatedNumber value={group.incomeTotal} format={fmtIncome} /></span>}
                             </span>
                           </div>
                           {group.entries.map(renderRow)}
