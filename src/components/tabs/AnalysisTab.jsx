@@ -540,14 +540,15 @@ export default function AnalysisTab() {
         {sumRow && (
           <section className="ar-summary" aria-label={`${sumRow.year} 年度總計`}>
             {[
-              ['總收入', sumRow.income, 'is-pos'],
-              ['總支出', sumRow.total, 'is-neg'],
-              ['結餘', sumRow.balance, sumRow.balance < 0 ? 'is-neg' : 'is-pos'],
-            ].map(([label, v, cls]) => (
+              // 第 4 欄是金額類型：收入、結餘（由收入推得）在「隱藏收入」時遮蔽，支出照常顯示
+              ['總收入', sumRow.income, 'is-pos', 'income'],
+              ['總支出', sumRow.total, 'is-neg', 'expense'],
+              ['結餘', sumRow.balance, sumRow.balance < 0 ? 'is-neg' : 'is-pos', 'income'],
+            ].map(([label, v, cls, type]) => (
               <div className="ar-stat" key={label}>
                 <div className="ar-stat-label">{label}</div>
                 <div className={`ar-stat-value ${cls}`}>
-                  <span className="ar-cur">{v < 0 ? '−NT$' : 'NT$'}</span><span className="ar-num">{formatAmount(Math.abs(Math.round(v)))}</span>
+                  <span className="ar-cur">{v < 0 ? '−NT$' : 'NT$'}</span><span className="ar-num">{formatAmount(Math.abs(Math.round(v)), type)}</span>
                 </div>
               </div>
             ))}

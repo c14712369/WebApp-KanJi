@@ -18,15 +18,19 @@ export function getLifeCat(cats, id) {
   return cats.find(c => c.id === id) || { name: '其他', color: '#8A8A8A' };
 }
 
+// 左上角「隱藏收入」只遮收入（2026-11-13 使用者定）：type 為 'income' 的才變 ****。
+// 由收入推得出來的數字（還能花／結餘、收入走勢圖的座標軸）也標 'income'；支出、固定、專案、資產照常顯示。
 export function formatAmount(val, type) {
   const { isPrivacyMode } = useAppStore.getState();
-  if (isPrivacyMode && type !== 'plain') return '****';
+  if (isPrivacyMode && type === 'income') return '****';
   if (val == null) return '0';
   return Number(val).toLocaleString();
 }
 
-// 給 AnimatedNumber 的 format 用：隱私模式下一律遮蔽
+// 給 AnimatedNumber 的 format 用：非收入金額（隱私模式不遮）
 export const fmtMoney = (v) => formatAmount(v, 'money');
+// 給 AnimatedNumber 的 format 用：收入金額（隱私模式遮蔽）
+export const fmtIncomeMoney = (v) => formatAmount(v, 'income');
 
 export function toMonthlyAmount(item) {
   const base = Number(item.originalAmount || item.amount) || 0;

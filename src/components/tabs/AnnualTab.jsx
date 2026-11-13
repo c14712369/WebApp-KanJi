@@ -118,12 +118,14 @@ export default function AnnualTab() {
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { position: 'bottom', labels: { color: textColor, usePointStyle: true, boxWidth: 8, padding: 14 } },
-          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: NT$ ${formatAmount(Math.round(ctx.raw))}` } },
+          // 「收入」「總結餘」兩條線在隱藏收入時遮蔽，支出線照常顯示
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: NT$ ${formatAmount(Math.round(ctx.raw), ['收入', '總結餘'].includes(ctx.dataset.label) ? 'income' : 'expense')}` } },
         },
         scales: {
           x: { ticks: { color: textColor, maxRotation: 0 }, grid: { display: false } },
           // 從 0 起算；結餘為負時 beginAtZero 仍會往下延伸，不會裁掉負值
-          y: { beginAtZero: true, ticks: { color: textColor, callback: v => 'NT$' + formatAmount(v) }, grid: { color: gridColor } },
+          // 座標軸刻度看得出收入線有多高 → 隱藏收入時一起遮
+          y: { beginAtZero: true, ticks: { color: textColor, callback: v => 'NT$' + formatAmount(v, 'income') }, grid: { color: gridColor } },
         },
       },
     });

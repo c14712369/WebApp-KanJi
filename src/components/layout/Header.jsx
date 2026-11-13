@@ -44,7 +44,7 @@ export default function Header() {
         <div className="sidebar-footer">
           {currentUser && <span className="sidebar-email" title={currentUser.email}>{currentUser.email}</span>}
           <div className="sidebar-actions">
-            <button className="sidebar-icon-btn" onClick={togglePrivacy} title={isPrivacyMode ? '顯示金額' : '隱藏金額'}>
+            <button className="sidebar-icon-btn" onClick={togglePrivacy} title={isPrivacyMode ? '顯示收入' : '隱藏收入'}>
               <i className={`fa-solid ${isPrivacyMode ? 'fa-eye-slash' : 'fa-eye'}`}></i>
             </button>
             <button className="sidebar-icon-btn" onClick={openSettings} title="設定">
@@ -61,7 +61,7 @@ export default function Header() {
         </div>
       </aside>
 
-      {/* 手機/平板：單列頁首（參考 MOZE）—— 左隱藏金額、中間標題/月份、右設定；分頁切換交給 BottomNav。
+      {/* 手機/平板：單列頁首（參考 MOZE）—— 左隱藏收入、中間標題/月份、右設定；分頁切換交給 BottomNav。
           中間的 #mobileHeaderSlot 由生活費頁把月份切換列 portal 進來，其他分頁顯示分頁名稱。
           登入入口收在「設定 → 帳號」。 */}
       <header className="mobile-header">
@@ -69,8 +69,8 @@ export default function Header() {
           type="button"
           className="icon-btn header-side-btn"
           onClick={() => { if (navigator.vibrate) navigator.vibrate(20); togglePrivacy(); }}
-          title={isPrivacyMode ? '顯示金額' : '隱藏金額'}
-          aria-label={isPrivacyMode ? '顯示金額' : '隱藏金額'}
+          title={isPrivacyMode ? '顯示收入' : '隱藏收入'}
+          aria-label={isPrivacyMode ? '顯示收入' : '隱藏收入'}
           aria-pressed={isPrivacyMode}
         >
           <i className={`fa-solid ${isPrivacyMode ? 'fa-eye-slash' : 'fa-eye'}`} id="privacyIcon" aria-hidden="true"></i>

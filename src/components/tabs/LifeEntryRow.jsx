@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import IconRenderer from '../../lib/IconRenderer';
 import AnimatedNumber from '../../lib/AnimatedNumber';
-import { formatAmount, fmtMoney } from '../../lib/utils';
+import { formatAmount, fmtIncomeMoney } from '../../lib/utils';
 
 /**
  * 明細列（參考 MOZE）：左大圓分類圖示｜中間標題（備註/店家）＋副標｜右金額＋分類、付款方式小標籤。
@@ -66,7 +66,7 @@ export default function LifeEntryRow({
             {metaText}
             {reward && (
               <span className="kk-entry-reward">
-                {metaText ? ' · ' : ''}<i className="fa-solid fa-gift" aria-hidden="true"></i> 回饋 +<AnimatedNumber value={reward.amount} format={fmtMoney} />{reward.rate ? `（${reward.rate}）` : ''}
+                {metaText ? ' · ' : ''}<i className="fa-solid fa-gift" aria-hidden="true"></i> 回饋 +<AnimatedNumber value={reward.amount} format={fmtIncomeMoney} />{reward.rate ? `（${reward.rate}）` : ''}
               </span>
             )}
           </span>
