@@ -31,3 +31,6 @@ FUTURE_PLANS.md
 
 # GAS 暫存
 .clasp.json
+
+# Impeccable 設計檢查 hook（工具自動產生，不納入版控）
+.codex/

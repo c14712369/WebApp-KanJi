@@ -226,6 +226,7 @@
 
     /* 月份列在頁首：無框標題感，箭頭輕量 */
     body .app-shell .life-month-nav.is-in-header {
+        position: relative;
         flex-wrap: nowrap;
         gap: 0;
         width: auto;
@@ -244,7 +245,7 @@
     }
 
     body .app-shell .life-month-nav.is-in-header .life-month-input {
-        width: 7.4em;
+        width: 7em;
         min-width: 0;
         height: 40px;
         padding: 0 2px;
@@ -254,13 +255,24 @@
         font-size: 1.15rem;
     }
 
+    /* 「回到本月」：浮在月份右側的小圓鈕，不佔排版空間 → 出現與否月份標題都置中、不位移 */
     body .app-shell .life-month-nav.is-in-header .life-month-today {
-        height: 28px;
-        min-height: 28px;
+        position: absolute;
+        top: 50%;
+        left: 100%;
+        width: 30px;
+        height: 30px;
+        min-height: 30px;
         margin-left: 2px;
-        padding: 0 10px;
-        border-radius: 9999px;
-        font-size: 0.78rem;
+        padding: 0;
+        justify-content: center;
+        border-radius: 50%;
+        font-size: 0.8rem;
+        transform: translateY(-50%);
+    }
+
+    body .app-shell .life-month-nav.is-in-header .life-month-today-label {
+        display: none;
     }
 
     body.life-page-active .app-main {

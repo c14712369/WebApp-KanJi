@@ -29,6 +29,9 @@
     --hover-bg:      rgba(39, 55, 77, 0.05);
     --shadow-color:  rgba(39, 55, 77, 0.10);
     --success-light: rgba(61, 122, 90, 0.08);
+    /* 收支文字專用色：金額、日期、表頭等文字在頁面與卡片底色上都 ≥4.5:1（按鈕底色仍用 danger/success） */
+    --expense-ink: #AE3F3F;
+    --income-ink:  #387052;
 }
 
 [data-theme="dark"] {
@@ -50,4 +53,6 @@
     --hover-bg:      rgba(221, 230, 237, 0.06);
     --shadow-color:  rgba(0, 0, 0, 0.40);
     --success-light: rgba(90, 158, 122, 0.12);
+    --expense-ink: #DF8888;
+    --income-ink:  #6FAD8C;
 }

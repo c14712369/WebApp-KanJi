@@ -47,9 +47,15 @@ export default function CalendarView({
   const [collapsed, setCollapsed] = useState(false);   // 月曆收合成單週，讓出空間給明細
   const [listScrolled, setListScrolled] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [scrollDate, setScrollDate] = useState(null);   // 整月清單目前捲到的日期：收合時單週跟著它走
+  const [rovingDate, setRovingDate] = useState(null);   // 月曆的鍵盤焦點日（整個月曆只佔一個 Tab 停點）
   const collapsedRef = useRef(false);
   const listRef = useRef(null);
   const filterWrapRef = useRef(null);
+  const filterBtnRef = useRef(null);
+  const gridRef = useRef(null);
+  const scrollRafRef = useRef(0);
+  const pendingFocusRef = useRef(null);
   const lastScrollTopRef = useRef(0);
   const pullStartYRef = useRef(null);
   const panEndAtRef = useRef(0);
@@ -61,16 +67,25 @@ export default function CalendarView({
     const el = listRef.current;
     if (el) el.scrollTop = 0;
     lastScrollTopRef.current = 0;
+    setScrollDate(null);
   }, [ym, filterType, sortMode, selectedDate]);
 
-  // 篩選選單：點外面或按 Esc 關閉
+  // 篩選選單：打開時焦點移進選單；點外面關閉；按 Esc 關閉並把焦點還給篩選鈕
   useEffect(() => {
     if (!filterOpen) return undefined;
+    const raf = requestAnimationFrame(() => {
+      filterWrapRef.current?.querySelector('.kfp-seg-btn.is-active, .kfp-seg-btn')?.focus({ preventScroll: true });
+    });
     const onDown = (e) => { if (!filterWrapRef.current?.contains(e.target)) setFilterOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') setFilterOpen(false); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      setFilterOpen(false);
+      filterBtnRef.current?.focus({ preventScroll: true });
+    };
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener('pointerdown', onDown);
       document.removeEventListener('keydown', onKey);
     };
@@ -92,8 +107,12 @@ export default function CalendarView({
     return { leadNums: lead, trailNums: trail, monthNum: m };
   }, [ym, paddingDays, days.length]);
 
-  // 收合時顯示的那一週：選取日 → 今天（本月）→ 第一週
-  const focusDate = selectedDate || (todayIso.startsWith(ym) ? todayIso : null);
+  // 收合時顯示的那一週：選取日 →（整月清單捲到的日期）→ 今天（本月）→ 第一週
+  const followScroll = collapsed && !selectedDate && !!scrollDate;
+  const focusDate = selectedDate || (followScroll ? scrollDate : null) || (todayIso.startsWith(ym) ? todayIso : null);
+  // 鍵盤 Tab 停點：使用者用方向鍵走到的日期 → 焦點日 → 本月第一天
+  const hasDay = (d) => !!d && days.some(x => x.date === d);
+  const rovingTarget = hasDay(rovingDate) ? rovingDate : hasDay(focusDate) ? focusDate : days[0]?.date;
   const { rows: calRows, row: focusRow } = useMemo(
     () => calendarFocusRow({ paddingDays, days }, focusDate),
     [paddingDays, days, focusDate]
@@ -168,7 +187,41 @@ export default function CalendarView({
       toggleCollapsed(true);
     }
     lastScrollTopRef.current = top;
+
+    // 整月檢視：找出目前在清單最上方的那一天（每幀最多算一次），收合的單週跟著換週
+    if (!selectedDate) {
+      cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = requestAnimationFrame(() => {
+        const listTop = el.getBoundingClientRect().top;
+        let current = null;
+        for (const s of el.querySelectorAll('.kakei-day-group-section[data-date]')) {
+          if (s.getBoundingClientRect().bottom > listTop + 8) { current = s.dataset.date; break; }
+        }
+        setScrollDate(top > 2 ? current : null);
+      });
+    }
   };
+
+  // 月曆方向鍵：左右一天、上下一週；移到被收起的週時自動展開月曆
+  const handleGridKeyDown = (e) => {
+    const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+    if (delta === undefined) return;
+    const idx = days.findIndex(d => d.date === e.target?.dataset?.date);
+    if (idx < 0) return;
+    e.preventDefault();
+    const next = Math.min(days.length - 1, Math.max(0, idx + delta));
+    if (collapsedRef.current && Math.floor((paddingDays + next) / 7) !== focusRow) toggleCollapsed(false);
+    pendingFocusRef.current = days[next].date;
+    setRovingDate(days[next].date);
+  };
+
+  // 等重繪（含展開月曆）完成後再把焦點移到新日期
+  useEffect(() => {
+    const target = pendingFocusRef.current;
+    if (!target) return;
+    pendingFocusRef.current = null;
+    gridRef.current?.querySelector(`[data-date="${target}"]`)?.focus({ preventScroll: true });
+  }, [rovingDate, collapsed]);
 
   // 明細區手勢（不用特地抓把手）：
   // - 展開時往上滑，清單已到底或內容太少捲不動 → 直接收成單週
@@ -252,7 +305,13 @@ export default function CalendarView({
           className="kakei-cal-viewport"
           style={{ '--cal-rows': calRows, '--cal-focus-row': focusRow }}
         >
-          <div className="kakei-cal-grid">
+          <div
+            className="kakei-cal-grid"
+            ref={gridRef}
+            onKeyDown={handleGridKeyDown}
+            role="group"
+            aria-label="月曆：方向鍵移動日期，Enter 選取"
+          >
             {/* 上個月補位 */}
             {leadNums.map((n, i) => (
               <div key={`lead-${n}`} className={`kakei-cal-cell is-pad${i === 0 ? ' is-sun' : ''}`} aria-hidden="true">
@@ -267,18 +326,23 @@ export default function CalendarView({
               const isSelected = dayItem.date === selectedDate;
               const hasEntries = dayItem.hasExpense || dayItem.hasIncome;
               const offscreen = collapsed && Math.floor((paddingDays + i) / 7) !== focusRow;
+              const isFuture = dayItem.date > todayIso;               // ISO 字串可直接比大小
+              const isScrollFocus = followScroll && dayItem.date === scrollDate;
+              const isTabStop = dayItem.date === rovingTarget;
 
               return (
                 <motion.button
                   key={dayItem.date}
                   type="button"
+                  data-date={dayItem.date}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => handleCellClick(dayItem.date)}
-                  className={`kakei-cal-cell${isSelected ? ' is-selected' : ''}${isToday ? ' is-today' : ''}${hasEntries ? '' : ' is-quiet'}${col === 0 ? ' is-sun' : col === 6 ? ' is-sat' : ''}`}
-                  aria-label={`${dayItem.date}${dayItem.hasExpense ? ' 有支出' : ''}${dayItem.hasIncome ? ' 有收入' : ''}${hasEntries ? '' : ' 無紀錄'}`}
+                  onFocus={() => setRovingDate(dayItem.date)}
+                  className={`kakei-cal-cell${isSelected ? ' is-selected' : ''}${isToday ? ' is-today' : ''}${hasEntries ? '' : ' is-quiet'}${isFuture ? ' is-future' : ''}${isScrollFocus ? ' is-scroll-focus' : ''}${col === 0 ? ' is-sun' : col === 6 ? ' is-sat' : ''}`}
+                  aria-label={`${Number(dayItem.date.slice(5, 7))}月${dayItem.day}日 週${WEEKDAYS[col]}${dayItem.hasExpense ? '，有支出' : ''}${dayItem.hasIncome ? '，有收入' : ''}${hasEntries ? '' : '，無紀錄'}`}
                   aria-pressed={isSelected}
                   aria-hidden={offscreen || undefined}
-                  tabIndex={offscreen ? -1 : undefined}
+                  tabIndex={!offscreen && isTabStop ? 0 : -1}
                   title={isSelected ? '再次點擊取消篩選，看整月' : dayItem.date}
                 >
                   {/* 1 號照樣顯示 01：月份已在頁首，不在格子裡重複 */}
@@ -332,10 +396,11 @@ export default function CalendarView({
             {showFilter && (
               <div className="kakei-filter-wrap" ref={filterWrapRef}>
                 <button
+                  ref={filterBtnRef}
                   type="button"
                   className={`kakei-filter-btn${filterDirty ? ' is-dirty' : ''}${filterOpen ? ' is-open' : ''}`}
                   onClick={() => { buzz(20); setFilterOpen(v => !v); }}
-                  aria-haspopup="true"
+                  aria-haspopup="dialog"
                   aria-expanded={filterOpen}
                   aria-label={filterDirty ? '篩選與排序（已套用）' : '篩選與排序'}
                   title="篩選與排序"
@@ -475,7 +540,7 @@ export default function CalendarView({
                       const gParts = (group.date || '').split('-');
                       const gWeek = group.date ? WEEKDAYS[new Date(group.date + 'T00:00:00').getDay()] : '';
                       return (
-                        <div key={group.date} className="kakei-day-group-section">
+                        <div key={group.date} className="kakei-day-group-section" data-date={group.date}>
                           <div className="life-day-header">
                             <span className="ldh-date">
                               {parseInt(gParts[1], 10)}/{parseInt(gParts[2], 10)}

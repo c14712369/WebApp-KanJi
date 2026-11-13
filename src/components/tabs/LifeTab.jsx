@@ -393,8 +393,10 @@ export default function LifeTab() {
             setSelectedCatId(null);
           }}
           title="回到本月"
+          aria-label="回到本月"
         >
-          <i className="fa-solid fa-calendar-day" aria-hidden="true"></i> 本月
+          <i className="fa-solid fa-calendar-day" aria-hidden="true"></i>
+          <span className="life-month-today-label">本月</span>
         </button>
       )}
     </div>

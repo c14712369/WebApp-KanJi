@@ -193,6 +193,13 @@
         outline-offset: 7px;
     }
 
+    /* 分頁鈕原本 outline: none，鍵盤 Tab 到這裡看不出焦點 */
+    .bottom-nav .nav-item:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: -4px;
+        border-radius: 12px;
+    }
+
     /* 深色主題的琥珀較亮，白色加號對比不足 → 改用深底色 */
     [data-theme="dark"] .bottom-nav .nav-add-btn {
         color: var(--bg-color);

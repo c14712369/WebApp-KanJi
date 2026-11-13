@@ -91,7 +91,7 @@
 }
 
 .kk-sheet-icon:active { background: var(--hover-bg); }
-.kk-sheet-icon.is-danger { color: var(--danger-color); }
+.kk-sheet-icon.is-danger { color: var(--expense-ink); }
 
 .kk-type-seg {
     justify-self: center;
@@ -140,8 +140,8 @@
     z-index: 1;
 }
 
-.kk-type-btn.is-active.is-expense { color: var(--danger-color); }
-.kk-type-btn.is-active.is-income { color: var(--success-color); }
+.kk-type-btn.is-active.is-expense { color: var(--expense-ink); }
+.kk-type-btn.is-active.is-income { color: var(--income-ink); }
 
 /* 金額：右對齊，上方算式、中間結果、下方錯誤提示（固定高度，不讓版面跳） */
 .kk-amount {
@@ -168,11 +168,11 @@
     line-height: 1.1;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
-    color: var(--danger-color);
+    color: var(--expense-ink);
     transition: color 0.2s ease;
 }
 
-.kk-sheet.is-income .kk-amount-value { color: var(--success-color); }
+.kk-sheet.is-income .kk-amount-value { color: var(--income-ink); }
 .kk-amount-value.is-empty,
 .kk-sheet.is-income .kk-amount-value.is-empty { color: var(--text-muted); }
 
@@ -186,7 +186,7 @@
     min-height: 1.3em;
     font-size: 0.8rem;
     font-weight: 600;
-    color: var(--danger-color);
+    color: var(--expense-ink);
 }
 
 /* 分類圖示格：4 欄；高度固定為 --kk-cat-rows 排（支出、收入取較多的一邊），切換類型時抽屜不伸縮；

@@ -57,6 +57,12 @@
     cursor: pointer;
 }
 
+/* 鍵盤聚焦時顯示焦點框（原本 outline: none，Tab 到這裡看不出來） */
+.life-month-input:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
 /* iOS Safari：日期值置中 */
 .life-month-input::-webkit-date-and-time-value {
     text-align: center;
@@ -218,7 +224,8 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 2px 4px 16px;
+    /* 上方不留內距：黏頂的日期列才會貼齊清單頂緣，不漏出底下的內容 */
+    padding: 0 4px 16px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -239,8 +246,8 @@
 }
 
 /* 週日偏紅、週六偏綠（同參考圖的月曆慣例） */
-.kakei-cal-weekday-cell.is-sun { color: var(--danger-color); }
-.kakei-cal-weekday-cell.is-sat { color: var(--success-color); }
+.kakei-cal-weekday-cell.is-sun { color: var(--expense-ink); }
+.kakei-cal-weekday-cell.is-sat { color: var(--income-ink); }
 
 .kakei-cal-grid {
     display: grid;
@@ -319,10 +326,21 @@
     color: var(--text-muted);
 }
 
-.kakei-cal-cell.is-sun .kakei-cal-num { color: var(--danger-color); }
-.kakei-cal-cell.is-sat .kakei-cal-num { color: var(--success-color); }
-.kakei-cal-cell.is-quiet.is-sun .kakei-cal-num { color: color-mix(in srgb, var(--danger-color) 70%, var(--text-muted)); }
-.kakei-cal-cell.is-quiet.is-sat .kakei-cal-num { color: color-mix(in srgb, var(--success-color) 70%, var(--text-muted)); }
+.kakei-cal-cell.is-sun .kakei-cal-num { color: var(--expense-ink); }
+.kakei-cal-cell.is-sat .kakei-cal-num { color: var(--income-ink); }
+.kakei-cal-cell.is-quiet.is-sun .kakei-cal-num { color: color-mix(in srgb, var(--expense-ink) 70%, var(--text-muted)); }
+.kakei-cal-cell.is-quiet.is-sat .kakei-cal-num { color: color-mix(in srgb, var(--income-ink) 70%, var(--text-muted)); }
+
+/* 未來的日子再淡一階，和「過去沒記帳的日子」分開；選中時恢復 */
+.kakei-cal-cell.is-future:not(.is-selected) .kakei-cal-num {
+    font-weight: 400;
+    opacity: 0.7;
+}
+
+/* 收合成單週時，整月清單目前捲到的那一天：淡色外環標出 */
+.kakei-cal-cell.is-scroll-focus:not(.is-selected)::before {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary-color) 45%, transparent);
+}
 
 /* 前後月補位：只當背景，不搶眼、不可點 */
 .kakei-cal-cell.is-pad {
@@ -406,8 +424,8 @@
     white-space: nowrap;
 }
 
-.kakei-day-total .is-expense { color: var(--danger-color); }
-.kakei-day-total .is-income { color: var(--success-color); }
+.kakei-day-total .is-expense { color: var(--expense-ink); }
+.kakei-day-total .is-income { color: var(--income-ink); }
 
 .kakei-filter-wrap {
     position: relative;
@@ -515,8 +533,8 @@
     box-shadow: var(--shadow-sm);
 }
 
-.kfp-seg-btn.is-active.is-expense { color: var(--danger-color); }
-.kfp-seg-btn.is-active.is-income { color: var(--success-color); }
+.kfp-seg-btn.is-active.is-expense { color: var(--expense-ink); }
+.kfp-seg-btn.is-active.is-income { color: var(--income-ink); }
 
 
 /* ── 每月統計（清單頂端，點進總覽） ── */
@@ -610,8 +628,8 @@
     font-variant-numeric: tabular-nums;
 }
 
-.kms-sub b.is-pos { color: var(--success-color); }
-.kms-sub b.is-neg { color: var(--danger-color); }
+.kms-sub b.is-pos { color: var(--income-ink); }
+.kms-sub b.is-neg { color: var(--expense-ink); }
 
 .kms-side {
     font-family: var(--font-num);
@@ -624,8 +642,8 @@
     white-space: nowrap;
 }
 
-.kms-side .is-expense { color: var(--danger-color); }
-.kms-side .is-income { color: var(--success-color); }
+.kms-side .is-expense { color: var(--expense-ink); }
+.kms-side .is-income { color: var(--income-ink); }
 
 .kms-dot {
     color: var(--text-muted);
@@ -689,8 +707,8 @@
     font-variant-numeric: tabular-nums;
 }
 
-.kakei-calendar-container .ldh-total .is-expense { color: var(--danger-color); }
-.kakei-calendar-container .ldh-total .is-income { color: var(--success-color); }
+.kakei-calendar-container .ldh-total .is-expense { color: var(--expense-ink); }
+.kakei-calendar-container .ldh-total .is-income { color: var(--income-ink); }
 
 /* 明細捲動條：桌面用細的主題色並預留位置（換頁時內容不會左右跳）；觸控裝置隱藏，同原生 App */
 .kakei-cal-list {
@@ -782,7 +800,7 @@
     text-overflow: ellipsis;
 }
 
-.kk-entry-reward { color: var(--success-color); }
+.kk-entry-reward { color: var(--income-ink); }
 .kk-entry-reward i { font-size: 0.68rem; }
 
 .kk-entry-amount {
@@ -799,8 +817,8 @@
 /* 百萬以上的金額縮小一號，不擠出固定欄寬 */
 .kk-entry-amount.is-long { font-size: 0.9rem; }
 
-.kk-entry-amount.is-expense { color: var(--danger-color); }
-.kk-entry-amount.is-income { color: var(--success-color); }
+.kk-entry-amount.is-expense { color: var(--expense-ink); }
+.kk-entry-amount.is-income { color: var(--income-ink); }
 
 /* 很窄的手機（≤360px）收窄金額欄 */
 @media (max-width: 360px) {
@@ -862,7 +880,7 @@
     border: 0;
     border-radius: var(--radius);
     background: transparent;
-    color: var(--danger-color);
+    color: var(--expense-ink);
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
