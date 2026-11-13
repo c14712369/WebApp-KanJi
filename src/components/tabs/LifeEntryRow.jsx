@@ -24,11 +24,16 @@ export default function LifeEntryRow({
     : (lifeCategories.find(c => c.id === entry.categoryId) || { name: '支出', color: '#6B6B6B' });
 
   const payment = !isIncome ? paymentMethods.find(p => p.id === entry.paymentMethod) : null;
-  // 付款方式名稱去掉括號說明，標籤保持短
-  const paymentLabel = payment?.name ? payment.name.replace(/\s*[（(].*?[)）]\s*/g, '').trim() : '';
+  // 付款方式名稱去掉括號說明、斜線兩側空白，標籤保持短（「現金 / 其他」→「現金/其他」）
+  const paymentLabel = payment?.name
+    ? payment.name.replace(/\s*[（(].*?[)）]\s*/g, '').replace(/\s*\/\s*/g, '/').trim()
+    : '';
   const note = (noteLabel || entry.note || '').trim();
   const title = note || cat.name;
+  const metaText = [note ? cat.name : null, paymentLabel].filter(Boolean).join(' · ');
   const amountType = isIncome ? 'income' : 'expense';
+  // 百萬以上縮小一號，避免擠出固定寬的金額欄
+  const isLongAmount = String(Math.round(Math.abs(Number(entry.amount) || 0))).length >= 7;
 
   const open = () => onEdit && onEdit(entry);
 
@@ -53,26 +58,23 @@ export default function LifeEntryRow({
           : <span className="kk-entry-initial">{cat.name.slice(0, 1)}</span>}
       </span>
 
+      {/* 左側兩行：標題＋小字「分類 · 付款」（標題已是分類名時不重複）；右側只放金額，各列比例固定 */}
       <span className="kk-entry-main">
         <span className="kk-entry-title" title={title}>{title}</span>
-        {/* 分類已在右側標籤，副標只放回饋，不重複顯示 */}
-        {reward && (
-          <span className="kk-entry-sub is-reward">
-            <i className="fa-solid fa-gift" aria-hidden="true"></i> 回饋 +<AnimatedNumber value={reward.amount} format={fmtMoney} />{reward.rate ? `（${reward.rate}）` : ''}
+        {(metaText || reward) && (
+          <span className="kk-entry-meta" title={metaText || undefined}>
+            {metaText}
+            {reward && (
+              <span className="kk-entry-reward">
+                {metaText ? ' · ' : ''}<i className="fa-solid fa-gift" aria-hidden="true"></i> 回饋 +<AnimatedNumber value={reward.amount} format={fmtMoney} />{reward.rate ? `（${reward.rate}）` : ''}
+              </span>
+            )}
           </span>
         )}
       </span>
 
-      <span className="kk-entry-side">
-        <span className={`kk-entry-amount ${isIncome ? 'is-income' : 'is-expense'}`}>
-          $<AnimatedNumber value={Math.round(entry.amount)} format={v => formatAmount(v, amountType)} />
-        </span>
-        {(note || paymentLabel) && (
-          <span className="kk-entry-tags" aria-hidden="true">
-            {note && <span className="kk-tag">{cat.name}</span>}
-            {paymentLabel && <span className="kk-tag">{paymentLabel}</span>}
-          </span>
-        )}
+      <span className={`kk-entry-amount ${isIncome ? 'is-income' : 'is-expense'}${isLongAmount ? ' is-long' : ''}`}>
+        $<AnimatedNumber value={Math.round(entry.amount)} format={v => formatAmount(v, amountType)} />
       </span>
     </motion.div>
   );

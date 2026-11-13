@@ -219,6 +219,18 @@ test('支出與收入分開加總', () => {
   assert.equal(g[1].total, 104);
   assert.equal(g[1].incomeTotal, 3000);
 });
+test('分別計算支出筆數與收入筆數（只有 1 筆時日期列不顯示合計，避免和那筆金額重複）', () => {
+  const g = groupEntriesByDay([
+    { id: 'a', date: '2026-11-12', amount: 104, type: 'expense' },
+    { id: 'b', date: '2026-11-12', amount: 59, type: 'expense' },
+    { id: 'c', date: '2026-11-12', amount: 3000, type: 'income' },
+    { id: 'd', date: '2026-11-11', amount: 59, type: 'expense' },
+  ]);
+  assert.equal(g[0].expenseCount, 2);
+  assert.equal(g[0].incomeCount, 1);
+  assert.equal(g[1].expenseCount, 1);
+  assert.equal(g[1].incomeCount, 0);
+});
 
 console.log('\n[noteDisplayMap — 同一家店大小寫不同時統一顯示（只改顯示，不動資料）]');
 test('大小寫混用 → 統一用非全大寫的寫法', () => {

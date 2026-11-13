@@ -13,11 +13,12 @@ export function groupEntriesByDay(entries = []) {
   const map = {};
   for (const e of arr) {
     const d = (e && e.date) || '';
-    if (!map[d]) { map[d] = { date: d, entries: [], total: 0, incomeTotal: 0 }; order.push(d); }
+    if (!map[d]) { map[d] = { date: d, entries: [], total: 0, incomeTotal: 0, expenseCount: 0, incomeCount: 0 }; order.push(d); }
     map[d].entries.push(e);
     // total 維持「當日支出」（既有語意）；收入另計，只有收入的日子才不會顯示「合計 $0」
-    if (e && e.type !== 'income') map[d].total += (Number(e.amount) || 0);
-    else if (e) map[d].incomeTotal += (Number(e.amount) || 0);
+    // 筆數另計：同類只有 1 筆時合計等於那筆金額，畫面上不重複顯示
+    if (e && e.type !== 'income') { map[d].total += (Number(e.amount) || 0); map[d].expenseCount += 1; }
+    else if (e) { map[d].incomeTotal += (Number(e.amount) || 0); map[d].incomeCount += 1; }
   }
   return order.map(d => map[d]);
 }
