@@ -68,9 +68,18 @@
     text-align: center;
 }
 
+/* Chrome 的原生日曆小圖示拿掉（旁邊已有「回到本月」圖示，不並排兩個）；點月份文字由 showPicker() 叫出選擇器 */
+.life-month-input::-webkit-calendar-picker-indicator {
+    display: none;
+}
+
 /* 深色主題：Chrome 的月曆小圖示跟著變淺 */
 [data-theme="dark"] .life-month-input {
     color-scheme: dark;
+}
+
+.life-month-today-face {
+    display: contents;
 }
 
 .life-month-today {
@@ -358,14 +367,15 @@
 /* ── 把手列：左「看整月」｜中把手｜右當日合計＋篩選 ── */
 .kakei-cal-handle-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
     align-items: center;
     min-height: 36px;
     margin-top: 2px;
 }
 
+/* 把手 64px（握把本身約 36px 寬）：兩側各多 4px，360px 寬時「只看收入 ✕」才不會被截掉 */
 .kakei-cal-handle-row .kakei-cal-handle {
-    width: 72px;
+    width: 64px;
     height: 32px;
 }
 
@@ -412,6 +422,42 @@
 
 @media (hover: hover) {
     .kakei-chip:hover { color: var(--text-main); border-color: var(--text-muted); }
+}
+
+/* 篩選中膠囊「只看收入 ✕」：主色淡底，跟一般操作膠囊分開；名稱過長就省略，✕ 永遠看得到 */
+.kakei-chip.is-filter {
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 8px 0 10px;
+    border-color: transparent;
+    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    color: var(--primary-hover, var(--primary-color));
+}
+
+.kakei-chip.is-filter .kakei-chip-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kakei-chip.is-filter i { flex: 0 0 auto; font-size: 0.7rem; opacity: 0.8; }
+
+.kakei-chip.is-filter:active {
+    background: color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.kakei-chip.is-filter:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+}
+
+@media (hover: hover) {
+    .kakei-chip.is-filter:hover {
+        border-color: transparent;
+        background: color-mix(in srgb, var(--primary-color) 18%, transparent);
+        color: var(--primary-hover, var(--primary-color));
+    }
 }
 
 .kakei-day-total {

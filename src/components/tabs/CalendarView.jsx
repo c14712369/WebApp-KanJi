@@ -28,6 +28,9 @@ const pad2 = (n) => String(n).padStart(2, '0');
 export default function CalendarView({
   ym,
   entries = [],
+  allEntries = null,     // 未篩選的本月明細：用來算被篩選藏起幾筆（沒給就不提示）
+  filterLabel = null,    // 目前篩選的說明（如「只看收入」），有值時把手列顯示可移除的膠囊
+  onClearFilter,
   selectedDate,
   onSelectDate,
   onQuickAdd,
@@ -147,6 +150,19 @@ export default function CalendarView({
     return groupEntriesByDay(entries);
   }, [entries, selectedDate]);
 
+  // 篩選中被藏起來的筆數（單日看那天、整月看全月）→ 空狀態說「有 3 筆支出沒顯示」，不會誤以為沒記帳
+  const hiddenText = useMemo(() => {
+    if (!filterLabel || !allEntries) return '';
+    const visible = new Set(entries.map(e => e.id));
+    let exp = 0, inc = 0;
+    for (const e of allEntries) {
+      if (selectedDate && e.date !== selectedDate) continue;
+      if (visible.has(e.id)) continue;
+      if (e.type === 'income') inc++; else exp++;
+    }
+    return [exp ? `${exp} 筆支出` : '', inc ? `${inc} 筆收入` : ''].filter(Boolean).join('、');
+  }, [filterLabel, allEntries, entries, selectedDate]);
+
 
   // 點擊日期格子：選中則取消（還原為全月），未選中則切換為該日
   const handleCellClick = (dateStr) => {
@@ -257,6 +273,10 @@ export default function CalendarView({
 
   const filterDirty = filterType !== 'all' || sortMode !== 'date-desc';
   const showFilter = !!(setFilterType || setSortMode);
+  const showFilterPill = !!filterLabel && !!onClearFilter;
+  // 篩選已經由膠囊顯示，篩選鈕上的點只剩「排序改過」時才出現，同一件事不標兩次
+  const filterDot = sortMode !== 'date-desc' || (filterType !== 'all' && !showFilterPill);
+  const clearFilter = () => { buzz(20); onClearFilter?.(); };
 
   const renderRow = (e, idx) => (
     <LifeEntryRow
@@ -273,7 +293,7 @@ export default function CalendarView({
     />
   );
 
-  const renderEmpty = (icon, text, actionLabel, onAction) => (
+  const renderEmpty = (icon, text, actionLabel, onAction, actionIcon = 'fa-solid fa-plus') => (
     <div className="kakei-day-empty-state">
       <span className="kakei-empty-icon" aria-hidden="true"><i className={icon}></i></span>
       <div className="kakei-empty-text">{text}</div>
@@ -282,10 +302,20 @@ export default function CalendarView({
         className="btn btn-outline btn-sm kakei-empty-action"
         onClick={() => { buzz(20); onAction(); }}
       >
-        <i className="fa-solid fa-plus" aria-hidden="true"></i>
+        <i className={actionIcon} aria-hidden="true"></i>
         {actionLabel}
       </button>
     </div>
+  );
+
+  // 篩選把東西都藏起來時的空狀態：說清楚藏了什麼，按鈕改成清除篩選（不是叫你再記一筆）；
+  // 篩選名稱已在把手列膠囊上，這裡不再重寫一次
+  const renderFilteredEmpty = (scope) => renderEmpty(
+    'fa-solid fa-filter',
+    `${scope}有 ${hiddenText}被篩選隱藏`,
+    '清除篩選',
+    () => onClearFilter?.(),
+    'fa-solid fa-xmark'
   );
 
   return (
@@ -393,12 +423,25 @@ export default function CalendarView({
 
           {/* 把手列只放操作；當日花費改到當天明細最上面的「當日小計」 */}
           <div className="kakei-cal-handle-side is-right">
+            {/* 篩選中：一眼看得到、點一下就清掉，不用再打開選單 */}
+            {showFilterPill && (
+              <button
+                type="button"
+                className="kakei-chip is-filter"
+                onClick={clearFilter}
+                aria-label={`清除篩選：${filterLabel}`}
+                title="清除篩選"
+              >
+                <span className="kakei-chip-label">{filterLabel}</span>
+                <i className="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            )}
             {showFilter && (
               <div className="kakei-filter-wrap" ref={filterWrapRef}>
                 <button
                   ref={filterBtnRef}
                   type="button"
-                  className={`kakei-filter-btn${filterDirty ? ' is-dirty' : ''}${filterOpen ? ' is-open' : ''}`}
+                  className={`kakei-filter-btn${filterDot ? ' is-dirty' : ''}${filterOpen ? ' is-open' : ''}`}
                   onClick={() => { buzz(20); setFilterOpen(v => !v); }}
                   aria-haspopup="dialog"
                   aria-expanded={filterOpen}
@@ -509,7 +552,9 @@ export default function CalendarView({
             {selectedDate ? (
               /* ── 單日檢視 ── */
               selectedEntries.length === 0 ? (
-                renderEmpty('fa-solid fa-mug-hot', '這天還沒有記帳', '補記這天的收支', () => onQuickAdd(selectedDate))
+                hiddenText
+                  ? renderFilteredEmpty('這天')
+                  : renderEmpty('fa-solid fa-mug-hot', '這天還沒有記帳', '補記這天的收支', () => onQuickAdd(selectedDate))
               ) : (
                 <>
                   {/* 當日小計：樣式同整月清單的日期列，但不寫日期（月曆上已選中，不重複）；
@@ -531,7 +576,9 @@ export default function CalendarView({
             ) : (
               /* ── 全月檢視（依日期分組 + 分頁） ── */
               dayGroups.length === 0 ? (
-                renderEmpty('fa-regular fa-note-sticky', '這個月還沒有記帳', '新增本月第一筆', () => onQuickAdd(`${ym}-01`))
+                hiddenText
+                  ? renderFilteredEmpty('這個月')
+                  : renderEmpty('fa-regular fa-note-sticky', '這個月還沒有記帳', '新增本月第一筆', () => onQuickAdd(`${ym}-01`))
               ) : (
                 <>
                   {/* 整月一路往下捲：日期標題黏在頂端，捲動時月曆自動收成單週 */}

@@ -327,7 +327,8 @@ export default function EntrySheet({
           </div>
         ) : (
           <div className="kk-pill-row">
-            <label className="kk-pill">
+            {/* 新增時日期不是今天（從月曆選了別天再按 ＋）→ 琥珀外框提醒，免得補記到錯的日子 */}
+            <label className={`kk-pill is-date${!isEdit && date !== toIso(new Date()) ? ' is-off-today' : ''}`}>
               <i className="fa-regular fa-calendar" aria-hidden="true"></i>
               <span className="kk-pill-text">{dateLabel(date)}</span>
               <input
@@ -341,7 +342,7 @@ export default function EntrySheet({
             </label>
 
             {!isIncome && (
-              <label className="kk-pill">
+              <label className="kk-pill is-pay">
                 <i className="fa-regular fa-credit-card" aria-hidden="true"></i>
                 <span className="kk-pill-text">{stripParen(payment?.name) || '付款方式'}</span>
                 <select

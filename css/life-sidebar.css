@@ -216,6 +216,7 @@
 
     body .app-shell .mobile-header .header-slot {
         display: flex;
+        flex: 1 1 auto;
         justify-content: center;
         min-width: 0;
     }
@@ -224,19 +225,26 @@
         display: none;
     }
 
-    /* 月份列在頁首：無框標題感，箭頭輕量 */
+    /* 月份列在頁首：無框標題感，箭頭輕量。
+       左右對稱五欄「空｜‹｜月份｜›｜本月」：兩側 1fr 等寬，月份永遠在正中；
+       「本月」住在右側固定格位裡，不再浮出去壓到設定鈕（360px 寬時原本會重疊） */
     body .app-shell .life-month-nav.is-in-header {
-        position: relative;
-        flex-wrap: nowrap;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 34px auto 34px minmax(0, 1fr);
+        align-items: center;
         gap: 0;
-        width: auto;
+        width: 100%;
         max-width: none;
         margin: 0;
     }
 
+    body .app-shell .life-month-nav.is-in-header > .icon-btn:first-child {
+        grid-column: 2;
+    }
+
     body .app-shell .life-month-nav.is-in-header .icon-btn {
-        width: 36px;
-        min-width: 36px;
+        width: 34px;
+        min-width: 34px;
         height: 40px;
         padding: 0;
         border: 0;
@@ -244,8 +252,9 @@
         color: var(--text-muted);
     }
 
+    /* 寬度貼合「2026年11月」（約 5.4em）：多出來的空間留給兩側格位，「本月」才放得下 */
     body .app-shell .life-month-nav.is-in-header .life-month-input {
-        width: 7em;
+        width: 6em;
         min-width: 0;
         height: 40px;
         padding: 0 2px;
@@ -255,20 +264,56 @@
         font-size: 1.15rem;
     }
 
-    /* 「回到本月」：浮在月份右側的小圓鈕，不佔排版空間 → 出現與否月份標題都置中、不位移 */
+    /* 「回到本月」：按鈕本身是填滿右側格位、44px 高的透明點擊區，圓形外觀畫在內層 face；
+       出現與否都不影響月份置中（兩側格位等寬） */
     body .app-shell .life-month-nav.is-in-header .life-month-today {
-        position: absolute;
-        top: 50%;
-        left: 100%;
+        justify-self: start;
+        justify-content: center;
+        width: 100%;
+        max-width: 44px;
+        height: 44px;
+        min-height: 44px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 12px;
+        background: transparent;
+        color: var(--text-main);
+        font-size: 0.8rem;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body .app-shell .life-month-nav.is-in-header .life-month-today-face {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
         width: 30px;
         height: 30px;
-        min-height: 30px;
-        margin-left: 2px;
-        padding: 0;
-        justify-content: center;
+        border: 1px solid var(--border-color);
         border-radius: 50%;
-        font-size: 0.8rem;
-        transform: translateY(-50%);
+        background: var(--card-bg);
+        transition: background-color 0.15s ease, transform 0.1s ease;
+    }
+
+    body .app-shell .life-month-nav.is-in-header .life-month-today:active .life-month-today-face {
+        background: var(--hover-bg);
+        transform: scale(0.94);
+    }
+
+    body .app-shell .life-month-nav.is-in-header .life-month-today:focus-visible {
+        outline: none;
+    }
+
+    body .app-shell .life-month-nav.is-in-header .life-month-today:focus-visible .life-month-today-face {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 2px;
+    }
+
+    /* 360px 等窄螢幕：月份字小一階，讓右側格位放得下 30px 的「本月」圓鈕而不貼到設定鈕 */
+    @media (max-width: 380px) {
+        body .app-shell .life-month-nav.is-in-header .life-month-input {
+            font-size: 1.05rem;
+        }
     }
 
     body .app-shell .life-month-nav.is-in-header .life-month-today-label {

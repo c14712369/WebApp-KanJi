@@ -33,9 +33,9 @@
     outline: none;
 }
 
-.kk-sheet button,
-.kk-sheet input,
-.kk-sheet select {
+/* :where() 讓這條權重只剩 .kk-sheet 一層：按鈕預設跟抽屜同字，
+   但 .kk-key 等自己指定 --font-num 的元件不會再被蓋回明體 */
+.kk-sheet :where(button, input, select) {
     font-family: inherit;
 }
 
@@ -299,7 +299,27 @@
     max-width: none;
 }
 
+/* 日期最短（最長「12/31（三）」）也最不能被截：固定寬度不縮，窄螢幕由付款、備註讓出空間 */
+.kk-pill.is-date {
+    flex: 0 0 auto;
+    max-width: none;
+}
+
+/* 付款名稱（如「現金 / 其他」）截掉尾巴仍認得出來，空間不夠時比備註先讓 */
+.kk-pill.is-pay { flex-shrink: 4; }
+
+/* 新增時日期不是今天：琥珀外框＋圖示，提醒這筆會記到別天 */
+.kk-pill.is-off-today {
+    border-color: var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+}
+
+.kk-pill.is-off-today i { color: var(--accent-color); }
+
 .kk-pill.is-note:not(.has-value) .kk-pill-text { color: var(--text-muted); }
+
+/* 還沒填備註時只有「備註」兩個字，不縮（360px 寬原本會被截成「備…」）；填了長備註才跟著省略 */
+.kk-pill.is-note:not(.has-value) { flex-shrink: 0; }
 
 .kk-pill-text {
     overflow: hidden;

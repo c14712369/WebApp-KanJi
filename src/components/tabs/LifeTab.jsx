@@ -183,12 +183,15 @@ export default function LifeTab() {
     }
   }, [ym]);
 
+  // 新增的預設日期：明細頁的月曆選了哪天就記到那天（補記舊帳）；看不到月曆時交給抽屜預設（今天）
+  const newEntryDraft = () => (lifeView === 'exp' && selectedCalDate ? { date: selectedCalDate } : {});
+
   // 底部導覽中間「＋」→ 開新增支出視窗（從其他分頁按也會先切過來再開）
   useEffect(() => {
     if (pendingAdd !== 'life') return;
     setPendingAdd(null);
     setNewType('expense');
-    setExpModal({});
+    setExpModal(newEntryDraft());
   }, [pendingAdd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleQuickAdd = (targetDate) => {
@@ -292,16 +295,25 @@ export default function LifeTab() {
   // 同一天內：收入在前 → 依分類設定順序分組 → 同分類內備註同群的相鄰、依金額由大到小
   const catOrder = {};
   [...lifeIncomeCategories, ...lifeCategories].forEach((c, i) => { if (!(c.id in catOrder)) catOrder[c.id] = i; });
+  // 未篩選的本月明細：月曆用來算「被篩選藏起幾筆」，避免篩選後誤以為那天沒記帳
+  const monthEntries = lifeExpenses.filter(e =>
+    (e.date || '').startsWith(ym) && !(e.type === 'income' && e._linkedExpenseId)
+  );
   const calEntries = sortEntries(
-    lifeExpenses.filter(e => {
-      if (!(e.date || '').startsWith(ym)) return false;
-      if (e.type === 'income' && e._linkedExpenseId) return false;
+    monthEntries.filter(e => {
       if (selectedCatId !== null && e.categoryId !== selectedCatId) return false;
       if (filterType !== 'all' && e.type !== filterType) return false;
       return true;
     }),
     { catOrder, dir: sortMode === 'date-desc' ? 'desc' : 'asc' }
   );
+
+  // 目前的篩選（分類優先，其次類型）→ 月曆把手列顯示成可移除的膠囊
+  const selectedCatName = selectedCatId !== null ? (lifeCategories.find(c => c.id === selectedCatId)?.name || '分類') : null;
+  const filterLabel = selectedCatName
+    ? `只看${selectedCatName}`
+    : filterType === 'expense' ? '只看支出' : filterType === 'income' ? '只看收入' : null;
+  const clearFilters = () => { setSelectedCatId(null); setFilterType('all'); };
 
   // 存檔後聚焦該筆日期、捲過去並閃爍提示
   useEffect(() => {
@@ -324,7 +336,7 @@ export default function LifeTab() {
     const [y, m] = ym.split('-').map(Number);
     const d = new Date(y, m - 1 + delta, 1);
     setLifeCurrentMonth(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
-    setSelectedCatId(null);
+    clearFilters();
   };
 
   // ── CRUD handlers ──
@@ -361,7 +373,7 @@ export default function LifeTab() {
     return true;
   };
   const openEdit = (entry) => { if (navigator.vibrate) navigator.vibrate(50); setExpModal(entry); };
-  const openNew  = (type)  => { if (navigator.vibrate) navigator.vibrate(50); setNewType(type); setExpModal({}); };
+  const openNew  = (type)  => { if (navigator.vibrate) navigator.vibrate(50); setNewType(type); setExpModal(newEntryDraft()); };
 
   // 月份切換列：桌面在頁內；手機搬進單列頁首，「本月」只在看別的月份時出現
   const inHeader = isMobile && !!headerSlot;
@@ -378,9 +390,11 @@ export default function LifeTab() {
         onChange={e => {
           if (e.target.value) {
             setLifeCurrentMonth(e.target.value);
-            setSelectedCatId(null);
+            clearFilters();
           }
         }}
+        // 原生日曆小圖示已隱藏（避免和「回到本月」兩個日曆圖示並排），點月份文字直接叫出選擇器
+        onClick={e => { try { e.currentTarget.showPicker?.(); } catch { /* 部分瀏覽器不支援 */ } }}
       />
       <button className="icon-btn" onClick={() => changeMonth(1)} aria-label="下個月"><i className="fa-solid fa-chevron-right"></i></button>
       {(!inHeader || !isThisMonth) && (
@@ -390,12 +404,15 @@ export default function LifeTab() {
             if (navigator.vibrate) navigator.vibrate(20);
             // 用本地時間，避免 UTC 在每月 1 號早上 8 點前算成上個月
             setLifeCurrentMonth(localYm());
-            setSelectedCatId(null);
+            clearFilters();
           }}
           title="回到本月"
           aria-label="回到本月"
         >
-          <i className="fa-solid fa-calendar-day" aria-hidden="true"></i>
+          {/* 頁首版：按鈕本身是 44 高的透明點擊區，圓形外觀畫在這層 */}
+          <span className="life-month-today-face" aria-hidden="true">
+            <i className="fa-solid fa-calendar-day"></i>
+          </span>
           <span className="life-month-today-label">本月</span>
         </button>
       )}
@@ -512,22 +529,13 @@ export default function LifeTab() {
               className="life-view-content active"
             >
               <div className="life-detail-panel" style={{ width: '100%' }}>
-                {selectedCatId !== null && (
-                  <div className="life-detail-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px 4px 16px', background: 'transparent', border: 'none' }}>
-                    <h3 id="lifeDetailTitle" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)', letterSpacing: '0.3px' }}>
-                      {lifeCategories.find(c => c.id === selectedCatId)?.name || '分類明細'}
-                    </h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button className="icon-btn" id="lifeClearFilter" onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(null); }} title="清除篩選">
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
+                {/* 分類篩選不再另起一列標題：和類型篩選一起顯示成月曆把手列的「只看○○ ✕」膠囊 */}
                 <CalendarView
                   ym={ym}
                   entries={calEntries}
+                  allEntries={monthEntries}
+                  filterLabel={filterLabel}
+                  onClearFilter={clearFilters}
                   selectedDate={selectedCalDate}
                   onSelectDate={setSelectedCalDate}
                   onQuickAdd={handleQuickAdd}
