@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { supabase } from '../../lib/supabaseClient';
 import { showToast } from '../../lib/utils';
-import CategoryManageModal from '../modals/CategoryManageModal';
+
+// 分類管理（含 200 個圖示的目錄）用到才載；設定一打開就先預載，點進去不會等
+const loadCategoryManage = () => import('../modals/CategoryManageModal');
+const CategoryManageModal = lazy(loadCategoryManage);
 import IdentityModal from './IdentityModal';
 import { APP_VERSION, useAppUpdate, checkForUpdate, applyUpdate } from '../../lib/appUpdate';
 
@@ -50,6 +53,8 @@ export default function SettingsModal({ onClose, onLogin }) {
   const open = (key) => { vibrate(); setSub(key); };
   const back = () => setSub(null);
 
+  useEffect(() => { loadCategoryManage().catch(() => {}); }, []);
+
   // 固定支出分類被刪除時，原本屬於它的項目改歸「其他」（沿用 FixedTab 原邏輯）。
   // 讀最新 store 而非 render 閉包：刪除確認框開著時若雲端同步更新了 items，不能拿舊快照整份蓋回去。
   const saveFixedCategories = (cats) => {
@@ -67,11 +72,13 @@ export default function SettingsModal({ onClose, onLogin }) {
     await supabase.auth.signOut();
   };
 
+  // 載入中只留遮罩，背景不閃
+  const overlayFallback = <div className="modal-overlay active" aria-hidden="true" />;
   if (sub === 'life') {
-    return <CategoryManageModal title="生活支出分類" categories={lifeCategories} type="expense" onClose={back} onSave={setLifeCategories} />;
+    return <Suspense fallback={overlayFallback}><CategoryManageModal title="生活支出分類" categories={lifeCategories} type="expense" onClose={back} onSave={setLifeCategories} /></Suspense>;
   }
   if (sub === 'fixed') {
-    return <CategoryManageModal title="固定支出分類" categories={categories} type="expense" onClose={back} onSave={saveFixedCategories} />;
+    return <Suspense fallback={overlayFallback}><CategoryManageModal title="固定支出分類" categories={categories} type="expense" onClose={back} onSave={saveFixedCategories} /></Suspense>;
   }
   if (sub === 'identity') {
     return <IdentityModal onClose={back} />;

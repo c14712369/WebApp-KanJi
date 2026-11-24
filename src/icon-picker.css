@@ -1,0 +1,78 @@
+/* 分類圖示選擇器（IconPicker.jsx）：搜尋框＋固定高度捲動框，分組標題黏頂 */
+
+.ip { display: flex; flex-direction: column; gap: 8px; }
+
+/* 「圖示」標籤列：右側顯示目前選的圖示名稱（圖示本身沒有文字，靠這個確認） */
+.ip-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ip-label-current { font-weight: 500; letter-spacing: 0; color: var(--text-main); }
+
+.ip-search { position: relative; }
+.ip-search-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 0.85rem; color: var(--text-muted); pointer-events: none; z-index: 1;
+}
+.ip-search .ip-search-input { padding-left: 36px; padding-right: 40px; }
+.ip-search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.ip-search-clear {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  z-index: 1;
+  width: 40px; height: 40px; border: 0; border-radius: var(--radius);
+  background: transparent; color: var(--text-muted); cursor: pointer;
+  font-family: inherit; display: flex; align-items: center; justify-content: center;
+}
+.ip-search-clear:hover { background: var(--hover-bg); color: var(--text-main); }
+
+/* 高度固定：搜尋結果多或少，視窗都不跳動 */
+.ip-box {
+  position: relative;
+  height: 248px; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg-color); border: 1px solid var(--border-color);
+  border-radius: var(--radius); padding: 0 8px 8px;
+  scrollbar-width: thin; scrollbar-color: var(--border-color) transparent;
+}
+
+.ip-group + .ip-group { margin-top: 4px; }
+.ip-group-head {
+  position: sticky; top: 0; z-index: 1;
+  margin: 0 -8px; padding: 8px 12px 6px;
+  background: var(--bg-color);
+  font-size: 0.8125rem; font-weight: 600; line-height: 1;
+  color: var(--text-muted); letter-spacing: 0.04em;
+}
+
+.ip-grid {
+  display: grid; gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+}
+.ip-cell {
+  height: 44px; border: 0; border-radius: var(--radius);
+  background: transparent; color: var(--text-main); cursor: pointer;
+  font-family: inherit; display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.ip-cell:hover { background: var(--hover-bg); }
+.ip-cell:active { transform: scale(0.94); }
+.ip-cell:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+/* 選中：底色＝分類顏色、圖示＝圖示顏色（inline style），再加陰影讓淺色分類也分得出來 */
+.ip-cell.is-on { box-shadow: var(--shadow-sm); }
+.ip-cell.is-on:hover { filter: brightness(1.04); }
+
+.ip-empty {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: var(--text-muted); font-size: 0.9rem; text-align: center;
+}
+.ip-empty p { margin: 0; }
+.ip-empty-clear {
+  min-height: 40px; padding: 0 14px; border-radius: var(--radius);
+  border: 1px solid var(--border-color); background: var(--card-bg);
+  color: var(--text-main); font-family: inherit; font-size: 0.9rem; cursor: pointer;
+}
+.ip-empty-clear:hover { background: var(--hover-bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ip-cell { transition: none; }
+  .ip-cell:active { transform: none; }
+}

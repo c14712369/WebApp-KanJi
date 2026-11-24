@@ -7,6 +7,7 @@ import SyncOverlay from './components/layout/SyncOverlay';
 import UpdateBanner from './components/layout/UpdateBanner';
 import TabSkeleton from './components/layout/TabSkeleton';
 import { TABS } from './lib/constants';
+import { loadAllIcons } from './lib/IconRenderer';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Global CSS (既有模組全部沿用)
@@ -61,6 +62,14 @@ export default function App() {
     if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
   }, [theme]);
+
+  // 擴充分類圖示不進主程式檔；開完畫面、瀏覽器閒下來再預載，打開選擇器時就不用等
+  useEffect(() => {
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+    const cancel = window.cancelIdleCallback || clearTimeout;
+    const id = idle(() => { loadAllIcons(); });
+    return () => cancel(id);
+  }, []);
 
   // 切換分頁時捲回頂部
   useEffect(() => {

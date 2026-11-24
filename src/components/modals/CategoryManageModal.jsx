@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
-import IconRenderer, { AVAILABLE_ICONS } from '../../lib/IconRenderer';
+import IconRenderer from '../../lib/IconRenderer';
+import { iconLabel } from '../../lib/iconCatalog';
+import IconPicker from './IconPicker';
 import { showToast, confirmDialog } from '../../lib/utils';
 
 export default function CategoryManageModal({ categories, onSave, onClose, type = 'expense', title }) {
@@ -95,24 +97,11 @@ export default function CategoryManageModal({ categories, onSave, onClose, type 
             </div>
 
             <div className="form-group">
-              <label className="form-label">圖示</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, maxHeight: 150, overflowY: 'auto', padding: 8, background: 'var(--bg-color)', borderRadius: 'var(--radius)', border: '1px solid var(--border-color)' }}>
-                {AVAILABLE_ICONS.map(iconName => (
-                  <button
-                    key={iconName}
-                    onClick={() => setIcon(iconName)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      padding: 8, borderRadius: 8, border: 'none', cursor: 'pointer',
-                      background: icon === iconName ? color : 'transparent',
-                      color: icon === iconName ? iconColor : 'var(--text-main)',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <IconRenderer name={iconName} size={20} color={icon === iconName ? iconColor : 'currentColor'} />
-                  </button>
-                ))}
+              <div className="form-label ip-label-row">
+                <span id="catIconLabel">圖示</span>
+                <span className="ip-label-current">{iconLabel(icon)}</span>
               </div>
+              <IconPicker value={icon} onChange={setIcon} color={color} iconColor={iconColor} labelId="catIconLabel" />
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
