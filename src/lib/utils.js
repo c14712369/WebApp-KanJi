@@ -1,5 +1,6 @@
 // ====== src/lib/utils.js ======
 import { useAppStore } from '../store/appStore';
+import { fetchRateToTWD } from './fx';
 
 // ─── 純工具函式 ──────────────────────────────────────────────────────────────
 
@@ -216,20 +217,10 @@ export async function fetchWithCache(url, ttlHours = 6) {
   return promise;
 }
 
+// frankfurter 沒有 TWD（抓了只會 404 → 默默當 1:1），改用 fx.js 的來源；抓不到退回項目存的匯率
 export async function fetchHistoricalRate(currency, dateStr) {
   if (currency === 'TWD') return 1;
-  const today = new Date().toISOString().split('T')[0];
-  const effectiveDate = dateStr > today ? today : dateStr;
-  const cacheKey = `${currency}_${effectiveDate}`;
-  if (_fxRateCache[cacheKey]) return _fxRateCache[cacheKey];
-
-  const ttl = effectiveDate < today ? 8760 : 6;
-  try {
-    const data = await fetchWithCache(`https://api.frankfurter.app/${effectiveDate}?from=${currency}&to=TWD`, ttl);
-    const rate = data?.rates?.TWD || 1;
-    _fxRateCache[cacheKey] = rate;
-    return rate;
-  } catch { return 1; }
+  return fetchRateToTWD(currency, dateStr);
 }
 
 export async function prefetchFXRates(items, yearMonthPairs) {
@@ -251,7 +242,7 @@ export async function getItemAmountForMonth(item, year, month) {
     return calculateExpenseForMonth(item, year, month);
   }
   const dateStr = getBillingDateForMonth(item, year, month);
-  const rate    = dateStr ? await fetchHistoricalRate(item.currency, dateStr) : 1;
+  const rate    = (dateStr && await fetchHistoricalRate(item.currency, dateStr)) || Number(item.exchangeRate) || 1;
   const base    = calculateExpenseForMonth({ ...item, amount: item.originalAmount || item.amount }, year, month);
   return base * rate;
 }

@@ -19,6 +19,7 @@ import './tabs-wealth.css';
 import './tabs-annual.css';
 import './tabs-analysis.css';
 import './tabs-projects.css';
+import './tabs-trips.css';
 
 // 分頁懶載入：首屏只載入當前分頁，chart.js / 股票清單等重物按需切出獨立 chunk
 const LifeTab     = lazy(() => import('./components/tabs/LifeTab'));

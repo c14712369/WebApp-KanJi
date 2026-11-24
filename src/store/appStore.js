@@ -4,7 +4,7 @@ import {
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
   INCOME_KEY, WEALTH_PARAMS_KEY, WEALTH_HOLDINGS_KEY, WEALTH_BANKS_KEY,
   SALARY_DEFAULT_KEY, DAILY_EXP_KEY, PAYMENT_KEY, FIXED_SORT_KEY, THEME_KEY,
-  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY,
+  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY, TRIPS_KEY,
   DEFAULT_CATS, DEFAULT_LIFE_CATS, DEFAULT_LIFE_INC_CATS,
   DEFAULT_PROJECT_CATS, DEFAULT_PAYMENT_METHODS,
 } from '../lib/constants';
@@ -44,6 +44,9 @@ const initState = {
   merchantRules:        load(MERCHANT_RULES_KEY, {}),   // { merchantKey: categoryId }，GAS 匯入時套用
   deletedImportIds:     load(DELETED_IMPORT_KEY, []),   // 使用者刪掉的明細墓碑（手動＋匯入），避免同步/重新匯入讓它復活
   lifeCurrentMonth: new Date().toISOString().slice(0, 7),
+
+  // 旅程：{ id, name, startDate, endDate, currency }；明細用 tripId 或日期歸屬（見 lib/trips.js）
+  trips:              load(TRIPS_KEY, []),
 
   // Projects
   projects:           load(PROJECTS_KEY,    []),
@@ -132,6 +135,16 @@ export const useAppStore = create((set, get) => {
       const next = get().lifeExpenses.map(e => e.id === id ? { ...e, ...data, ...edited } : e);
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
+    // 多筆各自修改（旅程換算外幣用）：每筆依 id 改「目前」的資料，只存一次；不接受整份清單
+    patchLifeExpenses: (patches) => {
+      const byId = new Map((patches || []).map(p => [p.id, p.patch]));
+      if (!byId.size) return;
+      const now = Date.now();
+      const next = get().lifeExpenses.map(e => byId.has(e.id)
+        ? { ...e, ...byId.get(e.id), ...(isImportedId(e.id) ? { _editedAt: now } : {}) }
+        : e);
+      save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
+    },
     deleteLifeExpense: (id) => {
       const removed = get().lifeExpenses.filter(e => e.id === id || e._linkedExpenseId === id).map(e => e.id);
       const next = get().lifeExpenses.filter(e => e.id !== id && e._linkedExpenseId !== id);
@@ -159,6 +172,15 @@ export const useAppStore = create((set, get) => {
     applyCloudMerge: ({ lifeExpenses, merchantRules, deletedImportIds = get().deletedImportIds }) => {
       save(LIFE_EXP_KEY, lifeExpenses); save(MERCHANT_RULES_KEY, merchantRules); save(DELETED_IMPORT_KEY, deletedImportIds);
       set({ lifeExpenses, merchantRules, deletedImportIds });
+    },
+
+    // ── Trips（單筆新增／修改／刪除，不拿整份清單覆蓋；刪旅程不動明細，掛在上面的 tripId 會自動退回依日期歸屬）──
+    addTrip:    (t) => { const next = [...get().trips, t]; save(TRIPS_KEY, next); stamp(); set({ trips: next }); },
+    updateTrip: (id, data) => { const next = get().trips.map(t => t.id === id ? { ...t, ...data } : t); save(TRIPS_KEY, next); stamp(); set({ trips: next }); },
+    removeTrip: (id) => {
+      const next = get().trips.filter(t => t.id !== id);
+      console.log(`[trips] 刪除旅程 ${id}，剩 ${next.length} 趟（明細不動）`);
+      save(TRIPS_KEY, next); stamp(); set({ trips: next });
     },
 
     // ── Projects ──
@@ -190,6 +212,7 @@ export const useAppStore = create((set, get) => {
       if (data.lifeIncomeCategories) save(LIFE_INC_CAT_KEY,   data.lifeIncomeCategories);
       if (data.lifeBudgets)          save(LIFE_BDG_KEY,       data.lifeBudgets);
       if (data.merchantRules)        save(MERCHANT_RULES_KEY, data.merchantRules);
+      if (data.trips)                save(TRIPS_KEY,          data.trips);
       if (data.projects)             save(PROJECTS_KEY,       data.projects);
       if (data.projectExpenses)      save(PROJECT_EXP_KEY,    data.projectExpenses);
       if (data.projectCategories)    save(PROJECT_CAT_KEY,    data.projectCategories);
@@ -212,6 +235,7 @@ export const useAppStore = create((set, get) => {
         lifeIncomeCategories: data.lifeIncomeCategories ?? get().lifeIncomeCategories,
         lifeBudgets:          data.lifeBudgets          ?? get().lifeBudgets,
         merchantRules:        data.merchantRules        ?? get().merchantRules,
+        trips:                data.trips                ?? get().trips,
         projects:             data.projects             ?? get().projects,
         projectExpenses:      data.projectExpenses      ?? get().projectExpenses,
         projectCategories:    data.projectCategories    ?? get().projectCategories,

@@ -2,6 +2,9 @@ import { motion } from 'framer-motion';
 import IconRenderer from '../../lib/IconRenderer';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { formatAmount, fmtIncomeMoney } from '../../lib/utils';
+import { formatForeign } from '../../lib/fx';
+import { entryTripId } from '../../lib/trips';
+import { useAppStore } from '../../store/appStore';
 
 /**
  * 明細列（參考 MOZE）：左大圓分類圖示｜中間標題（備註/店家）＋副標｜右金額＋分類、付款方式小標籤。
@@ -17,8 +20,13 @@ export default function LifeEntryRow({
   lifeIncomeCategories = [],
   paymentMethods = [],
   onEdit,
+  hideTrip = false,   // 旅程頁裡每筆都是同一趟，不再標飛機
+  hideCategory = false, // 已篩成單一分類時，副標不再重複寫分類名
 }) {
   const isIncome = entry.type === 'income';
+  const isPrivacyMode = useAppStore(s => s.isPrivacyMode);
+  const trips = useAppStore(s => s.trips);
+  const tripName = !isIncome && !hideTrip ? (trips.find(t => t.id === entryTripId(entry, trips))?.name || '') : '';
   const cat = isIncome
     ? (lifeIncomeCategories.find(c => c.id === entry.categoryId) || { name: '收入', color: '#3D7A5A' })
     : (lifeCategories.find(c => c.id === entry.categoryId) || { name: '支出', color: '#6B6B6B' });
@@ -30,10 +38,15 @@ export default function LifeEntryRow({
     : '';
   const note = (noteLabel || entry.note || '').trim();
   const title = note || cat.name;
-  const metaText = [note ? cat.name : null, paymentLabel].filter(Boolean).join(' · ');
+  const metaText = [note && !hideCategory ? cat.name : null, paymentLabel].filter(Boolean).join(' · ');
   const amountType = isIncome ? 'income' : 'expense';
   // 百萬以上縮小一號，避免擠出固定寬的金額欄
   const isLongAmount = String(Math.round(Math.abs(Number(entry.amount) || 0))).length >= 7;
+
+  // 外幣筆：金額欄下多一行原幣（收入在隱藏模式下逐位換星號，寬度不變）
+  const isForeign = !!(entry.currency && entry.currency !== 'TWD' && Number(entry.originalAmount) > 0);
+  const origText = isForeign ? formatForeign(entry.originalAmount, entry.currency) : '';
+  const origShown = isIncome && isPrivacyMode ? origText.replace(/\d/g, '*') : origText;
 
   const open = () => onEdit && onEdit(entry);
 
@@ -48,7 +61,7 @@ export default function LifeEntryRow({
       data-entry-id={entry.id}
       role={onEdit ? 'button' : undefined}
       tabIndex={onEdit ? 0 : undefined}
-      aria-label={`${isIncome ? '收入' : '支出'} ${cat.name}${note ? ` ${note}` : ''} ${formatAmount(entry.amount, amountType)} 元，點一下編輯`}
+      aria-label={`${isIncome ? '收入' : '支出'} ${cat.name}${note ? ` ${note}` : ''} ${formatAmount(entry.amount, amountType)} 元${isForeign ? `（${origShown}）` : ''}，點一下編輯`}
       onClick={open}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}
     >
@@ -61,8 +74,9 @@ export default function LifeEntryRow({
       {/* 左側兩行：標題＋小字「分類 · 付款」（標題已是分類名時不重複）；右側只放金額，各列比例固定 */}
       <span className="kk-entry-main">
         <span className="kk-entry-title" title={title}>{title}</span>
-        {(metaText || reward) && (
+        {(metaText || reward || tripName) && (
           <span className="kk-entry-meta" title={metaText || undefined}>
+            {tripName && <i className="fa-solid fa-plane kk-entry-trip" aria-label={`旅程：${tripName}`}></i>}
             {metaText}
             {reward && (
               <span className="kk-entry-reward">
@@ -73,8 +87,15 @@ export default function LifeEntryRow({
         )}
       </span>
 
-      <span className={`kk-entry-amount ${isIncome ? 'is-income' : 'is-expense'}${isLongAmount ? ' is-long' : ''}`}>
-        $<AnimatedNumber value={Math.round(entry.amount)} format={v => formatAmount(v, amountType)} />
+      <span className={`kk-entry-amount ${isIncome ? 'is-income' : 'is-expense'}${isLongAmount ? ' is-long' : ''}${isForeign ? ' has-orig' : ''}`}>
+        {isForeign ? (
+          <>
+            <span className="kk-entry-amt-main">$<AnimatedNumber value={Math.round(entry.amount)} format={v => formatAmount(v, amountType)} /></span>
+            <span className="kk-entry-orig">{origShown}</span>
+          </>
+        ) : (
+          <>$<AnimatedNumber value={Math.round(entry.amount)} format={v => formatAmount(v, amountType)} /></>
+        )}
       </span>
     </motion.div>
   );

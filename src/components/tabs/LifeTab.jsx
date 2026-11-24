@@ -8,9 +8,10 @@ import AnimatedNumber from '../../lib/AnimatedNumber';
 import IconRenderer from '../../lib/IconRenderer';
 import { sortEntries } from '../../lib/lifeGrouping';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { isImportedId } from '../../lib/syncMerge';
+import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
 import { computeSpendPace } from '../../lib/spendPace';
 import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
+import { splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, TRIP_COLOR } from '../../lib/trips';
 import LifeEntryRow from './LifeEntryRow';
 import CalendarView from './CalendarView';
 import EntrySheet from './EntrySheet';
@@ -140,13 +141,14 @@ export default function LifeTab() {
   const {
     items,
     lifeExpenses, lifeCategories, lifeIncomeCategories,
-    lifeBudgets, lifeCurrentMonth, paymentMethods,
+    lifeBudgets, lifeCurrentMonth, paymentMethods, trips,
     lifePendingCatId,
-    addLifeExpense, updateLifeExpense, deleteLifeExpense, setLifeCurrentMonth,
+    addLifeExpense, updateLifeExpense, setLifeCurrentMonth,
     setLifePendingCatId,
-    setLifeCategories, learnLifeCategory,
+    setLifeCategories,
     activeTab, pendingAdd, setPendingAdd,
   } = useAppStore();
+  const { saveEntry, deleteEntry } = useLifeEntryActions();
 
   // 手機版：月份切換列放進單列頁首（Header 的 #mobileHeaderSlot），不另外佔一列
   const isMobile = useMediaQuery('(max-width: 768px)');
@@ -267,18 +269,19 @@ export default function LifeTab() {
   const pct      = tInc > 0 ? Math.min(Math.round((totalSpent / tInc) * 100), 100) : 0;
   const timePct  = pace.isCurrentMonth ? Math.round((now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 100) : null;
 
-  // ── Category summary ──
-  const catSummary = lifeCategories.map(cat => {
-    const spent  = lifeExpenses.filter(e => e.categoryId === cat.id && (e.date || '').startsWith(ym) && e.type !== 'income').reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  // ── Category summary：日常與旅程拆開（都是台幣）；分類與預算只算日常，旅程整趟合成一行 ──
+  const monthSplit = splitMonthSpend(lifeExpenses, trips, ym, lifeCategories);
+  const catSummary = monthSplit.daily.map(cat => {
+    const spent  = cat.amount;
     const budget = lifeBudgets[cat.id + '|' + ym] || 0;
     return { ...cat, spent, budget, isOver: budget > 0 && spent > budget };
-  }).filter(c => c.spent > 0);
+  });
 
-  const categorizedSpent = catSummary.reduce((sum, cat) => sum + cat.spent, 0);
-  const uncategorizedSpent = Math.max(0, tExp - categorizedSpent);
+  const uncategorizedSpent = monthSplit.uncategorized;
   const expenseSegments = [
     ...catSummary.map(cat => ({ id: cat.id, label: cat.name, color: cat.color, amount: cat.spent })),
     ...(uncategorizedSpent > 0 ? [{ id: 'uncategorized', label: '未分類', color: '#8A8A8A', amount: uncategorizedSpent }] : []),
+    ...monthSplit.trips.map(t => ({ id: tripFilterId(t.id), label: `✈ ${t.name}`, color: TRIP_COLOR, amount: t.amount })),
     ...(fixedMonthly > 0 ? [{ id: 'fixed', label: '固定支出', color: '#64748B', amount: fixedMonthly }] : []),
   ];
 
@@ -301,7 +304,7 @@ export default function LifeTab() {
   );
   const calEntries = sortEntries(
     monthEntries.filter(e => {
-      if (selectedCatId !== null && e.categoryId !== selectedCatId) return false;
+      if (selectedCatId !== null && !matchesCatFilter(e, selectedCatId, trips)) return false;
       if (filterType !== 'all' && e.type !== filterType) return false;
       return true;
     }),
@@ -309,10 +312,15 @@ export default function LifeTab() {
   );
 
   // 目前的篩選（分類優先，其次類型）→ 月曆把手列顯示成可移除的膠囊
-  const selectedCatName = selectedCatId !== null ? (lifeCategories.find(c => c.id === selectedCatId)?.name || '分類') : null;
-  const filterLabel = selectedCatName
-    ? `只看${selectedCatName}`
+  const filterTripId = tripIdFromFilter(selectedCatId);
+  const selectedCatName = selectedCatId === null ? null
+    : filterTripId ? (trips.find(t => t.id === filterTripId)?.name || '旅程')
+    : (lifeCategories.find(c => c.id === selectedCatId)?.name || '分類');
+  // 旅程用小飛機代替「只看」：旅程名通常較長，360px 寬時省下兩個字才放得下
+  const filterLabel = filterTripId ? selectedCatName
+    : selectedCatName ? `只看${selectedCatName}`
     : filterType === 'expense' ? '只看支出' : filterType === 'income' ? '只看收入' : null;
+  const filterIcon = filterTripId ? 'fa-plane' : null;
   const clearFilters = () => { setSelectedCatId(null); setFilterType('all'); };
 
   // 存檔後聚焦該筆日期、捲過去並閃爍提示
@@ -340,38 +348,13 @@ export default function LifeTab() {
   };
 
   // ── CRUD handlers ──
+  // 存檔／刪除規則和旅程頁共用（hooks/useLifeEntryActions）
   const handleSaveExp = (entry) => {
-    const prev = entry.id && lifeExpenses.find(e => e.id === entry.id);
-    if (prev) {
-      // 手動改過金額/分類的自動薪資做記號，之後改薪資設定時不覆蓋
-      const salaryManual = (prev._autoSalary || prev._salaryDefault)
-        && (Number(entry.amount) !== Number(prev.amount) || entry.categoryId !== prev.categoryId)
-        ? { _salaryManual: true } : {};
-      updateLifeExpense(entry.id, { ...entry, ...salaryManual });
-      // 刷卡匯入列改分類 → 記住這家店，同店其他「其他」一起改，之後匯入自動套用
-      if (isImportedId(prev.id) && entry.type !== 'income' && prev.categoryId !== entry.categoryId) {
-        const n = learnLifeCategory(entry.id, entry.categoryId);
-        const catName = lifeCategories.find(c => c.id === entry.categoryId)?.name || '';
-        showToast(n > 0 ? `已更新，同店另外 ${n} 筆也改成「${catName}」` : `已更新，之後這家店自動歸「${catName}」`);
-      } else {
-        showToast('已更新');
-      }
-    } else {
-      addLifeExpense(entry);
-      const entryYm = (entry.date || '').slice(0, 7);
-      showToast(entryYm === ym ? '已儲存' : `已儲存到 ${Number(entryYm.slice(5, 7))} 月`);
-    }
+    saveEntry(entry, { viewYm: ym });
     setJustSavedId(entry.id);
     setExpModal(null);
   };
-  // 回傳是否真的刪了，讓編輯視窗決定要不要關閉
-  const handleDelete = async (id) => {
-    if (!await confirmDialog({ title: '刪除明細', message: '確定要刪除這筆紀錄嗎？此動作無法復原。', confirmText: '刪除' })) return false;
-    if (navigator.vibrate) navigator.vibrate(50);
-    deleteLifeExpense(id);
-    showToast('已刪除');
-    return true;
-  };
+  const handleDelete = deleteEntry;
   const openEdit = (entry) => { if (navigator.vibrate) navigator.vibrate(50); setExpModal(entry); };
   const openNew  = (type)  => { if (navigator.vibrate) navigator.vibrate(50); setNewType(type); setExpModal(newEntryDraft()); };
 
@@ -505,8 +488,14 @@ export default function LifeTab() {
           </div>
           <div className="hero-detail-item">
             <div className="detail-label"><i className="fa-solid fa-leaf"></i> 生活支出</div>
-            <div className="detail-value stat-negative" id="lifeMonthSpent">NT$ <AnimatedNumber value={Math.round(tExp)} format={fmtMoney} effect="scroll" /></div>
+            <div className="detail-value stat-negative" id="lifeMonthSpent">NT$ <AnimatedNumber value={Math.round(monthSplit.dailyTotal)} format={fmtMoney} effect="scroll" /></div>
           </div>
+          {monthSplit.tripTotal > 0 && (
+            <div className="hero-detail-item">
+              <div className="detail-label"><i className="fa-solid fa-plane"></i> 旅程支出</div>
+              <div className="detail-value stat-negative">NT$ <AnimatedNumber value={Math.round(monthSplit.tripTotal)} format={fmtMoney} effect="scroll" /></div>
+            </div>
+          )}
           {fixedMonthly > 0 && (
             <div className="hero-detail-item">
               <div className="detail-label"><i className="fa-solid fa-money-bill-wave"></i> 固定支出</div>
@@ -535,6 +524,7 @@ export default function LifeTab() {
                   entries={calEntries}
                   allEntries={monthEntries}
                   filterLabel={filterLabel}
+                  filterIcon={filterIcon}
                   onClearFilter={clearFilters}
                   selectedDate={selectedCalDate}
                   onSelectDate={setSelectedCalDate}
@@ -605,6 +595,25 @@ export default function LifeTab() {
                       </div>
                     );
                   })}
+                  {/* 旅程：整趟一行，不計入分類預算；點了月曆只看這趟 */}
+                  {monthSplit.trips.map(t => (
+                    <div key={t.id}
+                      className={`life-cat-row is-trip${selectedCatId === tripFilterId(t.id) ? ' active' : ''}`}
+                      onClick={() => { if (navigator.vibrate) navigator.vibrate(50); setSelectedCatId(tripFilterId(t.id)); setLifeView('exp'); }}>
+                      <div className="life-cat-row-left">
+                        <div className="life-cat-dot" style={{ background: TRIP_COLOR, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <i className="fa-solid fa-plane" style={{ color: '#fff', fontSize: '0.62rem' }} aria-hidden="true"></i>
+                        </div>
+                        <div className="life-cat-row-info">
+                          <div className="life-cat-row-name">{t.name}</div>
+                          <div className="life-cat-row-sub">旅程・不計入分類預算</div>
+                        </div>
+                      </div>
+                      <div className="life-cat-row-right">
+                        <span className="life-cat-row-amt">NT$ <AnimatedNumber value={t.amount} format={fmtMoney} /></span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </motion.div>
@@ -625,6 +634,7 @@ export default function LifeTab() {
             lifeCategories={lifeCategories}
             lifeIncomeCategories={lifeIncomeCategories}
             paymentMethods={paymentMethods}
+            trips={trips}
             currentMonth={ym}
             initial={expModal.id ? expModal : { type: newType, ...(expModal.date ? { date: expModal.date } : {}) }}
             onClose={() => setExpModal(null)}

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import TripsView from './TripsView';
+import { splitMonthSpend, tripFilterId, TRIP_COLOR } from '../../lib/trips';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
 import { calculateExpenseForMonth, prefetchFXRates, showToast, formatAmount } from '../../lib/utils';
@@ -125,7 +127,7 @@ const RANGES = [3, 6, 12, 24].map(n => ({ value: n, label: `${n} 個月`, aria: 
 // ── Main AnalysisTab ──────────────────────────────────────────────────────────
 export default function AnalysisTab() {
   const {
-    items, categories, lifeExpenses, lifeCategories,
+    items, categories, lifeExpenses, lifeCategories, trips,
     setActiveTab, setLifeCurrentMonth, setLifePendingCatId,
     projects, projectExpenses, estimatedIncome, theme, isPrivacyMode
   } = useAppStore();
@@ -239,14 +241,14 @@ export default function AnalysisTab() {
   }, [expData, chartShape, theme, view, isPrivacyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Life Category Chart ──
+  // 日常分類不含旅程；每趟旅程合成一條（點了跳到生活頁只看那趟）
   const lifeCatData = useMemo(() => {
-    const labels = [], data = [], colors = [];
-    lifeCategories.forEach(cat => {
-      const s = lifeExpenses.filter(e => e.categoryId === cat.id && (e.date || '').startsWith(ym) && e.type !== 'income').reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-      if (s > 0) { labels.push(cat.name); data.push(s); colors.push(cat.color); }
-    });
-    return { labels, data, colors };
-  }, [ym, lifeExpenses, lifeCategories]);
+    const labels = [], data = [], colors = [], ids = [];
+    const split = splitMonthSpend(lifeExpenses, trips, ym, lifeCategories);
+    split.daily.forEach(c => { labels.push(c.name); data.push(c.amount); colors.push(c.color); ids.push(c.id); });
+    split.trips.forEach(t => { labels.push(`✈ ${t.name}`); data.push(t.amount); colors.push(TRIP_COLOR); ids.push(tripFilterId(t.id)); });
+    return { labels, data, colors, ids };
+  }, [ym, lifeExpenses, lifeCategories, trips]);
   const lifeEmpty = lifeCatData.data.length === 0;
 
   useEffect(() => {
@@ -265,9 +267,9 @@ export default function AnalysisTab() {
         scales: { y: yScale(), x: xScale() },
         onClick: (_, elements) => {
           if (!elements?.length) return;
-          const cat = lifeCategories.find(c => c.name === labels[elements[0].index]);
-          if (!cat) return;
-          setLifePendingCatId(cat.id);
+          const id = lifeCatData.ids[elements[0].index];
+          if (!id) return;
+          setLifePendingCatId(id);
           setLifeCurrentMonth(ym);
           setActiveTab('life');
         },
@@ -427,9 +429,9 @@ export default function AnalysisTab() {
 
   return (
     <div className="tab-content an-page">
-      {/* 分頁切換：本月 / 長期（沿用試算頁的 .wl-view-switch） */}
-      <div className="wl-view-switch" role="tablist" aria-label="分析分頁">
-        {[['month', '本月', 'fa-calendar-day'], ['long', '長期', 'fa-chart-line']].map(([id, label, icon]) => (
+      {/* 分頁切換：本月 / 長期 / 旅程（沿用試算頁的 .wl-view-switch） */}
+      <div className="wl-view-switch is-3" role="tablist" aria-label="分析分頁">
+        {[['month', '本月', 'fa-calendar-day'], ['long', '長期', 'fa-chart-line'], ['trip', '旅程', 'fa-plane']].map(([id, label, icon]) => (
           <button key={id} type="button" role="tab" aria-selected={view === id} className={view === id ? 'is-active' : ''} onClick={() => setView(id)}>
             <i className={`fa-solid ${icon}`} aria-hidden="true"></i> {label}
           </button>
@@ -591,6 +593,8 @@ export default function AnalysisTab() {
         )}
       </section>
       </>)}
+
+      {view === 'trip' && <TripsView />}
     </div>
   );
 }

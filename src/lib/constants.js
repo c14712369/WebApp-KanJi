@@ -21,6 +21,7 @@ export const WEALTH_HOLDINGS_KEY = 'wealthHoldings_v1';
 export const WEALTH_BANKS_KEY   = 'wealthBanks_v1';
 export const MERCHANT_RULES_KEY = 'sub_mgr_merchant_rules';
 export const DELETED_IMPORT_KEY = 'sub_mgr_deleted_import_ids';
+export const TRIPS_KEY          = 'sub_mgr_trips';
 
 // Default data
 export const DEFAULT_CATS = [
@@ -37,8 +38,12 @@ export const DEFAULT_LIFE_CATS = [
   { id: 'lc_util',   name: '水電費', color: '#5A9E7A', icon: 'Zap' },
   { id: 'lc_ent',    name: '娛樂', color: '#8B5CF6', icon: 'Gamepad2' },
   { id: 'lc_health', name: '醫療', color: '#D46060', icon: 'Pill' },
+  { id: 'lc_stay',   name: '住宿', color: '#4A6CB3', icon: 'BedDouble' },
   { id: 'lc_other',  name: '其他', color: '#8A8A8A', icon: 'MoreHorizontal' },
 ];
+
+// 旅程頁「一鍵新增住宿分類」用（既有使用者的分類存在本機/雲端，不能靠預設值）
+export const STAY_CATEGORY = { id: 'lc_stay', name: '住宿', color: '#4A6CB3', icon: 'BedDouble' };
 
 export const DEFAULT_LIFE_INC_CATS = [
   { id: 'lc_inc_salary', name: '薪資', color: '#5A9E7A', icon: 'Landmark' },

@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { getCycleLabel, formatAmount, toMonthlyAmount, fetchWithCache, showToast, autoFocusDesktop, confirmDialog } from '../../lib/utils';
+import { getCycleLabel, formatAmount, toMonthlyAmount, showToast, autoFocusDesktop, confirmDialog } from '../../lib/utils';
 import { getNextCharge, toYmd } from '../../lib/nextCharge';
+import { fetchRateToTWD } from '../../lib/fx';
 import IconRenderer from '../../lib/IconRenderer';
 import { motion, AnimatePresence, useMotionValue, animate } from 'framer-motion';
 
@@ -54,11 +55,11 @@ function ItemModal({ categories, onClose, onSave, onDelete, initial }) {
     set('currency', curr);
     if (curr === 'TWD') { set('exchangeRate', 1); return; }
     setLoading(true);
-    try {
-      const data = await fetchWithCache(`https://api.frankfurter.app/latest?from=${curr}&to=TWD`);
-      if (data?.rates?.TWD) set('exchangeRate', parseFloat(data.rates.TWD.toFixed(4)));
-    } catch { setErrors(e => ({ ...e, exchangeRate: '匯率抓取失敗，請手動輸入' })); }
-    finally { setLoading(false); }
+    // 舊來源 frankfurter 沒有 TWD，抓了沒結果也不報錯 → 匯率停在 1；抓不到要明說請手動輸入
+    const rate = await fetchRateToTWD(curr, toYmd(new Date()));
+    if (rate) set('exchangeRate', parseFloat(rate.toFixed(4)));
+    else setErrors(e => ({ ...e, exchangeRate: '匯率抓取失敗，請手動輸入' }));
+    setLoading(false);
   }, []);
 
   const validate = () => {

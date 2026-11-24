@@ -19,6 +19,7 @@ function exportState(store) {
     lifeIncomeCategories: store.lifeIncomeCategories,
     lifeBudgets:          store.lifeBudgets,
     merchantRules:        store.merchantRules,
+    trips:                store.trips,
     projects:             store.projects,
     projectExpenses:      store.projectExpenses,
     projectCategories:    store.projectCategories,

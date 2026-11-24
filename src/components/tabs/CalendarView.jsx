@@ -30,6 +30,7 @@ export default function CalendarView({
   entries = [],
   allEntries = null,     // 未篩選的本月明細：用來算被篩選藏起幾筆（沒給就不提示）
   filterLabel = null,    // 目前篩選的說明（如「只看收入」），有值時把手列顯示可移除的膠囊
+  filterIcon = null,     // 膠囊前的小圖示（旅程用 fa-plane，代替「只看」兩字省寬度）
   onClearFilter,
   selectedDate,
   onSelectDate,
@@ -427,11 +428,12 @@ export default function CalendarView({
             {showFilterPill && (
               <button
                 type="button"
-                className="kakei-chip is-filter"
+                className={`kakei-chip is-filter${filterIcon ? ' has-lead' : ''}`}
                 onClick={clearFilter}
                 aria-label={`清除篩選：${filterLabel}`}
-                title="清除篩選"
+                title={`清除篩選：${filterLabel}`}
               >
+                {filterIcon && <i className={`fa-solid ${filterIcon}`} aria-hidden="true"></i>}
                 <span className="kakei-chip-label">{filterLabel}</span>
                 <i className="fa-solid fa-xmark" aria-hidden="true"></i>
               </button>
