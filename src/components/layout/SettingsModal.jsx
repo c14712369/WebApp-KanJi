@@ -53,6 +53,7 @@ export default function SettingsModal({ onClose, onLogin }) {
   const {
     theme, setTheme, currentUser,
     lifeCategories, setLifeCategories,
+    lifeIncomeCategories, setLifeIncomeCategories,
     categories, setCategories, setItems,
     isSyncing, syncStatus, requestSync,
   } = useAppStore();
@@ -80,8 +81,25 @@ export default function SettingsModal({ onClose, onLogin }) {
     const reassigned = cur.map(i => cats.find(c => c.id === i.categoryId) || !fallbackId ? i : { ...i, categoryId: fallbackId });
     if (reassigned.some((item, idx) => item !== cur[idx])) setItems(reassigned);
     setCategories(cats);
-    showToast('分類已儲存');
   };
+
+  // 分類管理的資料組：生活分類有支出／收入兩組，固定支出一組。usage＝用到幾筆（刪除前告知）
+  const countLife = (isIncome) => (id) => useAppStore.getState().lifeExpenses
+    .filter(e => e.categoryId === id && (e.type === 'income') === isIncome).length;
+  const lifeOrphan = () => '刪除後這些明細會顯示為未分類（灰色），金額不變。';
+  const lifeSets = [
+    { key: 'expense', label: '支出', categories: lifeCategories, onSave: setLifeCategories, usage: countLife(false), orphanNote: lifeOrphan },
+    { key: 'income', label: '收入', categories: lifeIncomeCategories, onSave: setLifeIncomeCategories, usage: countLife(true), orphanNote: lifeOrphan },
+  ];
+  const fixedSets = [{
+    key: 'fixed', label: '固定支出', categories, onSave: saveFixedCategories,
+    usage: (id) => useAppStore.getState().items.filter(i => i.categoryId === id).length,
+    orphanNote: (id) => {
+      const rest = categories.filter(c => c.id !== id);
+      const fallback = rest.find(c => c.id === 'cat_other') || rest.at(-1);
+      return fallback ? `刪除後這些固定支出會改到「${fallback.name}」。` : '';
+    },
+  }];
 
   const handleLogout = async () => {
     vibrate();
@@ -92,10 +110,10 @@ export default function SettingsModal({ onClose, onLogin }) {
   // 載入中只留遮罩，背景不閃
   const overlayFallback = <div className="modal-overlay active" aria-hidden="true" />;
   if (sub === 'life') {
-    return <Suspense fallback={overlayFallback}><CategoryManageModal title="生活支出分類" categories={lifeCategories} type="expense" onClose={back} onSave={setLifeCategories} /></Suspense>;
+    return <Suspense fallback={overlayFallback}><CategoryManageModal title="生活收支分類" sets={lifeSets} onClose={back} /></Suspense>;
   }
   if (sub === 'fixed') {
-    return <Suspense fallback={overlayFallback}><CategoryManageModal title="固定支出分類" categories={categories} type="expense" onClose={back} onSave={saveFixedCategories} /></Suspense>;
+    return <Suspense fallback={overlayFallback}><CategoryManageModal title="固定支出分類" sets={fixedSets} onClose={back} /></Suspense>;
   }
   if (sub === 'identity') {
     return <IdentityModal onClose={back} />;
@@ -114,7 +132,7 @@ export default function SettingsModal({ onClose, onLogin }) {
 
         <div className="settings-group-label">分類</div>
         <div className="settings-group">
-          <Row icon="fa-leaf" iconBg="#5B8C5A" label="生活支出分類" hint={`${lifeCategories.length} 個分類`} accessory={Chevron} onClick={() => open('life')} />
+          <Row icon="fa-leaf" iconBg="#5B8C5A" label="生活收支分類" hint={`支出 ${lifeCategories.length} 個・收入 ${lifeIncomeCategories.length} 個`} accessory={Chevron} onClick={() => open('life')} />
           <Row icon="fa-money-bill-wave" iconBg="#C17B2E" label="固定支出分類" hint={`${categories.length} 個分類`} accessory={Chevron} onClick={() => open('fixed')} />
         </div>
 

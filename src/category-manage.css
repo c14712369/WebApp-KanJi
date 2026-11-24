@@ -1,0 +1,235 @@
+/* 分類管理（CategoryManageModal.jsx）：沿用設定抽屜的 iOS 分組樣式。
+   抽屜高度固定，清單／編輯、支出／收入切換時不跳動，內容在 .cm-body 內捲動。 */
+
+.cm-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: min(80vh, 720px);
+  overflow: hidden;
+}
+@media (max-width: 768px) {
+  .cm-sheet { height: min(88dvh, 760px); max-height: none; }
+}
+
+.cm-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: cm-in 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes cm-in { from { opacity: 0; transform: translateY(6px); } }
+
+.cm-sheet h2:focus, .cm-sheet h2:focus-visible { outline: none; }
+/* 換畫面時焦點移到標題只為了讓螢幕閱讀器知道換頁；標題不可點，不畫焦點框 */
+
+.cm-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -16px;
+  padding: 4px 16px 8px;
+}
+
+/* 編輯頁頁首：取消｜標題｜儲存 */
+.cm-edit-head {
+  display: grid;
+  grid-template-columns: minmax(56px, auto) 1fr minmax(56px, auto);
+  gap: 8px;
+}
+.cm-edit-head h2 { text-align: center; font-size: 1.15rem; }
+.cm-edit-head .settings-done:last-child { justify-self: end; }
+.cm-cancel { justify-self: start; color: var(--text-muted); font-weight: 500; }
+
+.cm-seg { margin-top: 12px; }
+
+/* ── 清單 ── */
+.cm-list { margin: 0; padding: 0; list-style: none; }
+.cm-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--card-bg);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cm-row + .cm-row::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; left: 86px;
+  height: 1px;
+  background: var(--border-color);
+}
+.cm-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 52px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  cursor: grab;
+  touch-action: none;
+}
+.cm-handle:active { cursor: grabbing; }
+.cm-handle:focus-visible,
+.cm-row-main:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; border-radius: var(--radius); }
+.cm-row-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 14px 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.cm-row-main:hover { background: var(--hover-bg); }
+.cm-row-name { flex: 1; min-width: 0; }
+.cm-row-count {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cm-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+.cm-chip.is-lg { width: 52px; height: 52px; border-radius: 14px; box-shadow: var(--shadow-sm); }
+
+.cm-add-group { margin-top: 12px; }
+.cm-add { color: var(--primary-color); font-weight: 600; }
+.cm-add .settings-row-label { font-weight: 600; }
+.cm-add-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1.5px dashed color-mix(in srgb, var(--primary-color) 60%, transparent);
+  font-size: 0.8rem;
+}
+
+/* ── 編輯 ── */
+.cm-name-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 12px;
+}
+.cm-name-row .cm-chip.is-lg { margin-top: 22px; }
+.cm-name-field { flex: 1; min-width: 0; }
+.cm-name-field .form-input[aria-invalid="true"] { border-color: var(--expense-ink); }
+.cm-error { margin: 6px 2px 0; font-size: 0.85rem; color: var(--expense-ink); }
+
+.cm-label { margin-top: 18px; }
+
+.cm-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 2px;
+}
+.cm-swatch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cm-swatch::before {
+  content: '';
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.15s;
+}
+.cm-swatch:active::before { transform: scale(0.9); }
+.cm-swatch.is-on::before {
+  box-shadow: 0 0 0 2px var(--bg-color), 0 0 0 4px var(--text-main);
+}
+.cm-swatch:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; border-radius: var(--radius); }
+.cm-swatch.is-custom::before {
+  background: var(--sw, transparent);
+  border: 1.5px dashed var(--text-muted);
+  box-sizing: border-box;
+}
+.cm-swatch.is-custom.is-on::before { border: 0; }
+.cm-swatch.is-custom > i {
+  position: absolute;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.cm-swatch input[type="color"],
+.cm-ink-custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+}
+.cm-swatch:focus-within { outline: 2px solid var(--primary-color); outline-offset: -2px; border-radius: var(--radius); }
+
+.cm-ink-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+.cm-ink-row .cm-label { margin: 0; }
+.cm-ink-seg { flex: 0 1 auto; }
+.cm-ink-seg .fx-seg-btn { min-height: 36px; padding: 0 12px; gap: 6px; }
+.cm-ink-custom { position: relative; overflow: hidden; }
+.cm-ink-custom:focus-within { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+.cm-ink-dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-main) 35%, transparent);
+}
+
+.cm-hint { min-height: 1.3em; margin: 4px 2px 0; font-size: 0.8rem; color: var(--text-muted); }
+.cm-hint.is-warn { color: var(--expense-ink); }
+.cm-hint + .cm-label { margin-top: 8px; }
+
+.cm-delete-group { margin: 24px 0 8px; }
+.cm-delete-group .settings-row:disabled { cursor: not-allowed; }
+.cm-delete-group .settings-row:disabled .settings-row-label { color: var(--text-muted); font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-view { animation: none; }
+  .cm-swatch::before { transition: none; }
+}
