@@ -73,6 +73,22 @@ test('只算支出：手動指定＋日期內，排除收入與手動排除', ()
   assert.equal(s.count, 4);
   assert.deepEqual(s.entries.map(e => e.id), ['c', 'd', 'b', 'a']); // 新到舊
 });
+test('同一天依金額由大到小（不看記錄順序、不看分類）', () => {
+  const day = [
+    { id: 'small', type: 'expense', amount: 150, categoryId: 'lc_food', date: '2026-11-19' },
+    { id: 'big', type: 'expense', amount: 1915, categoryId: 'lc_stay', date: '2026-11-19' },
+    { id: 'mid', type: 'expense', amount: 497, categoryId: 'lc_food', date: '2026-11-19' },
+    { id: 'next', type: 'expense', amount: 50, categoryId: 'lc_food', date: '2026-11-20' },
+  ];
+  assert.deepEqual(summarizeTrip(tokyo, day, trips, cats).entries.map(e => e.id), ['next', 'big', 'mid', 'small']);
+});
+test('同日同金額 → 依 id，順序固定不跳動', () => {
+  const tie = [
+    { id: 'b2', type: 'expense', amount: 100, categoryId: 'lc_food', date: '2026-11-19' },
+    { id: 'a1', type: 'expense', amount: 100, categoryId: 'lc_food', date: '2026-11-19' },
+  ];
+  assert.deepEqual(summarizeTrip(tokyo, tie, trips, cats).entries.map(e => e.id), ['a1', 'b2']);
+});
 test('日均以旅程天數算', () => {
   const s = summarizeTrip(tokyo, entries, trips, cats);
   assert.equal(s.days, 9);

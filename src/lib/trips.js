@@ -41,12 +41,15 @@ export function tripDays(trip) {
 }
 
 /**
- * 一趟旅程的彙總：總額、筆數、天數、日均、分類拆解（大到小、含占比）、外幣原幣小計、明細（新到舊）。
+ * 一趟旅程的彙總：總額、筆數、天數、日均、分類拆解（大到小、含占比）、外幣原幣小計、明細（新到舊，同日金額大到小）。
  */
 export function summarizeTrip(trip, entries, trips, categories = []) {
+  // 新到舊；同一天依金額由大到小（使用者 2026-11-24 定），同金額依 id 讓順序固定
   const list = (entries || [])
     .filter(e => e && e.type !== 'income' && entryTripId(e, trips) === trip.id)
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '')
+      || (Number(b.amount) || 0) - (Number(a.amount) || 0)
+      || String(a.id || '').localeCompare(String(b.id || '')));
   const total = list.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const days = tripDays(trip);
 
