@@ -41,7 +41,7 @@ html {
   height: 60px;
   border-radius: 50%;
   background: var(--accent-color);
-  color: #fff;
+  color: var(--on-accent);
   border: none;
   display: flex;
   align-items: center;
@@ -122,7 +122,7 @@ body.scrolling-down .fab {
 .sort-chip.active {
   background: var(--primary-color);
   border-color: var(--primary-color);
-  color: #fff;
+  color: var(--on-primary);
   font-weight: 600;
 }
 
@@ -357,7 +357,7 @@ body.scrolling-down .fab {
 .confirm-btn-ok {
   background: var(--primary-color);
   border: 1px solid var(--primary-color);
-  color: #fff;
+  color: var(--on-primary);
   font-weight: 600;
 }
 .confirm-btn-ok.danger {
@@ -640,7 +640,7 @@ button.settings-row:active { background: var(--bg-color); }
 .settings-version-btn.is-update {
   border-color: var(--accent-color);
   background: var(--accent-color);
-  color: #fff;
+  color: var(--on-accent);
 }
 .settings-version-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 @media (prefers-reduced-motion: reduce) { .update-banner-dot::after { animation: none; } }

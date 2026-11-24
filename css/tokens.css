@@ -8,6 +8,8 @@
     /* ── 主色系 #27374D #526D82 #9DB2BF #DDE6ED ── */
     --primary-color: #526D82;
     --primary-hover: #27374D;
+    --on-primary:    #fff;      /* 主色底上的文字 */
+    --on-accent:     #fff;      /* 琥珀底上的圖示／文字 */
     --accent-color:  #C17B2E;      /* 暖琥珀，與冷藍互補 */
     --secondary-color: #9DB2BF;
     --bg-color:    #DDE6ED;
@@ -37,6 +39,8 @@
 [data-theme="dark"] {
     --primary-color:  #9DB2BF;
     --primary-hover:  #DDE6ED;
+    --on-primary:     #181F2A;   /* 深色主色偏淺，白字只有 2.2:1，改深字 7.5:1 */
+    --on-accent:      #181F2A;   /* 深色琥珀偏亮，白色只有 2.6:1，改深色 6.4:1 */
     --accent-color:   #D4944A;
     --secondary-color: #526D82;
     --bg-color:    #181F2A;

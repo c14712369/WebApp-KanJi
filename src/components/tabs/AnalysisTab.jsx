@@ -6,6 +6,8 @@ import { useAppStore } from '../../store/appStore';
 import { calculateExpenseForMonth, prefetchFXRates, showToast, formatAmount } from '../../lib/utils';
 import ChartEmpty from '../ui/ChartEmpty';
 import { sumProjectExpenses, projectExpenseYears } from '../../lib/projectSpend';
+import { lifeMonthOverMonth } from '../../lib/monthCompare';
+import { toYmd } from '../../lib/nextCharge';
 
 Chart.register(...registerables);
 
@@ -413,17 +415,8 @@ export default function AnalysisTab() {
     });
   }, [annualData, annualEmpty, theme, view, isPrivacyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 月對月：生活費較上月
-  const mom = (() => {
-    const [y, m] = ym.split('-').map(Number);
-    const prev = new Date(y, m - 2, 1);
-    const prevYm = prev.getFullYear() + '-' + String(prev.getMonth() + 1).padStart(2, '0');
-    const currLife = getLifeExpForMonth(lifeExpenses, ym);
-    const prevLife = getLifeExpForMonth(lifeExpenses, prevYm);
-    if (!prevLife) return null;
-    const delta = currLife - prevLife;
-    return { delta, pct: Math.round(Math.abs(delta / prevLife) * 100), up: delta > 0 };
-  })();
+  // 月對月：本月還沒過完就比上月同期（1 日到同一天），過完的月份整月比整月
+  const mom = lifeMonthOverMonth(lifeExpenses, ym, toYmd(now));
 
   const loadingBox = (h) => <div className="an-chart-wait" style={{ height: h }} aria-hidden="true" />;
 
@@ -450,9 +443,9 @@ export default function AnalysisTab() {
           <i className="fa-solid fa-calendar-day" aria-hidden="true"></i> 本月
         </button>
         {mom && (
-          <div className={`an-mom ${mom.up ? 'is-up' : 'is-down'}`}>
+          <div className={`an-mom ${mom.up ? 'is-up' : 'is-down'}`} title={mom.range ? `本月與上月的 ${mom.range}相比` : '整月相比'}>
             <i className={`fa-solid fa-arrow-trend-${mom.up ? 'up' : 'down'}`} aria-hidden="true"></i>
-            生活費較上月 {mom.up ? '+' : '-'}{mom.pct}%（{mom.up ? '+' : '-'}NT$ {formatAmount(Math.abs(Math.round(mom.delta)))}）
+            生活費{mom.label} {mom.up ? '+' : '-'}{mom.pct}%（{mom.up ? '+' : '-'}NT$ {formatAmount(Math.abs(Math.round(mom.delta)))}）
           </div>
         )}
       </div>

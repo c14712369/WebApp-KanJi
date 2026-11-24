@@ -100,7 +100,7 @@
     height: 56px;
     border-radius: 50%;
     background: var(--accent-color);
-    color: #fff;
+    color: var(--on-accent);
     border: none;
     display: flex;
     align-items: center;
@@ -125,7 +125,7 @@
     height: 60px;
     border-radius: 50%;
     background: var(--accent-color);
-    color: #fff;
+    color: var(--on-accent);
     border: none;
     display: flex;
     align-items: center;
@@ -175,7 +175,7 @@
         border: 0;
         border-radius: 50%;
         background: var(--accent-color);
-        color: #fff;
+        color: var(--on-accent);
         font-size: 1.35rem;
         box-shadow: 0 0 0 5px var(--bg-color), 0 8px 18px rgba(193, 123, 46, 0.38);
         cursor: pointer;

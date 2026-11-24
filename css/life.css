@@ -440,7 +440,7 @@
 
 .type-btn.active {
     background: var(--primary-color);
-    color: #fff;
+    color: var(--on-primary);
 }
 
 .type-btn.active.income-mode {
@@ -689,13 +689,13 @@ body.modal-open {
 
 .cpb-op-active {
     background: var(--primary-color) !important;
-    color: #fff !important;
+    color: var(--on-primary) !important;
 }
 
 /* = button */
 .cpb-eq {
     background: var(--primary-color);
-    color: #fff;
+    color: var(--on-primary);
     font-size: 1.4rem;
     font-weight: 700;
 }
