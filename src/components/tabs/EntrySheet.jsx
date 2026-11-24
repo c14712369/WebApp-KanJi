@@ -4,6 +4,7 @@ import { motion, useDragControls, useReducedMotion } from 'framer-motion';
 import IconRenderer from '../../lib/IconRenderer';
 import { OPS, pressKey, evaluateExpr, hasOperator, formatExpr, exprFromAmount } from '../../lib/calcPad';
 import { NO_TRIP, tripForDate, sheetTripDefault, tripIdToSave, sortTrips, formatTripRange } from '../../lib/trips';
+import { confirmsTwdOnEdit } from '../../lib/tripFx';
 import { CURRENCIES, currencyMeta, formatRate, toTWD, fetchRateToTWD, entryAmountFields } from '../../lib/fx';
 
 /**
@@ -245,6 +246,8 @@ export default function EntrySheet({
       id: initial?.id || crypto.randomUUID(),
       type,
       ...entryAmountFields(amount, currency, rate, rateManual),
+      // Apple Pay 列在台幣下改了金額（代刷外幣、自己只付一部分）→ 標確認台幣，旅程卡不再提醒換算
+      ...(confirmsTwdOnEdit(isEdit ? initial : null, amount, currency) ? { currency: 'TWD' } : {}),
       categoryId: isIncome ? incCatId : catId,
       date,
       note: note.trim(),

@@ -68,6 +68,17 @@ export function planFxConversion(items, ratesByDate, { confirmTwd = [] } = {}) {
   return { patches, missingDates: [], tooMany: false };
 }
 
+/**
+ * 編輯 Apple Pay 列時，使用者在台幣下改了金額（例如代刷日圓、自己只負擔 $320）
+ * → 視為確認這筆是台幣，存檔時標 currency 'TWD'，旅程卡不再提醒換算。
+ * 只改分類、金額沒動不算確認（可能根本沒注意到幣別）；手記列、新增的明細本來就不會被提醒。
+ */
+export function confirmsTwdOnEdit(initial, amount, currency) {
+  if (!initial || currency !== 'TWD' || initial.currency) return false;
+  if (!isLiveRow(initial)) return false;
+  return Number(amount) !== Number(initial.amount);
+}
+
 /** 換算前的快照 → 復原用的逐筆修改（原本沒有的欄位明確寫 undefined，才蓋得掉換算後的值） */
 export function fxRestorePatches(beforeEntries) {
   return (beforeEntries || []).map(e => ({

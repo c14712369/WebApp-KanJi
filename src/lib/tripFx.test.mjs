@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert';
 import {
-  unconvertedTripEntries, planFxConversion, fxRestorePatches, FX_CONVERT_MAX,
+  unconvertedTripEntries, planFxConversion, fxRestorePatches, FX_CONVERT_MAX, confirmsTwdOnEdit,
 } from './tripFx.js';
 
 let passed = 0, failed = 0;
@@ -130,6 +130,25 @@ test(`超過 ${FX_CONVERT_MAX} 筆 → 標記 tooMany，不產生修改`, () => 
   const plan = planFxConversion(many, { '2026-11-15': 0.2 });
   assert.equal(plan.tooMany, true);
   assert.equal(plan.patches.length, 0);
+});
+
+console.log('編輯時確認台幣');
+test('Apple Pay 列在台幣下改了金額（代刷、自己只付 $320）→ 確認是台幣', () => {
+  assert.equal(confirmsTwdOnEdit(live('d', '2026-11-19', 1500), 320, 'TWD'), true);
+});
+test('確認後就不再列入換算提醒', () => {
+  const after = live('d', '2026-11-19', 320, { currency: 'TWD' });
+  assert.equal(unconvertedTripEntries(tokyo, [after], trips).length, 0);
+});
+test('只改分類、金額沒動 → 不算確認（可能沒注意到幣別）', () => {
+  assert.equal(confirmsTwdOnEdit(live('d', '2026-11-19', 1500), 1500, 'TWD'), false);
+});
+test('改成外幣存檔 → 不需要標台幣', () => {
+  assert.equal(confirmsTwdOnEdit(live('d', '2026-11-19', 1500), 1500, 'JPY'), false);
+});
+test('手記列、新增的明細 → 不標（本來就不會被提醒）', () => {
+  assert.equal(confirmsTwdOnEdit(manual('m', '2026-11-19', 500), 300, 'TWD'), false);
+  assert.equal(confirmsTwdOnEdit(null, 300, 'TWD'), false);
 });
 
 console.log('復原');

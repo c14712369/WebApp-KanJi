@@ -43,7 +43,11 @@ export default function TripFxConvertModal({ trip, items, onClose, onConfirm }) 
   const missing = chosen.filter(it => !(rates[rateKey(it)] > 0));
   const allOn = chosen.length === items.length;
   const totalAfter = chosen.reduce((s, it) => s + (toTWD(it.original, rates[rateKey(it)]) || 0), 0);
-  const canSubmit = chosen.length > 0 && !loading && missing.length === 0;
+  // 預設勾了但被取消的 Apple Pay 筆 → 當作確認是台幣，之後不再提醒（後端待補匯率的一定是外幣，不算）
+  const confirmTwd = items.filter(it => it.suggested && !it.entry.fxPending && !selected.has(it.entry.id));
+  // 全部取消勾選也能送出：只把它們標成台幣（例如代刷、只是自己的份是台幣）
+  const markOnly = chosen.length === 0 && confirmTwd.length > 0;
+  const canSubmit = markOnly || (chosen.length > 0 && !loading && missing.length === 0);
 
   const toggle = (id) => setSelected((prev) => {
     const next = new Set(prev);
@@ -54,8 +58,6 @@ export default function TripFxConvertModal({ trip, items, onClose, onConfirm }) 
 
   const submit = () => {
     if (!canSubmit) return;
-    // 預設勾了但被取消的 Apple Pay 筆 → 當作確認是台幣，之後不再提醒
-    const confirmTwd = items.filter(it => it.suggested && !selected.has(it.entry.id));
     onConfirm(chosen, rates, confirmTwd);
   };
 
@@ -128,9 +130,11 @@ export default function TripFxConvertModal({ trip, items, onClose, onConfirm }) 
         <div className="fx-item-foot">
           <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
           <button type="button" className="btn btn-primary fx-submit" onClick={submit} disabled={!canSubmit}>
-            {loading
-              ? <><i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> 抓匯率中</>
-              : <><i className="fa-solid fa-check" aria-hidden="true"></i> 換算成台幣</>}
+            {markOnly
+              ? <><i className="fa-solid fa-check" aria-hidden="true"></i> 標記為台幣</>
+              : loading
+                ? <><i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> 抓匯率中</>
+                : <><i className="fa-solid fa-check" aria-hidden="true"></i> 換算成台幣</>}
           </button>
         </div>
       </div>
