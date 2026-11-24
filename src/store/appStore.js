@@ -4,7 +4,7 @@ import {
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
   INCOME_KEY, WEALTH_PARAMS_KEY, WEALTH_HOLDINGS_KEY, WEALTH_BANKS_KEY,
   SALARY_DEFAULT_KEY, DAILY_EXP_KEY, PAYMENT_KEY, FIXED_SORT_KEY, THEME_KEY,
-  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY, TRIPS_KEY,
+  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY, TRIPS_KEY, LAST_SYNC_OK_KEY,
   DEFAULT_CATS, DEFAULT_LIFE_CATS, DEFAULT_LIFE_INC_CATS,
   DEFAULT_PROJECT_CATS, DEFAULT_PAYMENT_METHODS,
 } from '../lib/constants';
@@ -70,8 +70,12 @@ const initState = {
   // Auth
   currentUser: null,
   isSyncing:   false,
-  // 開場：偵測登入 + 首次拉取雲端資料期間顯示全螢幕遮罩
+  // 開場：偵測登入 + 首次拉取雲端資料期間顯示全螢幕遮罩（SyncOverlay 最多顯示 2.5 秒）
   isBootstrapping: hasStoredSupabaseSession(),
+  // 雲端同步結果：state 'idle' | 'ok' | 'error' | 'offline'；at＝上次成功時間（存本機，重開還看得到）
+  syncStatus: { state: 'idle', at: Number(localStorage.getItem(LAST_SYNC_OK_KEY)) || null, message: '' },
+  // 每 +1 一次就請 useSync 立刻跟雲端對一次（設定頁的「立即同步／重試」）
+  syncRequest: 0,
 
   // UI
   activeTab: 'life',
@@ -201,6 +205,16 @@ export const useAppStore = create((set, get) => {
     setCurrentUser: (user) => set({ currentUser: user }),
     setIsSyncing:   (v)    => set({ isSyncing: v }),
     setBootstrapping: (v)  => set({ isBootstrapping: v }),
+    setSyncStatus: (state, message = '') => {
+      if (state === 'ok') {
+        const at = Date.now();
+        localStorage.setItem(LAST_SYNC_OK_KEY, String(at));
+        set({ syncStatus: { state, at, message: '' } });
+      } else {
+        set({ syncStatus: { ...get().syncStatus, state, message } });
+      }
+    },
+    requestSync: () => set({ syncRequest: get().syncRequest + 1 }),
 
     // ── Bulk load (用於雲端同步下載後覆寫) ──
     loadFromCloud: (data) => {

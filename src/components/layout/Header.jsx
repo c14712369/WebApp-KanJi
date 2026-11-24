@@ -6,7 +6,9 @@ import { applyStoredIdentity } from './IdentityModal';
 import SettingsModal from './SettingsModal';
 
 export default function Header() {
-  const { activeTab, setActiveTab, isPrivacyMode, togglePrivacy, currentUser, isSyncing } = useAppStore();
+  const { activeTab, setActiveTab, isPrivacyMode, togglePrivacy, currentUser, isSyncing, syncStatus } = useAppStore();
+  const syncFailed = !!currentUser && !isSyncing && syncStatus.state === 'error';
+  const settingsLabel = isSyncing ? '設定，資料同步中' : syncFailed ? '設定，雲端同步失敗' : !currentUser ? '設定，尚未登入' : '設定';
   const [showAuth, setShowAuth]         = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -87,11 +89,12 @@ export default function Header() {
           type="button"
           className={`icon-btn header-side-btn${isSyncing ? ' is-syncing' : ''}`}
           onClick={openSettings}
-          title={isSyncing ? '設定（同步中）' : '設定'}
-          aria-label={isSyncing ? '設定，資料同步中' : '設定'}
+          title={settingsLabel}
+          aria-label={settingsLabel}
         >
           <i className={`fa-solid ${isSyncing ? 'fa-rotate fa-spin' : 'fa-gear'}`} aria-hidden="true"></i>
           {!currentUser && <span className="header-badge" aria-hidden="true"></span>}
+          {syncFailed && <span className="header-badge is-error" aria-hidden="true"></span>}
         </button>
       </header>
 

@@ -22,6 +22,7 @@ export const WEALTH_BANKS_KEY   = 'wealthBanks_v1';
 export const MERCHANT_RULES_KEY = 'sub_mgr_merchant_rules';
 export const DELETED_IMPORT_KEY = 'sub_mgr_deleted_import_ids';
 export const TRIPS_KEY          = 'sub_mgr_trips';
+export const LAST_SYNC_OK_KEY   = 'sub_mgr_last_sync_ok';
 
 // Default data
 export const DEFAULT_CATS = [

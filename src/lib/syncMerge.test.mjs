@@ -3,7 +3,7 @@
  * 驗證雲端/本地合併邏輯——GAS 匯入列（gmail_）以雲端為準，手動列以本地為準。
  */
 import assert from 'node:assert';
-import { isImportedId, mergeLifeExpenses, purgePreAprilManualExpenses, mergeDeletedIds } from './syncMerge.js';
+import { isImportedId, mergeLifeExpenses, purgePreAprilManualExpenses, mergeDeletedIds, buildPushPayload } from './syncMerge.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -111,6 +111,35 @@ test('本地刪掉的手動列有墓碑 → 雲端還在也不會回來', () => 
 test('墓碑清單取聯集去重', () => {
   assert.deepEqual(mergeDeletedIds(['a', 'b'], ['b', 'c']).sort(), ['a', 'b', 'c']);
   assert.deepEqual(mergeDeletedIds(undefined, null), []);
+});
+
+console.log('\n[buildPushPayload] 推送時保留雲端上這版不認識的欄位');
+test('舊版 App 不認識 trips → 推送時保留雲端的 trips（2026-11 旅程被洗掉的根因）', () => {
+  const cloud = { items: [1], trips: [{ id: 't1' }] };
+  const local = { items: [1, 2] };            // 舊版的 exportState 沒有 trips
+  const out = buildPushPayload(cloud, local);
+  assert.deepEqual(out.trips, [{ id: 't1' }]);
+  assert.deepEqual(out.items, [1, 2]);
+});
+test('本機認識的欄位一律以本機為準（含刻意清空的陣列）', () => {
+  const out = buildPushPayload({ trips: [{ id: 't1' }] }, { trips: [] });
+  assert.deepEqual(out.trips, []);
+});
+test('settings 逐欄合併：本機沒有的設定保留雲端的', () => {
+  const out = buildPushPayload({ settings: { theme: 'dark', futureFlag: true } }, { settings: { theme: 'light' } });
+  assert.deepEqual(out.settings, { theme: 'light', futureFlag: true });
+});
+test('雲端還沒有資料 → 就是本機的內容', () => {
+  const local = { items: [1], settings: { theme: 'light' } };
+  assert.deepEqual(buildPushPayload(null, local), local);
+  assert.deepEqual(buildPushPayload(undefined, local), local);
+});
+test('不改動傳入的物件', () => {
+  const cloud = { a: 1, settings: { x: 1 } };
+  const local = { b: 2, settings: { y: 2 } };
+  buildPushPayload(cloud, local);
+  assert.deepEqual(cloud, { a: 1, settings: { x: 1 } });
+  assert.deepEqual(local, { b: 2, settings: { y: 2 } });
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);

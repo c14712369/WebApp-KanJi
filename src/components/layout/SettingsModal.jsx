@@ -36,6 +36,17 @@ function Row({ icon, iconBg, label, hint, accessory, onClick, danger, ...aria })
   );
 }
 
+// 上次同步時間：今天 14:32／昨天 09:10／11/20 14:32
+function fmtSyncTime(ts) {
+  const d = new Date(ts);
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const day0 = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day0(new Date()) - day0(d)) / 86400000);
+  if (diff === 0) return `今天 ${hm}`;
+  if (diff === 1) return `昨天 ${hm}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+}
+
 const Chevron = <i className="fa-solid fa-chevron-right settings-row-chevron" aria-hidden="true"></i>;
 
 export default function SettingsModal({ onClose, onLogin }) {
@@ -43,7 +54,13 @@ export default function SettingsModal({ onClose, onLogin }) {
     theme, setTheme, currentUser,
     lifeCategories, setLifeCategories,
     categories, setCategories, setItems,
+    isSyncing, syncStatus, requestSync,
   } = useAppStore();
+  const syncFailed = !isSyncing && syncStatus.state === 'error';
+  const syncHint = isSyncing ? '同步中…'
+    : syncStatus.state === 'error' ? `${syncStatus.message || '同步失敗'}${syncStatus.at ? `（上次成功 ${fmtSyncTime(syncStatus.at)}）` : ''}`
+    : syncStatus.state === 'offline' ? '離線中，連上網路後會自動同步'
+    : syncStatus.at ? `上次同步 ${fmtSyncTime(syncStatus.at)}` : '尚未同步';
   // 子畫面：null = 設定列表；關閉子畫面回到列表（像 iOS 的 push / back）
   const [sub, setSub] = useState(null);
   const updateStatus = useAppUpdate(s => s.status);
@@ -116,7 +133,20 @@ export default function SettingsModal({ onClose, onLogin }) {
         <div className="settings-group">
           {currentUser ? (
             <>
-              <Row icon="fa-user" iconBg="#6B7A8F" label={currentUser.email} hint="已登入，資料自動同步" />
+              <Row icon="fa-user" iconBg="#6B7A8F" label={currentUser.email} hint="已登入" />
+              <Row
+                icon={syncFailed ? 'fa-triangle-exclamation' : 'fa-cloud'} iconBg={syncFailed ? '#B24040' : '#4A6CB3'}
+                label="雲端同步"
+                hint={<span className={syncFailed ? 'settings-hint-error' : undefined}>{syncHint}</span>}
+                onClick={() => { if (isSyncing) return; vibrate(); requestSync(); }}
+                aria-label={`雲端同步，${syncHint}，${syncFailed ? '按一下重試' : '按一下立即同步'}`}
+                accessory={
+                  <span className={`settings-version-btn${syncFailed ? ' is-update' : ''}`}>
+                    <i className={`fa-solid fa-rotate${isSyncing ? ' fa-spin' : ''}`} aria-hidden="true"></i>
+                    {syncFailed ? '重試' : '立即同步'}
+                  </span>
+                }
+              />
               <Row label="登出" danger onClick={handleLogout} />
             </>
           ) : (

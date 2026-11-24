@@ -1,13 +1,24 @@
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { AnimatePresence, motion } from 'framer-motion';
 
-// 開場遮罩：偵測登入 + 首次拉取雲端資料期間顯示，處理完才收起。
+// 網路慢時遮罩最多擋這麼久；之後收起，用本機資料先記帳，頁首齒輪轉圈代表還在同步
+const MAX_BLOCK_MS = 2500;
+
+// 開場遮罩：偵測登入 + 首次拉取雲端資料期間顯示，處理完或逾時就收起。
 export default function SyncOverlay() {
   const isBootstrapping = useAppStore(s => s.isBootstrapping);
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    if (!isBootstrapping) return;
+    const t = setTimeout(() => setExpired(true), MAX_BLOCK_MS);
+    return () => clearTimeout(t);
+  }, [isBootstrapping]);
 
   return (
     <AnimatePresence>
-      {isBootstrapping && (
+      {isBootstrapping && !expired && (
         <motion.div
           className="sync-overlay"
           initial={{ opacity: 0 }}

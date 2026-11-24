@@ -74,3 +74,16 @@ export function purgePreAprilManualExpenses(entries = [], cutoff = '2026-04-01')
     return !(isManualExpense && beforeCutoff);
   });
 }
+
+/**
+ * 推送到雲端的整包資料：本機認識的欄位以本機為準，本機不認識的欄位保留雲端的。
+ * 背景：推送是整包 upsert。2026-11 外幣／旅程上線前，舊版 App 的匯出沒有 trips，
+ * 一推送就把新版寫進雲端的旅程洗掉。之後再加新欄位時，落後一版的裝置也不會再洗掉它。
+ * settings 也逐欄合併（同樣理由）。不改動傳入的物件。
+ */
+export function buildPushPayload(cloud, local) {
+  const base = cloud && typeof cloud === 'object' ? cloud : {};
+  const out = { ...base, ...local };
+  if (base.settings || local?.settings) out.settings = { ...(base.settings || {}), ...(local?.settings || {}) };
+  return out;
+}

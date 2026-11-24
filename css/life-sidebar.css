@@ -193,6 +193,12 @@
         background: var(--accent-color);
         box-shadow: 0 0 0 2px var(--bg-color);
     }
+    /* 雲端同步失敗：同位置改紅點（設定 → 帳號 → 雲端同步 可重試） */
+    body .app-shell .mobile-header .header-badge.is-error {
+        width: 8px;
+        height: 8px;
+        background: var(--danger-color);
+    }
 
     body .app-shell .mobile-header .header-center {
         display: flex;

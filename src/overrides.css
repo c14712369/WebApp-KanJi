@@ -504,6 +504,8 @@ button.settings-row:active { background: var(--bg-color); }
   white-space: nowrap;
 }
 .settings-row-hint { font-size: 0.75rem; color: var(--text-muted); }
+/* 雲端同步失敗的說明：用支出紅墨水色（淺深色都 ≥4.5:1），不用 danger 底色紅 */
+.settings-row-hint .settings-hint-error { color: var(--expense-ink); }
 .settings-row-chevron { font-size: 0.75rem; color: var(--text-muted); opacity: 0.7; }
 
 /* iOS 樣式開關 */

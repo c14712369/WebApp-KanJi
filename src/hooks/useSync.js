@@ -1,7 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAppStore } from '../store/appStore';
-import { mergeLifeExpenses, mergeMerchantRules, mergeDeletedIds, purgePreAprilManualExpenses } from '../lib/syncMerge';
+import { mergeLifeExpenses, mergeMerchantRules, mergeDeletedIds, purgePreAprilManualExpenses, buildPushPayload } from '../lib/syncMerge';
+
+// 拉雲端最多等這麼久；超過就算逾時，App 照常用本機資料，設定頁可按「重試」
+const PULL_TIMEOUT_MS = 15000;
 import {
   STORAGE_KEY, CAT_KEY, LIFE_EXP_KEY, LIFE_CAT_KEY, LIFE_INC_CAT_KEY,
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
@@ -38,7 +41,7 @@ function exportState(store) {
 
 export function useSync() {
   const store = useAppStore();
-  const { setCurrentUser, setIsSyncing, setBootstrapping, loadFromCloud, lastLocalUpdate } = store;
+  const { setCurrentUser, setIsSyncing, setBootstrapping, setSyncStatus, loadFromCloud, lastLocalUpdate, syncRequest } = store;
   const isFetching = useRef(false);
   const syncTimer  = useRef(null);
   const lastSync   = useRef(0);
@@ -46,7 +49,8 @@ export function useSync() {
   // ── push to Supabase ────────────────────────────────────────────────────
   const pushToCloud = useCallback(async (force = false) => {
     const user = useAppStore.getState().currentUser;
-    if (!user || isFetching.current || !navigator.onLine) return;
+    if (!user || isFetching.current) return;
+    if (!navigator.onLine) { setSyncStatus('offline'); return; }
     const now = Date.now();
     if (!force && now - lastSync.current < 2000) return;
     lastSync.current = now;
@@ -56,7 +60,11 @@ export function useSync() {
       // 否則 App 開著時用舊的本地資料整份覆蓋，會把它們洗掉。讀取失敗就不推送。
       const { data: cloud, error: readErr } = await supabase
         .from('user_backups').select('app_data').eq('user_id', user.id).maybeSingle();
-      if (readErr) { console.error('推送前讀取雲端失敗，暫停推送:', readErr.message); return; }
+      if (readErr) {
+        console.error('推送前讀取雲端失敗，暫停推送:', readErr.message);
+        setSyncStatus('error', '讀不到雲端，這次先不上傳');
+        return;
+      }
       if (cloud?.app_data) {
         const s = useAppStore.getState();
         const deletedImportIds = mergeDeletedIds(s.deletedImportIds, cloud.app_data.deletedImportIds);
@@ -69,17 +77,24 @@ export function useSync() {
         }
       }
 
+      // 整包 upsert，但雲端上這版不認識的欄位要留著（舊版 App 曾因此洗掉旅程）
       const { error } = await supabase.from('user_backups').upsert({
         user_id:    user.id,
-        app_data:   exportState(useAppStore.getState()),
+        app_data:   buildPushPayload(cloud?.app_data, exportState(useAppStore.getState())),
         updated_at: new Date().toISOString(),
       });
-      if (error) console.error('雲端同步失敗:', error.message);
-      else console.log('雲端同步成功', new Date().toLocaleTimeString());
+      if (error) {
+        console.error('雲端同步失敗:', error.message);
+        setSyncStatus('error', '上傳到雲端失敗');
+      } else {
+        console.log('雲端同步成功', new Date().toLocaleTimeString());
+        setSyncStatus('ok');
+      }
     } catch (e) {
       console.error('Sync error:', e);
+      setSyncStatus('error', '上傳到雲端失敗，請檢查網路');
     }
-  }, []);
+  }, [setSyncStatus]);
 
   // ── debounced trigger ───────────────────────────────────────────────────
   const triggerSync = useCallback(() => {
@@ -98,24 +113,36 @@ export function useSync() {
   // ── pull from Supabase ─────────────────────────────────────────────────
   const pullFromCloud = useCallback(async () => {
     const user = useAppStore.getState().currentUser;
-    if (!user || !navigator.onLine) return;
+    if (!user) return;
+    if (!navigator.onLine) {
+      // 離線開 App：別讓開場遮罩一直擋著，連上網路時 online 事件會再拉一次
+      window._appInitializing = false;
+      setBootstrapping(false);
+      setSyncStatus('offline');
+      return;
+    }
 
     isFetching.current = true;
     window._appInitializing = true;
     if (syncTimer.current) { clearTimeout(syncTimer.current); syncTimer.current = null; }
 
     setIsSyncing(true);
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), PULL_TIMEOUT_MS);
     try {
       const { data, error } = await supabase
         .from('user_backups')
         .select('app_data, updated_at')
         .eq('user_id', user.id)
+        .abortSignal(ctrl.signal)
         .single();
 
       if (error && error.code !== 'PGRST116') {
         console.error('讀取雲端失敗:', error.message);
+        setSyncStatus('error', ctrl.signal.aborted ? '連線逾時，雲端資料還沒拿到' : '讀取雲端失敗');
         return;
       }
+      setSyncStatus('ok');
 
       if (data?.app_data) {
         const cloudTs = new Date(data.updated_at).getTime();
@@ -176,13 +203,20 @@ export function useSync() {
       }
     } catch (e) {
       console.error('Fetch error:', e);
+      setSyncStatus('error', ctrl.signal.aborted ? '連線逾時，雲端資料還沒拿到' : '讀取雲端失敗，請檢查網路');
     } finally {
+      clearTimeout(timeout);
       isFetching.current = false;
       window._appInitializing = false;
       setIsSyncing(false);
       setBootstrapping(false); // 首次拉取結束 → 收起開場遮罩
     }
-  }, [loadFromCloud, pushToCloud, setIsSyncing, setBootstrapping]);
+  }, [loadFromCloud, pushToCloud, setIsSyncing, setBootstrapping, setSyncStatus]);
+
+  // 設定頁「立即同步／重試」：跟雲端對一次（拉下來合併，本機較新會接著推上去）
+  useEffect(() => {
+    if (syncRequest > 0 && useAppStore.getState().currentUser) pullFromCloud();
+  }, [syncRequest, pullFromCloud]);
 
   // ── auth listener ──────────────────────────────────────────────────────
   useEffect(() => {
