@@ -171,15 +171,19 @@ export default function TripEntriesSheet({
               <ul className="tp-pending-list">
                 {pending.map(e => (
                   <li key={e.id} className="tp-pending-row">
-                    <span className="tp-pending-name" title={exclusionLabel(e) || undefined}>
-                      {exclusionLabel(e) || '未命名'}
-                    </span>
-                    <span className="tp-pending-date">{shortDate(e.date)}</span>
-                    <span className="tp-pending-amt">−${fmtMoney(Math.round(Number(e.amount) || 0))}</span>
-                    <span className="tp-pending-actions">
-                      <button type="button" className="btn btn-ghost btn-sm tp-pending-btn" onClick={() => onDecide?.(e, 'daily')}>日常</button>
-                      <button type="button" className="btn btn-ghost btn-sm tp-pending-btn is-trip" onClick={() => onDecide?.(e, 'trip')}>算旅費</button>
-                    </span>
+                    <div className="tp-pending-top">
+                      <span className="tp-pending-name" title={exclusionLabel(e) || undefined}>
+                        {exclusionLabel(e) || '未命名'}
+                      </span>
+                      <span className="tp-pending-amt">−${fmtMoney(Math.round(Number(e.amount) || 0))}</span>
+                    </div>
+                    <div className="tp-pending-bottom">
+                      <span className="tp-pending-date">{shortDate(e.date)}</span>
+                      <span className="tp-pending-actions">
+                        <button type="button" className="btn btn-ghost btn-sm tp-pending-btn" onClick={() => onDecide?.(e, 'daily')}>日常</button>
+                        <button type="button" className="btn btn-ghost btn-sm tp-pending-btn is-trip" onClick={() => onDecide?.(e, 'trip')}>算旅費</button>
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>

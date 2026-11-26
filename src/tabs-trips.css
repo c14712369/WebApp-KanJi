@@ -131,8 +131,10 @@
   background: color-mix(in srgb, var(--accent-color) 16%, transparent);
 }
 
+.tp-card-add,
 .tp-edit {
   flex: 0 0 auto;
+  justify-content: center;
   width: 40px;
   height: 40px;
 }
@@ -859,7 +861,6 @@
   flex: 1;
 }
 
-.tp-card-add,
 .tp-add-entry-btn {
   display: inline-flex;
   align-items: center;
@@ -878,20 +879,17 @@
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.tp-card-add:active,
 .tp-add-entry-btn:active {
   background: var(--hover-bg);
 }
 
 @media (hover: hover) {
-  .tp-card-add:hover,
   .tp-add-entry-btn:hover {
     background: var(--hover-bg);
     border-color: var(--text-muted);
   }
 }
 
-.tp-card-add:focus-visible,
 .tp-add-entry-btn:focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
@@ -938,39 +936,51 @@
 }
 
 .tp-pending-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: 6px;
-  min-height: 42px;
-  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
   border-radius: 10px;
   background: var(--card-bg);
 }
 
+.tp-pending-top,
+.tp-pending-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
 .tp-pending-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--text-main);
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   font-weight: 600;
+  line-height: 1.3;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .tp-pending-date {
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .tp-pending-amt {
+  flex: 0 0 auto;
   color: var(--expense-ink);
   font-family: var(--font-num);
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1.3;
   white-space: nowrap;
 }
 
@@ -979,18 +989,19 @@
   flex: 0 0 auto;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .tp-pending-btn {
-  min-height: 32px;
-  padding: 0 9px;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: transparent;
   color: var(--text-muted);
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -1024,8 +1035,7 @@
 
 @media (max-width: 360px) {
   .tp-pending { padding: 8px 8px 6px; }
-  .tp-pending-row { gap: 4px; padding: 6px; }
-  .tp-pending-btn { padding: 0 7px; font-size: 0.75rem; }
+  .tp-pending-row { padding: 10px; }
 }
 
 /* ── 旅程例外商家入口與管理對話框 ── */

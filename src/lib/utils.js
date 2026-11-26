@@ -122,6 +122,7 @@ export function showToast(message, type = 'success', opts = {}) {
     whiteSpace: hasAction ? 'normal' : 'nowrap',
     boxShadow: '0 4px 12px rgba(0,0,0,0.2)', opacity: 0, transition: 'opacity 0.2s',
     ...(hasAction ? {
+      right: 'auto',
       display: 'flex',
       alignItems: 'center',
       gap: '12px',
@@ -146,6 +147,7 @@ export function showToast(message, type = 'success', opts = {}) {
     text.textContent = message;
     text.style.flex = '1 1 auto';
     text.style.minWidth = '0';
+    text.style.overflowWrap = 'anywhere';
 
     const btn = document.createElement('button');
     btn.type = 'button';

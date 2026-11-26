@@ -185,7 +185,7 @@ function TripExclusionsModal({ items, onRemove, onClose }) {
         </div>
 
         <div className="fx-item-foot">
-          <button type="button" className="btn btn-primary" onClick={onClose}>完成</button>
+          <button type="button" className="btn btn-primary fx-submit" onClick={onClose}>完成</button>
         </div>
       </div>
     </div>
@@ -214,8 +214,8 @@ function TripCard({ trip, summary, today, onEdit, onAddEntry, onOpenEntries, pen
           </p>
         </div>
         <div className="tp-card-actions">
-          <button type="button" className="btn btn-ghost btn-sm tp-card-add" onClick={onAddEntry}>
-            <i className="fa-solid fa-plus" aria-hidden="true"></i> 記一筆
+          <button type="button" className="icon-btn tp-card-add" onClick={onAddEntry} aria-label={`在「${trip.name}」記一筆`}>
+            <i className="fa-solid fa-plus" aria-hidden="true"></i>
           </button>
           <button type="button" className="icon-btn tp-edit" onClick={onEdit} aria-label={`編輯旅程「${trip.name}」`}>
             <i className="fa-solid fa-pen" aria-hidden="true"></i>

@@ -270,7 +270,7 @@ export default function EntrySheet({
     };
     onSave(payload);
     if (wasInTrip && nextTripId === NO_TRIP) {
-      offerExclusion({ ...initial, ...payload });
+      offerExclusion(initial);
     }
   };
 
