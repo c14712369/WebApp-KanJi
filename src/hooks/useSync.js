@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAppStore } from '../store/appStore';
 import { mergeLifeExpenses, mergeMerchantRules, mergeDeletedIds, purgePreAprilManualExpenses, buildPushPayload } from '../lib/syncMerge';
+import { mergeTripExcludes } from '../lib/tripMerchants';
 
 // 拉雲端最多等這麼久；超過就算逾時，App 照常用本機資料，設定頁可按「重試」
 const PULL_TIMEOUT_MS = 15000;
@@ -23,6 +24,7 @@ function exportState(store) {
     lifeBudgets:          store.lifeBudgets,
     merchantRules:        store.merchantRules,
     trips:                store.trips,
+    tripExcludeMerchants: store.tripExcludeMerchants,
     projects:             store.projects,
     projectExpenses:      store.projectExpenses,
     projectCategories:    store.projectCategories,
@@ -70,10 +72,12 @@ export function useSync() {
         const deletedImportIds = mergeDeletedIds(s.deletedImportIds, cloud.app_data.deletedImportIds);
         const lifeExpenses  = mergeLifeExpenses(s.lifeExpenses, cloud.app_data.lifeExpenses, deletedImportIds);
         const merchantRules = mergeMerchantRules(s.merchantRules, cloud.app_data.merchantRules);
+        const tripExcludeMerchants = mergeTripExcludes(s.tripExcludeMerchants, cloud.app_data.tripExcludeMerchants);
         const sig = arr => arr.map(e => e.id + ':' + e.categoryId + ':' + e.amount).sort().join('|');
         if (sig(lifeExpenses) !== sig(s.lifeExpenses) || JSON.stringify(merchantRules) !== JSON.stringify(s.merchantRules)
+            || JSON.stringify(tripExcludeMerchants) !== JSON.stringify(s.tripExcludeMerchants)
             || deletedImportIds.length !== s.deletedImportIds.length) {
-          useAppStore.getState().applyCloudMerge({ lifeExpenses, merchantRules, deletedImportIds });
+          useAppStore.getState().applyCloudMerge({ lifeExpenses, merchantRules, deletedImportIds, tripExcludeMerchants });
         }
       }
 
@@ -161,6 +165,7 @@ export function useSync() {
           mergeLifeExpenses(s.lifeExpenses, cloudData.lifeExpenses, deletedIds)
         );
         const mergedRules = mergeMerchantRules(s.merchantRules, cloudData.merchantRules);
+        const mergedExcludes = mergeTripExcludes(s.tripExcludeMerchants, cloudData.tripExcludeMerchants);
 
         // 核心安全邏輯：計算資料筆數
         const localCount = (s.items?.length || 0) + (s.lifeExpenses?.length || 0) + (s.projects?.length || 0);
@@ -186,7 +191,7 @@ export function useSync() {
 
         if (localCount > 0 && localTs > cloudTs) {
           // 本地較新 -> 推上去；但先把雲端的 gmail_ 匯入列合併進本地，避免把 GAS 寫入蓋掉。
-          useAppStore.getState().applyCloudMerge({ lifeExpenses: mergedLife, merchantRules: mergedRules, deletedImportIds: deletedIds });
+          useAppStore.getState().applyCloudMerge({ lifeExpenses: mergedLife, merchantRules: mergedRules, deletedImportIds: deletedIds, tripExcludeMerchants: mergedExcludes });
           isFetching.current = false;
           window._appInitializing = false;
           await pushToCloud(true);
@@ -194,7 +199,7 @@ export function useSync() {
         }
 
         // 否則，載入雲端（lifeExpenses 用合併版，保留本地手動列）
-        loadFromCloud({ ...cloudData, lifeExpenses: mergedLife, merchantRules: mergedRules, deletedImportIds: deletedIds });
+        loadFromCloud({ ...cloudData, lifeExpenses: mergedLife, merchantRules: mergedRules, deletedImportIds: deletedIds, tripExcludeMerchants: mergedExcludes });
       } else {
         // 雲端無資料 -> 推送本地
         isFetching.current = false;

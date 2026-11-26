@@ -5,6 +5,7 @@ import { formatAmount, fmtIncomeMoney } from '../../lib/utils';
 import { formatForeign } from '../../lib/fx';
 import { entryTripId } from '../../lib/trips';
 import { useAppStore } from '../../store/appStore';
+import { useTripContext } from '../../hooks/useTripContext';
 
 /**
  * 明細列（參考 MOZE）：左大圓分類圖示｜中間標題（備註/店家）＋副標｜右金額＋分類、付款方式小標籤。
@@ -26,7 +27,8 @@ export default function LifeEntryRow({
   const isIncome = entry.type === 'income';
   const isPrivacyMode = useAppStore(s => s.isPrivacyMode);
   const trips = useAppStore(s => s.trips);
-  const tripName = !isIncome && !hideTrip ? (trips.find(t => t.id === entryTripId(entry, trips))?.name || '') : '';
+  const tripCtx = useTripContext();
+  const tripName = !isIncome && !hideTrip ? (trips.find(t => t.id === entryTripId(entry, trips, tripCtx))?.name || '') : '';
   const cat = isIncome
     ? (lifeIncomeCategories.find(c => c.id === entry.categoryId) || { name: '收入', color: '#3D7A5A' })
     : (lifeCategories.find(c => c.id === entry.categoryId) || { name: '支出', color: '#6B6B6B' });

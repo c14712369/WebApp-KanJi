@@ -23,12 +23,12 @@ const isLiveRow = (e) => !!e.live || (typeof e.id === 'string' && e.id.indexOf('
  * 刷卡帳單列（gmail_）本來就是台幣，不列。
  * @returns {Array<{entry, suggested: boolean, code: string, original: number}>}
  */
-export function unconvertedTripEntries(trip, entries, trips) {
+export function unconvertedTripEntries(trip, entries, trips, ctx = {}) {
   if (!trip || !trip.currency || trip.currency === 'TWD') return [];
   const out = [];
   for (const e of entries || []) {
     if (!e || e.type === 'income' || e.transit || isStatementRow(e)) continue;
-    if (entryTripId(e, trips) !== trip.id) continue;
+    if (entryTripId(e, trips, ctx) !== trip.id) continue;
 
     if (e.fxPending && e.currency && e.currency !== 'TWD' && Number(e.originalAmount) > 0) {
       out.push({ entry: e, suggested: true, code: e.currency, original: Number(e.originalAmount) });

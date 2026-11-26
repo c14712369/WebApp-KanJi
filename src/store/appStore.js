@@ -4,11 +4,12 @@ import {
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
   INCOME_KEY, WEALTH_PARAMS_KEY, WEALTH_HOLDINGS_KEY, WEALTH_BANKS_KEY,
   SALARY_DEFAULT_KEY, DAILY_EXP_KEY, PAYMENT_KEY, FIXED_SORT_KEY, THEME_KEY,
-  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY, TRIPS_KEY, LAST_SYNC_OK_KEY,
+  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY, TRIPS_KEY, TRIP_EXCLUDE_KEY, LAST_SYNC_OK_KEY,
   DEFAULT_CATS, DEFAULT_LIFE_CATS, DEFAULT_LIFE_INC_CATS,
   DEFAULT_PROJECT_CATS, DEFAULT_PAYMENT_METHODS,
 } from '../lib/constants';
 import { learnCategory } from '../lib/merchantRules';
+import { setTripExclusion as setExclusionIn } from '../lib/tripMerchants';
 import { isImportedId } from '../lib/syncMerge';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
@@ -46,7 +47,8 @@ const initState = {
   lifeCurrentMonth: new Date().toISOString().slice(0, 7),
 
   // 旅程：{ id, name, startDate, endDate, currency }；明細用 tripId 或日期歸屬（見 lib/trips.js）
-  trips:              load(TRIPS_KEY, []),
+  trips:                load(TRIPS_KEY, []),
+  tripExcludeMerchants: load(TRIP_EXCLUDE_KEY, {}),     // 旅程例外商家：{ key: { on, at, label } }
 
   // Projects
   projects:           load(PROJECTS_KEY,    []),
@@ -173,9 +175,14 @@ export const useAppStore = create((set, get) => {
     },
 
     /** 推送前與雲端合併的結果寫回本地（不蓋時間戳，避免觸發再次推送） */
-    applyCloudMerge: ({ lifeExpenses, merchantRules, deletedImportIds = get().deletedImportIds }) => {
+    applyCloudMerge: ({ lifeExpenses, merchantRules, deletedImportIds = get().deletedImportIds, tripExcludeMerchants }) => {
       save(LIFE_EXP_KEY, lifeExpenses); save(MERCHANT_RULES_KEY, merchantRules); save(DELETED_IMPORT_KEY, deletedImportIds);
-      set({ lifeExpenses, merchantRules, deletedImportIds });
+      const patch = { lifeExpenses, merchantRules, deletedImportIds };
+      if (tripExcludeMerchants !== undefined) {
+        save(TRIP_EXCLUDE_KEY, tripExcludeMerchants);
+        patch.tripExcludeMerchants = tripExcludeMerchants;
+      }
+      set(patch);
     },
 
     // ── Trips（單筆新增／修改／刪除，不拿整份清單覆蓋；刪旅程不動明細，掛在上面的 tripId 會自動退回依日期歸屬）──
@@ -185,6 +192,11 @@ export const useAppStore = create((set, get) => {
       const next = get().trips.filter(t => t.id !== id);
       console.log(`[trips] 刪除旅程 ${id}，剩 ${next.length} 趟（明細不動）`);
       save(TRIPS_KEY, next); stamp(); set({ trips: next });
+    },
+    setTripExclusion: (name, on) => {
+      const next = setExclusionIn(get().tripExcludeMerchants, name, on);
+      if (next === get().tripExcludeMerchants) return;
+      save(TRIP_EXCLUDE_KEY, next); stamp(); set({ tripExcludeMerchants: next });
     },
 
     // ── Projects ──
@@ -227,6 +239,7 @@ export const useAppStore = create((set, get) => {
       if (data.lifeBudgets)          save(LIFE_BDG_KEY,       data.lifeBudgets);
       if (data.merchantRules)        save(MERCHANT_RULES_KEY, data.merchantRules);
       if (data.trips)                save(TRIPS_KEY,          data.trips);
+      if (data.tripExcludeMerchants) save(TRIP_EXCLUDE_KEY,   data.tripExcludeMerchants);
       if (data.projects)             save(PROJECTS_KEY,       data.projects);
       if (data.projectExpenses)      save(PROJECT_EXP_KEY,    data.projectExpenses);
       if (data.projectCategories)    save(PROJECT_CAT_KEY,    data.projectCategories);
@@ -250,6 +263,7 @@ export const useAppStore = create((set, get) => {
         lifeBudgets:          data.lifeBudgets          ?? get().lifeBudgets,
         merchantRules:        data.merchantRules        ?? get().merchantRules,
         trips:                data.trips                ?? get().trips,
+        tripExcludeMerchants: data.tripExcludeMerchants ?? get().tripExcludeMerchants,
         projects:             data.projects             ?? get().projects,
         projectExpenses:      data.projectExpenses      ?? get().projectExpenses,
         projectCategories:    data.projectCategories    ?? get().projectCategories,

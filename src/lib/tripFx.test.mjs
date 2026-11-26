@@ -60,6 +60,12 @@ test('手動排除旅程（tripId none）→ 不列', () => {
   const r = unconvertedTripEntries(tokyo, [live('x', '2026-11-15', 999, { tripId: 'none' })], trips);
   assert.equal(r.length, 0);
 });
+test('例外商家且沒標幣別的 Apple Pay 列：傳 ctx 時不列出；不傳 ctx 時照舊列出', () => {
+  const row = live('711', '2026-11-15', 85, { note: '7-ELEVEN' });
+  const ctx = { exclude: { '7-11': { on: true, at: 1 } } };
+  assert.equal(unconvertedTripEntries(tokyo, [row], trips, ctx).length, 0);
+  assert.equal(unconvertedTripEntries(tokyo, [row], trips).length, 1);
+});
 test('台幣旅程 → 什麼都不列', () => {
   assert.equal(unconvertedTripEntries(home, [live('a', '2026-12-02', 300)], trips).length, 0);
 });

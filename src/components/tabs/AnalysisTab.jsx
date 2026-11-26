@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import TripsView from './TripsView';
 import { splitMonthSpend, tripFilterId, TRIP_COLOR } from '../../lib/trips';
+import { useTripContext } from '../../hooks/useTripContext';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
 import { calculateExpenseForMonth, prefetchFXRates, showToast, formatAmount } from '../../lib/utils';
@@ -133,6 +134,7 @@ export default function AnalysisTab() {
     setActiveTab, setLifeCurrentMonth, setLifePendingCatId,
     projects, projectExpenses, estimatedIncome, theme, isPrivacyMode
   } = useAppStore();
+  const tripCtx = useTripContext();
 
   const now    = new Date();
   const initYm = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
@@ -246,11 +248,11 @@ export default function AnalysisTab() {
   // 日常分類不含旅程；每趟旅程合成一條（點了跳到生活頁只看那趟）
   const lifeCatData = useMemo(() => {
     const labels = [], data = [], colors = [], ids = [];
-    const split = splitMonthSpend(lifeExpenses, trips, ym, lifeCategories);
+    const split = splitMonthSpend(lifeExpenses, trips, ym, lifeCategories, tripCtx);
     split.daily.forEach(c => { labels.push(c.name); data.push(c.amount); colors.push(c.color); ids.push(c.id); });
     split.trips.forEach(t => { labels.push(`✈ ${t.name}`); data.push(t.amount); colors.push(TRIP_COLOR); ids.push(tripFilterId(t.id)); });
     return { labels, data, colors, ids };
-  }, [ym, lifeExpenses, lifeCategories, trips]);
+  }, [ym, lifeExpenses, lifeCategories, trips, tripCtx]);
   const lifeEmpty = lifeCatData.data.length === 0;
 
   useEffect(() => {

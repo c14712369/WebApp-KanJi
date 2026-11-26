@@ -12,6 +12,7 @@ import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
 import { computeSpendPace } from '../../lib/spendPace';
 import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
 import { splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, TRIP_COLOR } from '../../lib/trips';
+import { useTripContext } from '../../hooks/useTripContext';
 import LifeEntryRow from './LifeEntryRow';
 import CalendarView from './CalendarView';
 import EntrySheet from './EntrySheet';
@@ -149,6 +150,7 @@ export default function LifeTab() {
     activeTab, pendingAdd, setPendingAdd,
   } = useAppStore();
   const { saveEntry, deleteEntry } = useLifeEntryActions();
+  const tripCtx = useTripContext();
 
   // 手機版：月份切換列放進單列頁首（Header 的 #mobileHeaderSlot），不另外佔一列
   const isMobile = useMediaQuery('(max-width: 768px)');
@@ -270,7 +272,7 @@ export default function LifeTab() {
   const timePct  = pace.isCurrentMonth ? Math.round((now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 100) : null;
 
   // ── Category summary：日常與旅程拆開（都是台幣）；分類與預算只算日常，旅程整趟合成一行 ──
-  const monthSplit = splitMonthSpend(lifeExpenses, trips, ym, lifeCategories);
+  const monthSplit = splitMonthSpend(lifeExpenses, trips, ym, lifeCategories, tripCtx);
   const catSummary = monthSplit.daily.map(cat => {
     const spent  = cat.amount;
     const budget = lifeBudgets[cat.id + '|' + ym] || 0;
@@ -304,7 +306,7 @@ export default function LifeTab() {
   );
   const calEntries = sortEntries(
     monthEntries.filter(e => {
-      if (selectedCatId !== null && !matchesCatFilter(e, selectedCatId, trips)) return false;
+      if (selectedCatId !== null && !matchesCatFilter(e, selectedCatId, trips, tripCtx)) return false;
       if (filterType !== 'all' && e.type !== filterType) return false;
       return true;
     }),

@@ -4,6 +4,7 @@ import { motion, useDragControls, useReducedMotion } from 'framer-motion';
 import IconRenderer from '../../lib/IconRenderer';
 import { OPS, pressKey, evaluateExpr, hasOperator, formatExpr, exprFromAmount } from '../../lib/calcPad';
 import { NO_TRIP, tripForDate, sheetTripDefault, tripIdToSave, sortTrips, formatTripRange } from '../../lib/trips';
+import { useTripContext } from '../../hooks/useTripContext';
 import { confirmsTwdOnEdit } from '../../lib/tripFx';
 import { CURRENCIES, currencyMeta, formatRate, toTWD, fetchRateToTWD, entryAmountFields } from '../../lib/fx';
 
@@ -74,6 +75,7 @@ export default function EntrySheet({
   onDelete,
 }) {
   const isEdit = !!(initial?.id && initial?.type);
+  const tripCtx = useTripContext();
   const initType = initial?.type || 'expense';
   const lastSaved = useMemo(() => (isEdit ? {} : readLastEntry()), [isEdit]);
 
@@ -86,7 +88,7 @@ export default function EntrySheet({
   );
   const [date, setDate] = useState(() => initial?.date || defaultDate(currentMonth));
   // 旅程選項：旅程 id 或 'none'；新增時跟著日期自動換，使用者自己選過就不再自動
-  const [tripSel, setTripSel] = useState(() => sheetTripDefault(trips, date, isEdit ? initial : null));
+  const [tripSel, setTripSel] = useState(() => sheetTripDefault(trips, date, isEdit ? initial : (initial || null), tripCtx));
   const autoTripRef = useRef(!isEdit || !initial?.tripId);
   const curTouchedRef = useRef(isEdit); // 使用者自己選過幣別（或編輯舊筆）→ 換旅程不改幣別
   const [note, setNote] = useState(initial?.note || '');

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../../store/appStore';
 import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
+import { useTripContext } from '../../hooks/useTripContext';
 import {
   summarizeTrip, sortTrips, formatTripRange, tripStatus, validateTrip,
 } from '../../lib/trips';
@@ -255,6 +256,7 @@ export default function TripsView() {
   const [justSavedId, setJustSavedId] = useState(null);   // 剛改完的那筆閃一下
   const [entriesSheet, setEntriesSheet] = useState(null); // 明細抽屜：{ tripId, catId }（catId null＝全部）
   const { saveEntry, deleteEntry } = useLifeEntryActions();
+  const tripCtx = useTripContext();
   const today = toIso(new Date());
 
   useEffect(() => {
@@ -272,9 +274,9 @@ export default function TripsView() {
 
   const list = useMemo(() => sortTrips(trips).map(t => ({
     trip: t,
-    summary: summarizeTrip(t, lifeExpenses, trips, lifeCategories),
-    fxItems: unconvertedTripEntries(t, lifeExpenses, trips),
-  })), [trips, lifeExpenses, lifeCategories]);
+    summary: summarizeTrip(t, lifeExpenses, trips, lifeCategories, tripCtx),
+    fxItems: unconvertedTripEntries(t, lifeExpenses, trips, tripCtx),
+  })), [trips, lifeExpenses, lifeCategories, tripCtx]);
   const fxOpen = fxTripId ? list.find(x => x.trip.id === fxTripId) : null;
   const sheetOpen = entriesSheet ? list.find(x => x.trip.id === entriesSheet.tripId) : null;
 
