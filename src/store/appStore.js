@@ -214,7 +214,14 @@ export const useAppStore = create((set, get) => {
     migrateTripRules: () => {
       if (get().tripRulesV2At) return 0;
       const { lifeExpenses, trips, tripExcludeMerchants } = get();
-      if (!trips?.length) return 0;
+      // 拉完雲端還是沒有任何旅程 → 沒有舊旅程要守，直接標記完成；之後新建的旅程全照新規則
+      // （2026-11-27：正式站的東京賞楓早已被舊版同步洗掉，若等到重建才移轉，會用舊規則把台幣帳單鎖進旅程）
+      if (!trips?.length) {
+        const now = Date.now();
+        save(TRIP_RULES_V2_KEY, now); stamp(); set({ tripRulesV2At: now });
+        console.log('[trips] 規則改版移轉：沒有任何旅程，直接標記完成');
+        return 0;
+      }
       const plan = planTripMigration(lifeExpenses, trips, getTripContext(lifeExpenses, tripExcludeMerchants));
       if (plan.length > TRIP_MIGRATION_MAX) {
         console.warn(`[trips] 規則改版移轉中止：${plan.length} 筆超過上限 ${TRIP_MIGRATION_MAX}`);
