@@ -11,6 +11,14 @@ import {
 import { learnCategory } from '../lib/merchantRules';
 import { setTripExclusion as setExclusionIn } from '../lib/tripMerchants';
 import { isImportedId } from '../lib/syncMerge';
+import { getTripContext } from '../lib/trips';
+import {
+  planTripMigration,
+  TRIP_MIGRATION_FLAG,
+  TRIP_MIGRATION_SNAPSHOT,
+  TRIP_MIGRATION_MAX,
+} from '../lib/tripMigration';
+import { showToast } from '../lib/utils';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 const load  = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
@@ -197,6 +205,30 @@ export const useAppStore = create((set, get) => {
       const next = setExclusionIn(get().tripExcludeMerchants, name, on);
       if (next === get().tripExcludeMerchants) return;
       save(TRIP_EXCLUDE_KEY, next); stamp(); set({ tripExcludeMerchants: next });
+    },
+    /** 旅程規則改版一次性移轉：守住舊旅程總額（含快照、上限 200 筆、冪等旗標） */
+    migrateTripRules: () => {
+      if (localStorage.getItem(TRIP_MIGRATION_FLAG)) return;
+      const { lifeExpenses, trips, tripExcludeMerchants } = get();
+      const plan = planTripMigration(lifeExpenses, trips, getTripContext(lifeExpenses, tripExcludeMerchants));
+      if (plan.length > TRIP_MIGRATION_MAX) {
+        console.warn(`[trips] 規則改版移轉中止：${plan.length} 筆超過上限 ${TRIP_MIGRATION_MAX}`);
+        showToast('旅程資料移轉筆數異常，已暫停，請回報', 'error');
+        return;
+      }
+      if (plan.length > 0) {
+        const ids = new Set(plan.map(p => p.id));
+        const rows = lifeExpenses.filter(e => ids.has(e.id));
+        localStorage.setItem(TRIP_MIGRATION_SNAPSHOT, JSON.stringify({ at: Date.now(), rows }));
+        get().patchLifeExpenses(plan.map(p => ({ id: p.id, patch: { tripId: p.tripId } })));
+        const counts = new Map();
+        plan.forEach(p => counts.set(p.tripId, (counts.get(p.tripId) || 0) + 1));
+        const summary = [...counts.entries()]
+          .map(([tid, n]) => `${trips.find(t => t.id === tid)?.name || tid} ${n} 筆`)
+          .join('、');
+        console.log('[trips] 規則改版移轉：' + summary);
+      }
+      localStorage.setItem(TRIP_MIGRATION_FLAG, String(Date.now()));
     },
 
     // ── Projects ──

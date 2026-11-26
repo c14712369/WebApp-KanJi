@@ -133,6 +133,7 @@ export function useSync() {
     setIsSyncing(true);
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), PULL_TIMEOUT_MS);
+    let pulledOk = false;
     try {
       const { data, error } = await supabase
         .from('user_backups')
@@ -147,6 +148,7 @@ export function useSync() {
         return;
       }
       setSyncStatus('ok');
+      pulledOk = true;
 
       if (data?.app_data) {
         const cloudTs = new Date(data.updated_at).getTime();
@@ -215,6 +217,7 @@ export function useSync() {
       window._appInitializing = false;
       setIsSyncing(false);
       setBootstrapping(false); // 首次拉取結束 → 收起開場遮罩
+      if (pulledOk) useAppStore.getState().migrateTripRules();
     }
   }, [loadFromCloud, pushToCloud, setIsSyncing, setBootstrapping, setSyncStatus]);
 
