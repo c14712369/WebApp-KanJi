@@ -3,7 +3,7 @@
  * 驗證「依日期分組」與「分頁時整天不切斷」邏輯。
  */
 import assert from 'node:assert';
-import { groupEntriesByDay, paginateGroups, findEntryPage, noteGroupKey, sortEntries, buildMonthCalendar, calendarFocusRow, noteDisplayMap } from './lifeGrouping.js';
+import { groupEntriesByDay, paginateGroups, findEntryPage, noteGroupKey, sortEntries, buildMonthCalendar, calendarFocusRow, noteDisplayMap, collapseTripEntries } from './lifeGrouping.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -272,6 +272,35 @@ test('焦點不在本月或為空 → 第一列', () => {
 });
 test('空月曆安全回退', () => {
   assert.deepEqual(calendarFocusRow({ paddingDays: 0, days: [] }, null), { rows: 1, row: 0 });
+});
+
+console.log('\n[collapseTripEntries — 日常清單把旅程明細收成一行]');
+const T = [{ id: 't_tn', name: '台南小旅行', startDate: '2026-12-05', endDate: '2026-12-07', currency: 'TWD' }];
+const E = [
+  { id: 'm1', type: 'expense', amount: 300, date: '2026-12-06' },
+  { id: 'live_1', live: true, type: 'expense', amount: 85, date: '2026-12-06' },
+  { id: 'gmail_t', type: 'expense', amount: 599, date: '2026-12-06', note: '[台新] 台灣大哥大' },
+  { id: 'm2', type: 'expense', amount: 1200, date: '2026-12-07' },
+  { id: 'i1', type: 'income', amount: 50, date: '2026-12-06' },
+];
+test('同一天的旅程明細收成一行，金額是加總', () => {
+  const out = collapseTripEntries(E, T, {});
+  const d6 = out.find(e => e.id === 'tripday_t_tn_2026-12-06');
+  assert.equal(d6.amount, 385); assert.equal(d6.count, 2); assert.equal(d6._tripDay, true);
+  assert.ok(out.find(e => e.id === 'tripday_t_tn_2026-12-07'));
+});
+test('待確認的帳單列與收入照常顯示', () => {
+  const ids = collapseTripEntries(E, T, {}).map(e => e.id);
+  assert.ok(ids.includes('gmail_t')); assert.ok(ids.includes('i1'));
+  assert.ok(!ids.includes('m1')); assert.ok(!ids.includes('live_1'));
+});
+test('當日小計不變', () => {
+  const sum = (arr) => arr.filter(e => e.date === '2026-12-06' && e.type !== 'income').reduce((a, e) => a + e.amount, 0);
+  assert.equal(sum(collapseTripEntries(E, T, {})), sum(E));
+});
+test('收合後再分組，合成列在第一筆原本的位置', () => {
+  const g = groupEntriesByDay(collapseTripEntries(E, T, {})).find(x => x.date === '2026-12-06');
+  assert.equal(g.entries[0].id, 'tripday_t_tn_2026-12-06');
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);

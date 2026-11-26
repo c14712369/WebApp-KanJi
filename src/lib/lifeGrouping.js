@@ -1,6 +1,7 @@
 /**
  * 記帳明細「依日期分組」與「分頁時整天不切斷」邏輯（純函式，零依賴，可單元測試）。
  */
+import { entryTripId } from './trips.js';
 
 /**
  * 將已過濾、已排序的明細依日期分組（保留原排序）。
@@ -188,5 +189,48 @@ export function calendarFocusRow({ paddingDays = 0, days = [] } = {}, focusDate)
   const idx = focusDate ? days.findIndex(d => d.date === focusDate) : -1;
   const row = idx < 0 ? 0 : Math.floor((paddingDays + idx) / 7);
   return { rows, row };
+}
+
+/**
+ * 將日常清單裡歸屬旅程的支出收成「每天每趟一筆」合成列（不改動輸入陣列）。
+ * 合成列放在該組第一筆原本的位置；待確認帳單列與收入原樣保留。
+ */
+export function collapseTripEntries(entries = [], trips = [], ctx = {}) {
+  const arr = Array.isArray(entries) ? entries : [];
+  const tripNames = new Map((Array.isArray(trips) ? trips : []).filter(Boolean).map(t => [t.id, t.name || '旅程']));
+  const out = [];
+  const groups = new Map();
+  for (const e of arr) {
+    if (!e || e._tripDay || e.type === 'income') {
+      out.push(e);
+      continue;
+    }
+    const tid = entryTripId(e, trips, ctx);
+    if (!tid) {
+      out.push(e);
+      continue;
+    }
+    const date = e.date || '';
+    const key = `${tid}\0${date}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.amount += Number(e.amount) || 0;
+      existing.count += 1;
+    } else {
+      const row = {
+        id: `tripday_${tid}_${date}`,
+        _tripDay: true,
+        tripId: tid,
+        date,
+        type: 'expense',
+        amount: Number(e.amount) || 0,
+        count: 1,
+        note: tripNames.get(tid) || '旅程',
+      };
+      groups.set(key, row);
+      out.push(row);
+    }
+  }
+  return out;
 }
 

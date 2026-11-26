@@ -6,16 +6,17 @@ import { lifeMonthLabel, formatAmount, fmtMoney, showToast, getFixedLifeMonthly,
 import { SALARY_DEFAULT_KEY, DAILY_EXP_KEY } from '../../lib/constants';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import IconRenderer from '../../lib/IconRenderer';
-import { sortEntries } from '../../lib/lifeGrouping';
+import { sortEntries, collapseTripEntries } from '../../lib/lifeGrouping';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
 import { computeSpendPace } from '../../lib/spendPace';
 import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
-import { splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, TRIP_COLOR } from '../../lib/trips';
+import { splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, summarizeTrip, TRIP_COLOR } from '../../lib/trips';
 import { useTripContext } from '../../hooks/useTripContext';
 import LifeEntryRow from './LifeEntryRow';
 import CalendarView from './CalendarView';
 import EntrySheet from './EntrySheet';
+import TripEntriesSheet from './TripEntriesSheet';
 import '../../entry-sheet.css';
 
 const localYm = () => {
@@ -166,6 +167,7 @@ export default function LifeTab() {
   const [salaryVersion, setSalaryVersion] = useState(0); // 儲存薪資設定後重跑自動入帳
   const [filterType,    setFilterType]    = useState('all'); // 'all' | 'expense' | 'income'
   const [justSavedId,   setJustSavedId]   = useState(null);  // 剛存檔的那筆：聚焦並閃爍
+  const [openTripId,    setOpenTripId]    = useState(null);  // 點擊收合列後打開的旅程明細抽屜
   const prefersReducedMotion = useReducedMotion();
   const ym = lifeCurrentMonth;
 
@@ -300,11 +302,12 @@ export default function LifeTab() {
   // 同一天內：收入在前 → 依分類設定順序分組 → 同分類內備註同群的相鄰、依金額由大到小
   const catOrder = {};
   [...lifeIncomeCategories, ...lifeCategories].forEach((c, i) => { if (!(c.id in catOrder)) catOrder[c.id] = i; });
+  const filterTripId = tripIdFromFilter(selectedCatId);
   // 未篩選的本月明細：月曆用來算「被篩選藏起幾筆」，避免篩選後誤以為那天沒記帳
   const monthEntries = lifeExpenses.filter(e =>
     (e.date || '').startsWith(ym) && !(e.type === 'income' && e._linkedExpenseId)
   );
-  const calEntries = sortEntries(
+  const sortedCalEntries = sortEntries(
     monthEntries.filter(e => {
       if (selectedCatId !== null && !matchesCatFilter(e, selectedCatId, trips, tripCtx)) return false;
       if (filterType !== 'all' && e.type !== filterType) return false;
@@ -312,9 +315,11 @@ export default function LifeTab() {
     }),
     { catOrder, dir: sortMode === 'date-desc' ? 'desc' : 'asc' }
   );
+  // 篩選是旅程時不收合；其他情況先 sort 再收合，allEntries 也同步收合讓被藏起的筆數正確
+  const calEntries = filterTripId ? sortedCalEntries : collapseTripEntries(sortedCalEntries, trips, tripCtx);
+  const calAllEntries = filterTripId ? monthEntries : collapseTripEntries(monthEntries, trips, tripCtx);
 
   // 目前的篩選（分類優先，其次類型）→ 月曆把手列顯示成可移除的膠囊
-  const filterTripId = tripIdFromFilter(selectedCatId);
   const selectedCatName = selectedCatId === null ? null
     : filterTripId ? (trips.find(t => t.id === filterTripId)?.name || '旅程')
     : (lifeCategories.find(c => c.id === selectedCatId)?.name || '分類');
@@ -363,6 +368,7 @@ export default function LifeTab() {
   // 月份切換列：桌面在頁內；手機搬進單列頁首，「本月」只在看別的月份時出現
   const inHeader = isMobile && !!headerSlot;
   const isThisMonth = ym === localYm();
+  const openTrip = openTripId ? trips.find(t => t.id === openTripId) || null : null;
   const monthNav = (
     <div className={`month-nav life-month-nav${inHeader ? ' is-in-header' : ''}`}>
       <button className="icon-btn" onClick={() => changeMonth(-1)} aria-label="上個月"><i className="fa-solid fa-chevron-left"></i></button>
@@ -524,7 +530,7 @@ export default function LifeTab() {
                 <CalendarView
                   ym={ym}
                   entries={calEntries}
-                  allEntries={monthEntries}
+                  allEntries={calAllEntries}
                   filterLabel={filterLabel}
                   filterIcon={filterIcon}
                   onClearFilter={clearFilters}
@@ -543,6 +549,7 @@ export default function LifeTab() {
                   setSortMode={setSortMode}
                   monthSummary={{ expense: tExp, income: tInc, remain, isCurrentMonth: pace.isCurrentMonth }}
                   onOpenOverview={() => setLifeView('overview')}
+                  onOpenTrip={(id) => setOpenTripId(id)}
                 />
               </div>
             </motion.div>
@@ -627,6 +634,24 @@ export default function LifeTab() {
       <button className="fab" onClick={() => openNew('expense')}>
         <i className="fa-solid fa-plus"></i>
       </button>
+
+      {/* 旅程明細抽屜（層級 990/991，低於記一筆抽屜 998/999） */}
+      <AnimatePresence>
+        {openTrip && (
+          <TripEntriesSheet
+            key={`life-trip-entries-${openTrip.id}`}
+            trip={openTrip}
+            summary={summarizeTrip(openTrip, lifeExpenses, trips, lifeCategories, tripCtx)}
+            onClose={() => setOpenTripId(null)}
+            onEditEntry={(entry) => setExpModal(entry)}
+            justSavedId={justSavedId}
+            entrySheetOpen={expModal !== null}
+            lifeCategories={lifeCategories}
+            lifeIncomeCategories={lifeIncomeCategories}
+            paymentMethods={paymentMethods}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 記一筆／編輯：底部抽屜（AnimatePresence 讓關閉時能滑下去） */}
       <AnimatePresence>

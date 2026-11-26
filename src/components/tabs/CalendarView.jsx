@@ -4,6 +4,7 @@ import { buildMonthCalendar, groupEntriesByDay, calendarFocusRow, noteDisplayMap
 import { formatAmount } from '../../lib/utils';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import LifeEntryRow from './LifeEntryRow';
+import TripDayRow from './TripDayRow';
 
 // 金額一律走 AnimatedNumber：按「隱藏金額」時，所有收入同一種淡出／淡入節奏，不會有的瞬間換、有的慢半拍
 const fmtIncome = (v) => formatAmount(v, 'income');
@@ -47,6 +48,7 @@ export default function CalendarView({
   setSortMode,
   monthSummary = null,   // { expense, income, remain, isCurrentMonth }
   onOpenOverview,
+  onOpenTrip,
 }) {
   const [collapsed, setCollapsed] = useState(false);   // 月曆收合成單週，讓出空間給明細
   const [listScrolled, setListScrolled] = useState(false);
@@ -280,18 +282,22 @@ export default function CalendarView({
   const clearFilter = () => { buzz(20); onClearFilter?.(); };
 
   const renderRow = (e, idx) => (
-    <LifeEntryRow
-      key={e.id}
-      entry={e}
-      idx={idx}
-      noteLabel={noteLabels.get(String(e.note || '').trim().toLowerCase())}
-      isJustSaved={e.id === justSavedId}
-      reward={rewardMap[e.id]}
-      lifeCategories={lifeCategories}
-      lifeIncomeCategories={lifeIncomeCategories}
-      paymentMethods={paymentMethods}
-      onEdit={onEdit}
-    />
+    e._tripDay ? (
+      <TripDayRow key={e.id} entry={e} idx={idx} onOpen={onOpenTrip} />
+    ) : (
+      <LifeEntryRow
+        key={e.id}
+        entry={e}
+        idx={idx}
+        noteLabel={noteLabels.get(String(e.note || '').trim().toLowerCase())}
+        isJustSaved={e.id === justSavedId}
+        reward={rewardMap[e.id]}
+        lifeCategories={lifeCategories}
+        lifeIncomeCategories={lifeIncomeCategories}
+        paymentMethods={paymentMethods}
+        onEdit={onEdit}
+      />
+    )
   );
 
   const renderEmpty = (icon, text, actionLabel, onAction, actionIcon = 'fa-solid fa-plus') => (
