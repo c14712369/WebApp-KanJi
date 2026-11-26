@@ -152,7 +152,7 @@
     padding: 4px 4px 2px;
 }
 
-/* 第一行：左旅程標籤｜右算式（同一行，高度由算式行決定） */
+/* 第一行：左旅程＋幫大家付膠囊｜右算式（同一行，高度由算式行決定） */
 .kk-amount-top {
     align-self: stretch;
     display: flex;
@@ -160,6 +160,18 @@
     justify-content: space-between;
     gap: 12px;
     min-width: 0;
+}
+
+.kk-amount-tags {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.kk-amount-top.has-expr .kk-amount-tags {
+    max-width: 68%;
 }
 
 /* 算式太長時從左邊裁掉，最新輸入的數字永遠看得到 */
@@ -241,12 +253,11 @@
     height: auto;
 }
 
-/* 旅程標籤：純文字＋飛機圖示，不加框（擠在算式行裡，不能比行高高） */
+/* 旅程／幫大家付膠囊：純文字＋圖示，不加框（擠在算式行裡，不能比行高高） */
 .kk-trip {
     position: relative;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: 55%;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -261,20 +272,48 @@
 
 .kk-trip .kk-pill-native { inset: -10px -6px; }
 
-.kk-trip i { flex: 0 0 auto; font-size: 0.72rem; }
+.kk-trip i { flex: 0 0 auto; font-size: 0.72rem; line-height: 1; }
 .kk-trip .kk-trip-caret { font-size: 0.55rem; }
 
 .kk-trip-name {
     min-width: 0;
     overflow: hidden;
+    line-height: 1;
     white-space: nowrap;
     text-overflow: ellipsis;
 }
 
 .kk-trip.is-on { color: var(--text-main); }
-.kk-trip.is-on .fa-plane { color: var(--accent-color); }
+.kk-trip.is-on .fa-plane,
+.kk-share-pill.is-on .fa-user-group { color: var(--accent-color); }
 
 .kk-trip:focus-within {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 4px;
+    border-radius: 4px;
+}
+
+.kk-share-pill {
+    flex: 0 0 auto;
+    padding: 0 2px;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.kk-share-pill::after {
+    content: '';
+    position: absolute;
+    inset: -10px -6px;
+}
+
+.kk-share-pill:hover {
+    color: var(--text-main);
+}
+
+.kk-share-pill:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 4px;
     border-radius: 4px;
@@ -579,23 +618,41 @@
     cursor: pointer;
 }
 
-/* 幫大家付（只對支出顯示；三種模式共用固定高度，切換不跳動） */
-.kk-share-box {
-    flex: 0 0 auto;
+/* 抽屜下半部（分類＋膠囊列＋數字鍵盤）：讓幫大家付浮動卡片精準蓋在上方而不改抽屜高度 */
+.kk-sheet-lower {
+    position: relative;
+    flex: 0 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
-    background: var(--bg-color);
-    transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.kk-share-box.is-shared {
-    border-color: color-mix(in srgb, var(--accent-color) 55%, var(--border-color));
-    background: color-mix(in srgb, var(--accent-color) 6%, var(--bg-color));
+.kk-share-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    border-radius: inherit;
+    background: rgba(15, 22, 32, 0.14);
+}
+
+[data-theme="dark"] .kk-share-scrim {
+    background: rgba(0, 0, 0, 0.36);
+}
+
+/* 幫大家付浮動卡片（只對支出顯示；覆蓋在分類與鍵盤上方） */
+.kk-share-popover {
+    position: absolute;
+    top: 8px;
+    left: 0;
+    right: 0;
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px 16px;
+    border-radius: 16px;
+    background: var(--card-bg);
+    box-shadow: var(--shadow-lg);
 }
 
 .kk-share-head {
@@ -622,7 +679,7 @@
     color: var(--text-muted);
 }
 
-.kk-share-box.is-shared .kk-share-title i {
+.kk-share-popover.is-shared .kk-share-title i {
     color: var(--accent-color);
 }
 
@@ -657,6 +714,10 @@
     box-shadow: var(--shadow-sm);
 }
 
+.kk-share-btn:hover:not(.is-active) {
+    color: var(--text-main);
+}
+
 .kk-share-btn:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 1px;
@@ -665,13 +726,13 @@
 .kk-share-body {
     display: flex;
     align-items: center;
-    height: 36px;
+    height: 40px;
     min-width: 0;
 }
 
 .kk-share-hint {
     color: var(--text-muted);
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     line-height: 1.2;
 }
 
@@ -689,11 +750,11 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 34px;
-    padding: 0 10px;
+    height: 38px;
+    padding: 0 12px;
     border: 1px solid var(--border-color);
     border-radius: 10px;
-    background: var(--card-bg);
+    background: var(--input-bg);
 }
 
 .kk-share-field:focus-within {
@@ -757,6 +818,35 @@
     font-size: 0.94rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+}
+
+.kk-share-done {
+    width: 100%;
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--primary-color);
+    color: var(--on-primary, var(--card-bg));
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.12s ease, opacity 0.15s ease;
+}
+
+.kk-share-done:hover {
+    opacity: 0.92;
+}
+
+.kk-share-done:active {
+    transform: scale(0.98);
+}
+
+.kk-share-done:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
 }
 
 /* 數字鍵盤 */
@@ -868,7 +958,7 @@
     .kk-key.is-clear { height: 48px; }
     .kk-amount-value { font-size: 2.2rem; }
     .kk-amount-value.is-long { font-size: 1.8rem; }
-    .kk-share-box { padding: 6px 10px; gap: 4px; margin-bottom: 6px; }
+    .kk-share-popover { padding: 12px 14px 14px; gap: 10px; }
 }
 
 /* 桌面：抽屜浮在底部中央，四角圓 */

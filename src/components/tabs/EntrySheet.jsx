@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, useDragControls, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls, useReducedMotion } from 'framer-motion';
 import IconRenderer from '../../lib/IconRenderer';
 import { OPS, pressKey, evaluateExpr, hasOperator, formatExpr, exprFromAmount } from '../../lib/calcPad';
 import { NO_TRIP, entryTripId, tripForDate, sheetTripDefault, tripIdToSave, sortTrips, formatTripRange } from '../../lib/trips';
@@ -157,8 +157,11 @@ export default function EntrySheet({
     initShareMode === 'fixed' ? String(initial.myShare) : ''
   ));
   const splitNTouchedRef = useRef(initShareMode === 'split');
+  const [shareOpen, setShareOpen] = useState(false);
 
   const sheetRef = useRef(null);
+  const sharePillRef = useRef(null);
+  const sharePopoverRef = useRef(null);
   const returnFocusRef = useRef(null);
   const typeSwitchedRef = useRef(false); // 使用者切換過類型後，分類圖示才播進場動畫
   const longPressRef = useRef({ timer: null, fired: false });
@@ -189,6 +192,18 @@ export default function EntrySheet({
   const splitPreviewText = twd != null
     ? `$${Math.round(twd / effectiveSplitN).toLocaleString('en-US')}`
     : '—';
+  const effectiveMyShare = Math.max(0, Number(myShareStr) || 0);
+  const myShareDisplayText = `$${effectiveMyShare.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  const sharePillText = shareMode === 'split'
+    ? `÷${effectiveSplitN} · ${splitPreviewText}`
+    : shareMode === 'fixed'
+      ? `我的份 ${myShareDisplayText}`
+      : '幫大家付';
+  const shareAriaLabel = shareMode === 'split'
+    ? `幫大家付：目前 均分 ${effectiveSplitN} 人，我的份 ${splitPreviewText}`
+    : shareMode === 'fixed'
+      ? `幫大家付：目前 自填 ${myShareDisplayText}`
+      : '幫大家付：目前 不是';
   const amountText = amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
   const isLongAmount = (cur.symbol + amountText).length > 10;
   const title = `${isEdit ? '編輯' : '新增'}${isIncome ? '收入' : '支出'}`;
@@ -281,6 +296,28 @@ export default function EntrySheet({
     setSplitNStr(String(n));
   };
 
+  const closeShare = useCallback(() => {
+    if (shareMode === 'split') {
+      const n = Math.min(99, Math.max(2, Math.round(Number(splitNStr) || tripDefaultSplitN(trips, tripSel))));
+      setSplitNStr(String(n));
+    }
+    setShareOpen(false);
+    if (sharePopoverRef.current?.contains(document.activeElement)) {
+      sharePillRef.current?.focus({ preventScroll: true });
+    }
+  }, [shareMode, splitNStr, trips, tripSel]);
+
+  const toggleShare = () => {
+    buzz(10);
+    if (shareOpen) {
+      closeShare();
+    } else {
+      setNoteEditing(false);
+      setRateEditing(false);
+      setShareOpen(true);
+    }
+  };
+
   const openRateEdit = () => {
     setRateDraft(rateManual && rate ? String(rate) : '');
     setRateEditing(true);
@@ -359,6 +396,7 @@ export default function EntrySheet({
     if (next === type) return;
     buzz(12);
     typeSwitchedRef.current = true;
+    if (next === 'income') setShareOpen(false);
     setType(next);
   };
 
@@ -374,29 +412,31 @@ export default function EntrySheet({
   };
   const endBackspaceHold = () => clearTimeout(longPressRef.current.timer);
 
-  // 鍵盤：Esc 關閉、Tab 鎖在抽屜內、數字與運算子直接輸入、Enter 儲存
+  // 鍵盤：Esc 關閉、Tab 鎖在抽屜（或幫大家付面板）內、數字與運算子直接輸入、Enter 儲存
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
+      if (shareOpen) { closeShare(); return; }
       if (noteEditing) { setNoteEditing(false); return; }
       if (rateEditing) { setRateEditing(false); return; }
       onClose();
       return;
     }
     if (e.key === 'Tab') {
-      const nodes = sheetRef.current?.querySelectorAll('button:not([disabled]), input, select, [tabindex]:not([tabindex="-1"])');
+      const scope = shareOpen ? sharePopoverRef.current : sheetRef.current;
+      const nodes = scope?.querySelectorAll('button:not([disabled]), input, select, [tabindex]:not([tabindex="-1"])');
       if (!nodes || nodes.length === 0) return;
       const first = nodes[0];
       const last = nodes[nodes.length - 1];
-      if (e.shiftKey && (document.activeElement === first || document.activeElement === sheetRef.current)) {
+      if (e.shiftKey && (document.activeElement === first || !scope.contains(document.activeElement))) {
         e.preventDefault(); last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && (document.activeElement === last || !scope.contains(document.activeElement))) {
         e.preventDefault(); first.focus();
       }
       return;
     }
     const tag = e.target.tagName;
-    if (noteEditing || rateEditing || tag === 'INPUT' || tag === 'SELECT') return;
+    if (shareOpen || noteEditing || rateEditing || tag === 'INPUT' || tag === 'SELECT') return;
     if (tag === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return; // 讓聚焦中的按鈕自己處理
     if (e.key === 'Enter') { e.preventDefault(); handleSave(); return; }
     if (/^\d$/.test(e.key)) { e.preventDefault(); press(e.key); return; }
@@ -421,7 +461,7 @@ export default function EntrySheet({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: reduceMotion ? 0 : 0.2 }}
-        onClick={onClose}
+        onClick={shareOpen ? closeShare : onClose}
         aria-hidden="true"
       />
 
@@ -490,23 +530,42 @@ export default function EntrySheet({
         {/* 金額：有運算子時上方顯示算式；左側幣別膠囊、右側即時結果；
             外幣時下方一行換算台幣（與錯誤提示共用固定高度，切換幣別版面不跳） */}
         <div className="kk-amount" aria-live="polite">
-          {/* 第一行：左旅程標籤（有相關旅程才出現）｜右算式；行高固定，標籤出現或消失不推動版面 */}
-          <div className="kk-amount-top">
-            {showTrip && (
-              <label className={`kk-trip${selTrip ? ' is-on' : ''}`}>
-                <i className="fa-solid fa-plane" aria-hidden="true"></i>
-                <span className="kk-trip-name">{selTrip ? selTrip.name : '加入旅程'}</span>
-                <i className="fa-solid fa-chevron-down kk-trip-caret" aria-hidden="true"></i>
-                <select
-                  className="kk-pill-native"
-                  value={tripSel}
-                  onChange={e => pickTrip(e.target.value)}
-                  aria-label={`旅程：${selTrip ? selTrip.name : '不屬於旅程'}`}
-                >
-                  <option value={NO_TRIP}>不屬於旅程</option>
-                  {tripOptions.map(t => <option key={t.id} value={t.id}>{t.name}（{formatTripRange(t)}）</option>)}
-                </select>
-              </label>
+          {/* 第一行：左旅程＋幫大家付膠囊（只對支出顯示）｜右算式；行高固定，標籤出現或消失不推動版面 */}
+          <div className={`kk-amount-top${showExpr ? ' has-expr' : ''}`}>
+            {(showTrip || !isIncome) && (
+              <div className="kk-amount-tags">
+                {showTrip && (
+                  <label className={`kk-trip${selTrip ? ' is-on' : ''}`}>
+                    <i className="fa-solid fa-plane" aria-hidden="true"></i>
+                    <span className="kk-trip-name">{selTrip ? selTrip.name : '加入旅程'}</span>
+                    <i className="fa-solid fa-chevron-down kk-trip-caret" aria-hidden="true"></i>
+                    <select
+                      className="kk-pill-native"
+                      value={tripSel}
+                      onChange={e => pickTrip(e.target.value)}
+                      aria-label={`旅程：${selTrip ? selTrip.name : '不屬於旅程'}`}
+                    >
+                      <option value={NO_TRIP}>不屬於旅程</option>
+                      {tripOptions.map(t => <option key={t.id} value={t.id}>{t.name}（{formatTripRange(t)}）</option>)}
+                    </select>
+                  </label>
+                )}
+                {!isIncome && (
+                  <button
+                    ref={sharePillRef}
+                    type="button"
+                    className={`kk-trip kk-share-pill${shareMode !== 'none' ? ' is-on' : ''}${shareOpen ? ' is-open' : ''}`}
+                    onClick={toggleShare}
+                    aria-expanded={shareOpen}
+                    aria-haspopup="dialog"
+                    aria-label={shareAriaLabel}
+                  >
+                    <i className="fa-solid fa-user-group" aria-hidden="true"></i>
+                    <span className="kk-trip-name">{sharePillText}</span>
+                    <i className="fa-solid fa-chevron-down kk-trip-caret" aria-hidden="true"></i>
+                  </button>
+                )}
+              </div>
             )}
             <div className="kk-amount-expr" aria-hidden={!showExpr}><span>{showExpr ? formatExpr(expr) : ' '}</span></div>
           </div>
@@ -553,6 +612,7 @@ export default function EntrySheet({
           </div>
         </div>
 
+        <div className="kk-sheet-lower">
         {/* 分類圖示格 */}
         <motion.div
           key={type}
@@ -664,78 +724,6 @@ export default function EntrySheet({
           </div>
         )}
 
-        {/* 幫大家付（只對支出顯示；三種模式下固定高度，不讓抽屜跳動） */}
-        {!isIncome && !noteEditing && !rateEditing && (
-          <div className={`kk-share-box${shareMode !== 'none' ? ' is-shared' : ''}`}>
-            <div className="kk-share-head">
-              <span className="kk-share-title">
-                <i className="fa-solid fa-users" aria-hidden="true"></i>
-                <span>幫大家付</span>
-              </span>
-              <div className="kk-share-seg" role="radiogroup" aria-label="幫大家付">
-                {[['none', '不是'], ['split', '均分'], ['fixed', '自填']].map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    role="radio"
-                    aria-checked={shareMode === key}
-                    className={`kk-share-btn${shareMode === key ? ' is-active' : ''}`}
-                    onClick={() => switchShareMode(key)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="kk-share-body">
-              {shareMode === 'none' && (
-                <span className="kk-share-hint">整筆計入我的花費</span>
-              )}
-
-              {shareMode === 'split' && (
-                <div className="kk-share-split">
-                  <label className="kk-share-field">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={2}
-                      max={99}
-                      className="kk-share-num"
-                      value={splitNStr}
-                      onChange={handleSplitNChange}
-                      onBlur={handleSplitNBlur}
-                      aria-label="均分人數"
-                    />
-                    <span className="kk-share-unit">人</span>
-                  </label>
-                  <span className="kk-share-preview">
-                    我的份 <strong>{splitPreviewText}</strong>
-                  </span>
-                </div>
-              )}
-
-              {shareMode === 'fixed' && (
-                <div className="kk-share-fixed">
-                  <label className="kk-share-field is-money" htmlFor="kkShareMyInput">
-                    <span className="kk-share-unit">我的份 NT$</span>
-                    <input
-                      id="kkShareMyInput"
-                      type="text"
-                      inputMode="decimal"
-                      className="kk-share-money"
-                      value={myShareStr}
-                      placeholder="0"
-                      onChange={e => setMyShareStr(sanitizeDecimal(e.target.value))}
-                      aria-label="我的份金額（台幣）"
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* 常駐數字鍵盤：備註／匯率輸入時收起，讓系統鍵盤出來 */}
         {!noteEditing && !rateEditing && (
           <div className="kk-keypad">
@@ -776,6 +764,103 @@ export default function EntrySheet({
               {isEdit ? '儲存變更' : '儲存'}
             </button>
           </div>
+        )}
+
+        {/* 幫大家付浮動小面板：蓋在分類與鍵盤上方，不改變抽屜高度 */}
+        <AnimatePresence>
+          {!isIncome && shareOpen && (
+            <motion.div
+              ref={sharePopoverRef}
+              className={`kk-share-popover${shareMode !== 'none' ? ' is-shared' : ''}`}
+              role="dialog"
+              aria-label="幫大家付"
+              initial={reduceMotion ? false : { opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: reduceMotion ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="kk-share-head">
+                <span className="kk-share-title">
+                  <i className="fa-solid fa-user-group" aria-hidden="true"></i>
+                  <span>幫大家付</span>
+                </span>
+                <div className="kk-share-seg" role="radiogroup" aria-label="幫大家付">
+                  {[['none', '不是'], ['split', '均分'], ['fixed', '自填']].map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      role="radio"
+                      aria-checked={shareMode === key}
+                      className={`kk-share-btn${shareMode === key ? ' is-active' : ''}`}
+                      onClick={() => switchShareMode(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="kk-share-body">
+                {shareMode === 'none' && (
+                  <span className="kk-share-hint">整筆計入我的花費</span>
+                )}
+
+                {shareMode === 'split' && (
+                  <div className="kk-share-split">
+                    <label className="kk-share-field">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={2}
+                        max={99}
+                        enterKeyHint="done"
+                        className="kk-share-num"
+                        value={splitNStr}
+                        onChange={handleSplitNChange}
+                        onBlur={handleSplitNBlur}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); closeShare(); } }}
+                        aria-label="均分人數"
+                      />
+                      <span className="kk-share-unit">人</span>
+                    </label>
+                    <span className="kk-share-preview">
+                      我的份 <strong>{splitPreviewText}</strong>
+                    </span>
+                  </div>
+                )}
+
+                {shareMode === 'fixed' && (
+                  <div className="kk-share-fixed">
+                    <label className="kk-share-field is-money" htmlFor="kkShareMyInput">
+                      <span className="kk-share-unit">我的份 NT$</span>
+                      <input
+                        id="kkShareMyInput"
+                        type="text"
+                        inputMode="decimal"
+                        enterKeyHint="done"
+                        className="kk-share-money"
+                        value={myShareStr}
+                        placeholder="0"
+                        onChange={e => setMyShareStr(sanitizeDecimal(e.target.value))}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); closeShare(); } }}
+                        aria-label="我的份金額（台幣）"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <button type="button" className="kk-share-done" onClick={closeShare}>
+                完成
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        </div>
+
+        {/* 點面板外關閉幫大家付（覆蓋抽屜其餘區域，層級低於面板本身） */}
+        {!isIncome && shareOpen && (
+          <div className="kk-share-scrim" onClick={closeShare} aria-hidden="true" />
         )}
       </motion.div>
     </>,
