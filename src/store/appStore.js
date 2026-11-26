@@ -4,7 +4,7 @@ import {
   LIFE_BDG_KEY, PROJECTS_KEY, PROJECT_EXP_KEY, PROJECT_CAT_KEY,
   INCOME_KEY, WEALTH_PARAMS_KEY, WEALTH_HOLDINGS_KEY, WEALTH_BANKS_KEY,
   SALARY_DEFAULT_KEY, DAILY_EXP_KEY, PAYMENT_KEY, FIXED_SORT_KEY, THEME_KEY,
-  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY, TRIPS_KEY, TRIP_EXCLUDE_KEY, LAST_SYNC_OK_KEY,
+  MERCHANT_RULES_KEY, DELETED_IMPORT_KEY, TRIPS_KEY, TRIP_EXCLUDE_KEY, TRIP_RULES_V2_KEY, LAST_SYNC_OK_KEY,
   DEFAULT_CATS, DEFAULT_LIFE_CATS, DEFAULT_LIFE_INC_CATS,
   DEFAULT_PROJECT_CATS, DEFAULT_PAYMENT_METHODS,
 } from '../lib/constants';
@@ -14,7 +14,6 @@ import { isImportedId } from '../lib/syncMerge';
 import { getTripContext } from '../lib/trips';
 import {
   planTripMigration,
-  TRIP_MIGRATION_FLAG,
   TRIP_MIGRATION_SNAPSHOT,
   TRIP_MIGRATION_MAX,
 } from '../lib/tripMigration';
@@ -57,6 +56,7 @@ const initState = {
   // 旅程：{ id, name, startDate, endDate, currency }；明細用 tripId 或日期歸屬（見 lib/trips.js）
   trips:                load(TRIPS_KEY, []),
   tripExcludeMerchants: load(TRIP_EXCLUDE_KEY, {}),     // 旅程例外商家：{ key: { on, at, label } }
+  tripRulesV2At:        load(TRIP_RULES_V2_KEY, 0),     // 旅程規則 v2 移轉完成時間戳（0 = 尚未移轉，多裝置共用）
 
   // Projects
   projects:           load(PROJECTS_KEY,    []),
@@ -183,12 +183,16 @@ export const useAppStore = create((set, get) => {
     },
 
     /** 推送前與雲端合併的結果寫回本地（不蓋時間戳，避免觸發再次推送） */
-    applyCloudMerge: ({ lifeExpenses, merchantRules, deletedImportIds = get().deletedImportIds, tripExcludeMerchants }) => {
+    applyCloudMerge: ({ lifeExpenses, merchantRules, deletedImportIds = get().deletedImportIds, tripExcludeMerchants, tripRulesV2At }) => {
       save(LIFE_EXP_KEY, lifeExpenses); save(MERCHANT_RULES_KEY, merchantRules); save(DELETED_IMPORT_KEY, deletedImportIds);
       const patch = { lifeExpenses, merchantRules, deletedImportIds };
       if (tripExcludeMerchants !== undefined) {
         save(TRIP_EXCLUDE_KEY, tripExcludeMerchants);
         patch.tripExcludeMerchants = tripExcludeMerchants;
+      }
+      if (tripRulesV2At !== undefined) {
+        save(TRIP_RULES_V2_KEY, tripRulesV2At);
+        patch.tripRulesV2At = tripRulesV2At;
       }
       set(patch);
     },
@@ -206,15 +210,16 @@ export const useAppStore = create((set, get) => {
       if (next === get().tripExcludeMerchants) return;
       save(TRIP_EXCLUDE_KEY, next); stamp(); set({ tripExcludeMerchants: next });
     },
-    /** 旅程規則改版一次性移轉：守住舊旅程總額（含快照、上限 200 筆、冪等旗標） */
+    /** 旅程規則改版一次性移轉：守住舊旅程總額（含快照、上限 200 筆、雲端共用完成標記）；回傳實際寫入筆數 */
     migrateTripRules: () => {
-      if (localStorage.getItem(TRIP_MIGRATION_FLAG)) return;
+      if (get().tripRulesV2At) return 0;
       const { lifeExpenses, trips, tripExcludeMerchants } = get();
+      if (!trips?.length) return 0;
       const plan = planTripMigration(lifeExpenses, trips, getTripContext(lifeExpenses, tripExcludeMerchants));
       if (plan.length > TRIP_MIGRATION_MAX) {
         console.warn(`[trips] 規則改版移轉中止：${plan.length} 筆超過上限 ${TRIP_MIGRATION_MAX}`);
         showToast('旅程資料移轉筆數異常，已暫停，請回報', 'error');
-        return;
+        return 0;
       }
       if (plan.length > 0) {
         const ids = new Set(plan.map(p => p.id));
@@ -228,7 +233,11 @@ export const useAppStore = create((set, get) => {
           .join('、');
         console.log('[trips] 規則改版移轉：' + summary);
       }
-      localStorage.setItem(TRIP_MIGRATION_FLAG, String(Date.now()));
+      const now = Date.now();
+      save(TRIP_RULES_V2_KEY, now);
+      stamp();
+      set({ tripRulesV2At: now });
+      return plan.length;
     },
 
     // ── Projects ──
@@ -272,6 +281,8 @@ export const useAppStore = create((set, get) => {
       if (data.merchantRules)        save(MERCHANT_RULES_KEY, data.merchantRules);
       if (data.trips)                save(TRIPS_KEY,          data.trips);
       if (data.tripExcludeMerchants) save(TRIP_EXCLUDE_KEY,   data.tripExcludeMerchants);
+      const tripRulesV2At = Math.max(get().tripRulesV2At || 0, data.tripRulesV2At || 0);
+      if (tripRulesV2At)             save(TRIP_RULES_V2_KEY,  tripRulesV2At);
       if (data.projects)             save(PROJECTS_KEY,       data.projects);
       if (data.projectExpenses)      save(PROJECT_EXP_KEY,    data.projectExpenses);
       if (data.projectCategories)    save(PROJECT_CAT_KEY,    data.projectCategories);
@@ -296,6 +307,7 @@ export const useAppStore = create((set, get) => {
         merchantRules:        data.merchantRules        ?? get().merchantRules,
         trips:                data.trips                ?? get().trips,
         tripExcludeMerchants: data.tripExcludeMerchants ?? get().tripExcludeMerchants,
+        tripRulesV2At,
         projects:             data.projects             ?? get().projects,
         projectExpenses:      data.projectExpenses      ?? get().projectExpenses,
         projectCategories:    data.projectCategories    ?? get().projectCategories,

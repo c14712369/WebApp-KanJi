@@ -4,6 +4,7 @@
  * 讓改版後既有旅程（如東京賞楓）的總額與筆數不變。
  */
 import { entryTripId, tripForDate, NO_TRIP } from './trips.js';
+import { isTripExcluded } from './tripMerchants.js';
 
 export const TRIP_MIGRATION_FLAG = 'sub_mgr_trip_rules_v2';
 export const TRIP_MIGRATION_SNAPSHOT = 'sub_mgr_trip_rules_v2_snapshot';
@@ -29,6 +30,7 @@ export function planTripMigration(entries, trips, ctx = {}) {
   for (const e of entries) {
     if (!e || e.type === 'income') continue;
     if (e.tripId === NO_TRIP || (e.tripId && tripIds.has(e.tripId))) continue;
+    if (ctx?.exclude && isTripExcluded(e, ctx.exclude)) continue;
     const legacy = legacyEntryTripId(e, trips);
     if (!legacy) continue;
     if (entryTripId(e, trips, ctx) !== null) continue;

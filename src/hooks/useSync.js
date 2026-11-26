@@ -25,6 +25,7 @@ function exportState(store) {
     merchantRules:        store.merchantRules,
     trips:                store.trips,
     tripExcludeMerchants: store.tripExcludeMerchants,
+    tripRulesV2At:        store.tripRulesV2At,
     projects:             store.projects,
     projectExpenses:      store.projectExpenses,
     projectCategories:    store.projectCategories,
@@ -73,11 +74,13 @@ export function useSync() {
         const lifeExpenses  = mergeLifeExpenses(s.lifeExpenses, cloud.app_data.lifeExpenses, deletedImportIds);
         const merchantRules = mergeMerchantRules(s.merchantRules, cloud.app_data.merchantRules);
         const tripExcludeMerchants = mergeTripExcludes(s.tripExcludeMerchants, cloud.app_data.tripExcludeMerchants);
+        const tripRulesV2At = Math.max(s.tripRulesV2At || 0, cloud.app_data.tripRulesV2At || 0);
         const sig = arr => arr.map(e => e.id + ':' + e.categoryId + ':' + e.amount).sort().join('|');
         if (sig(lifeExpenses) !== sig(s.lifeExpenses) || JSON.stringify(merchantRules) !== JSON.stringify(s.merchantRules)
             || JSON.stringify(tripExcludeMerchants) !== JSON.stringify(s.tripExcludeMerchants)
-            || deletedImportIds.length !== s.deletedImportIds.length) {
-          useAppStore.getState().applyCloudMerge({ lifeExpenses, merchantRules, deletedImportIds, tripExcludeMerchants });
+            || deletedImportIds.length !== s.deletedImportIds.length
+            || tripRulesV2At !== (s.tripRulesV2At || 0)) {
+          useAppStore.getState().applyCloudMerge({ lifeExpenses, merchantRules, deletedImportIds, tripExcludeMerchants, tripRulesV2At });
         }
       }
 
@@ -193,7 +196,13 @@ export function useSync() {
 
         if (localCount > 0 && localTs > cloudTs) {
           // 本地較新 -> 推上去；但先把雲端的 gmail_ 匯入列合併進本地，避免把 GAS 寫入蓋掉。
-          useAppStore.getState().applyCloudMerge({ lifeExpenses: mergedLife, merchantRules: mergedRules, deletedImportIds: deletedIds, tripExcludeMerchants: mergedExcludes });
+          useAppStore.getState().applyCloudMerge({
+            lifeExpenses: mergedLife,
+            merchantRules: mergedRules,
+            deletedImportIds: deletedIds,
+            tripExcludeMerchants: mergedExcludes,
+            tripRulesV2At: Math.max(s.tripRulesV2At || 0, cloudData.tripRulesV2At || 0),
+          });
           isFetching.current = false;
           window._appInitializing = false;
           await pushToCloud(true);
@@ -209,6 +218,7 @@ export function useSync() {
         await pushToCloud(true);
       }
     } catch (e) {
+      pulledOk = false;
       console.error('Fetch error:', e);
       setSyncStatus('error', ctrl.signal.aborted ? '連線逾時，雲端資料還沒拿到' : '讀取雲端失敗，請檢查網路');
     } finally {
@@ -217,7 +227,7 @@ export function useSync() {
       window._appInitializing = false;
       setIsSyncing(false);
       setBootstrapping(false); // 首次拉取結束 → 收起開場遮罩
-      if (pulledOk) useAppStore.getState().migrateTripRules();
+      if (pulledOk && useAppStore.getState().migrateTripRules() > 0) pushToCloud(true);
     }
   }, [loadFromCloud, pushToCloud, setIsSyncing, setBootstrapping, setSyncStatus]);
 

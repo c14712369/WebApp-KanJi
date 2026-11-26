@@ -77,6 +77,16 @@ test('tripId 指向存在的旅程、或是 none 的列不動', () => {
   ], T, {}), []);
 });
 
+test('例外商家的列不移轉', () => {
+  const r = [{ id: 'live_7', live: true, type: 'expense', amount: 85, date: '2026-11-17', note: '7-ELEVEN' }];
+  // live 列新規則本來就歸旅程；改用手動列確認例外被跳過
+  const m = [{ id: 'm7', type: 'expense', amount: 85, date: '2026-11-17', note: '7-ELEVEN' }];
+  const g = [{ id: 'gmail_7', type: 'expense', amount: 85, date: '2026-11-17', note: '7-ELEVEN' }];
+  assert.deepEqual(planTripMigration(m, T, { exclude: { '7-11': { on: true, at: 1 } } }), []);
+  assert.deepEqual(planTripMigration(g, T, { exclude: { '7-11': { on: true, at: 1 } } }), []);
+  assert.deepEqual(planTripMigration(r, T, {}), []);
+});
+
 test('常數與 legacyEntryTripId 邊界', () => {
   assert.equal(TRIP_MIGRATION_FLAG, 'sub_mgr_trip_rules_v2');
   assert.equal(TRIP_MIGRATION_SNAPSHOT, 'sub_mgr_trip_rules_v2_snapshot');
