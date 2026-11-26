@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
-import { fetchWithCache, formatAmount, showToast, autoFocusDesktop, confirmDialog } from '../../lib/utils';
+import { fetchWithCache, maskMoney, showToast, autoFocusDesktop, confirmDialog } from '../../lib/utils';
 import { buildProxyUrl, unwrapAllOrigins, twSymbolCandidates } from '../../lib/yahooProxy';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import { WEALTH_PARAMS_KEY } from '../../lib/constants';
@@ -122,6 +122,7 @@ async function fetchCAGR(rawSymbol, years) {
 
 // ── Holding Modal ─────────────────────────────────────────────────────────────
 function HoldingModal({ initial, onClose, onSave }) {
+  const isPrivacyMode = useAppStore(s => s.isPrivacyMode);
   const isEdit = !!initial;
   const [search,    setSearch]    = useState(initial ? `${(initial.symbol || '').replace('.TW', '')} ${initial.name || ''}`.trim() : '');
   const [symbol,    setSymbol]    = useState(initial?.symbol || '');
@@ -221,7 +222,7 @@ function HoldingModal({ initial, onClose, onSave }) {
         </div>
         {(price !== null || loading) && (
           <div id="holdingSelectedInfo" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12 }}>
-            {loading ? <><i className="fa-solid fa-rotate fa-spin"></i> 抓取股價中…</> : `現價 NT$ ${price?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            {loading ? <><i className="fa-solid fa-rotate fa-spin"></i> 抓取股價中…</> : `現價 NT$ ${maskMoney(price?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), isPrivacyMode)}`}
           </div>
         )}
         <div className="form-group">
@@ -328,7 +329,10 @@ function PlanRow({ id, title, desc, open, onToggle, children }) {
 }
 
 // 摘要用的萬元寫法：26,953 → 2.7 萬、17,000,000 → 1,700 萬
-const wan = v => { const s = formatAmount(v); return s === '****' ? s : v >= 10000 ? `${(Math.round(v / 1000) / 10).toLocaleString()} 萬` : Math.round(v).toLocaleString(); };
+const wan = (v, isMasked) => maskMoney(
+  v >= 10000 ? `${(Math.round(v / 1000) / 10).toLocaleString()} 萬` : Math.round(v).toLocaleString(),
+  isMasked
+);
 
 // ── Wealth Chart ──────────────────────────────────────────────────────────────
 function WealthChart({ labels, cashData, investData, totalData, targetFV, targetLabel = '目標金額' }) {
@@ -365,10 +369,10 @@ function WealthChart({ labels, cashData, investData, totalData, targetFV, target
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { position: 'bottom', labels: { color: tc, padding: 16, usePointStyle: true } },
-          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': NT$ ' + formatAmount(Math.round(ctx.raw)) } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': NT$ ' + maskMoney(Math.round(ctx.raw), isPrivacyMode) } },
         },
         scales: {
-          y: { beginAtZero: true, ticks: { color: tc, callback: v => formatAmount(v) === '****' ? '****' : 'NT$ ' + (v / 10000).toLocaleString() + '萬' }, grid: { color: gc } },
+          y: { beginAtZero: true, ticks: { color: tc, callback: v => maskMoney('NT$ ' + (v / 10000).toLocaleString() + '萬', isPrivacyMode) }, grid: { color: gc } },
           x: { ticks: { color: tc }, grid: { display: false } },
         },
       },
@@ -388,6 +392,7 @@ export default function WealthTab() {
     wealthHoldings, wealthBankAccounts,
     setWealthHoldings, setWealthBankAccounts, setWealthParams,
   } = useAppStore();
+  const isPrivacyMode = useAppStore(s => s.isPrivacyMode);
 
   const savedParams = (() => { try { return JSON.parse(localStorage.getItem(WEALTH_PARAMS_KEY)) || {}; } catch { return {}; } })();
 
@@ -527,7 +532,7 @@ export default function WealthTab() {
       const price = await fetchStockPrice(h.symbol, true);
       if (price !== null) {
         setWealthHoldings(wealthHoldings.map(x => x.id === id ? { ...x, lastPrice: price, lastUpdated: new Date().toISOString() } : x));
-        showToast(`${h.symbol} 更新至 NT$ ${formatAmount(price, 'asset')}`);
+        showToast(`${h.symbol} 更新至 NT$ ${maskMoney(price)}`);
       } else {
         showToast(`${h.symbol} 無法取得股價`, 'error');
       }
@@ -669,7 +674,7 @@ export default function WealthTab() {
           <section className="wl-hero" aria-label="資產總覽">
             <div className="wl-hero-label">當前資產總額</div>
             <div className="wl-hero-amount" id="wealthTotalAssetsDisplay">
-              <span className="wl-hero-cur">NT$</span><AnimatedNumber value={totalAssets} format={v => formatAmount(v, 'asset')} effect="scroll" />
+              <span className="wl-hero-cur">NT$</span><AnimatedNumber value={totalAssets} format={v => maskMoney(v, isPrivacyMode)} effect="scroll" />
             </div>
 
             {totalAssets > 0 && (
@@ -683,14 +688,14 @@ export default function WealthTab() {
               <div className="wl-hero-cell is-invest">
                 <div className="wl-hero-cell-label"><i aria-hidden="true"></i>投資市值</div>
                 <div className="wl-hero-cell-value" id="wealthTotalInvestSub">
-                  NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" />
+                  NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => maskMoney(v, isPrivacyMode)} effect="scroll" />
                 </div>
                 {totalAssets > 0 && <div className="wl-hero-cell-pct" id="wealthTotalInvestPct">占比 {investPct}%</div>}
               </div>
               <div className="wl-hero-cell is-cash">
                 <div className="wl-hero-cell-label"><i aria-hidden="true"></i>現金存款</div>
                 <div className="wl-hero-cell-value" id="wealthTotalCashSub">
-                  NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" />
+                  NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => maskMoney(v, isPrivacyMode)} effect="scroll" />
                 </div>
                 {totalAssets > 0 && <div className="wl-hero-cell-pct" id="wealthTotalCashPct">占比 {100 - investPct}%</div>}
               </div>
@@ -704,7 +709,7 @@ export default function WealthTab() {
               <div className="wl-panel-head-main">
                 <h3 className="wl-panel-title"><i className="fa-solid fa-chart-line" aria-hidden="true"></i> 投資持股</h3>
                 <div className="wl-panel-sub">
-                  總市值 <strong id="holdingsTotalValue">NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>
+                  總市值 <strong id="holdingsTotalValue">NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => maskMoney(v, isPrivacyMode)} effect="scroll" /></strong>
                   {wealthHoldings.length > 0 && <span className="wl-count">{wealthHoldings.length} 檔</span>}
                 </div>
               </div>
@@ -750,11 +755,11 @@ export default function WealthTab() {
                         <div className="wealth-row-mid">
                           <span className="wealth-row-detail" style={{ color: 'var(--text-muted)' }}>{h.shares.toLocaleString()} 股</span>
                           <span className="wealth-row-price" style={{ color: 'var(--primary-color)' }}>
-                            {h.lastPrice ? <>NT$ <AnimatedNumber value={h.lastPrice} format={v => formatAmount(v, 'asset')} effect="scroll" /></> : '—'}
+                            {h.lastPrice ? <>NT$ <AnimatedNumber value={h.lastPrice} format={v => maskMoney(v, isPrivacyMode)} effect="scroll" /></> : '—'}
                           </span>
                           {timeStr && <span className="wl-row-time">{timeStr}</span>}
                         </div>
-                        <div className="wealth-row-value" style={{ color: 'var(--text-main)', fontWeight: 800 }}>{h.lastPrice ? <>NT$ <AnimatedNumber value={Math.round(value)} format={v => formatAmount(v, 'asset')} effect="scroll" /></> : '—'}</div>
+                        <div className="wealth-row-value" style={{ color: 'var(--text-main)', fontWeight: 800 }}>{h.lastPrice ? <>NT$ <AnimatedNumber value={Math.round(value)} format={v => maskMoney(v, isPrivacyMode)} effect="scroll" /></> : '—'}</div>
                         <div className="wealth-row-actions">
                           <button type="button" className="icon-btn" title="更新股價" aria-label="更新股價" onClick={() => handleRefreshPrice(h.id)}>
                             <i className={`fa-solid fa-rotate${fetchingId === h.id ? ' fa-spin' : ''}`}></i>
@@ -779,7 +784,7 @@ export default function WealthTab() {
               <div className="wl-panel-head-main">
                 <h3 className="wl-panel-title"><i className="fa-solid fa-building-columns" aria-hidden="true"></i> 銀行現金</h3>
                 <div className="wl-panel-sub">
-                  現金合計 <strong id="bankTotalValue">NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} effect="scroll" /></strong>
+                  現金合計 <strong id="bankTotalValue">NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => maskMoney(v, isPrivacyMode)} effect="scroll" /></strong>
                   {wealthBankAccounts.length > 0 && <span className="wl-count">{wealthBankAccounts.length} 個帳戶</span>}
                 </div>
               </div>
@@ -796,7 +801,7 @@ export default function WealthTab() {
                     <div key={a.id} className="wealth-row">
                       <div className="wealth-row-left"><span className="wealth-row-symbol" style={{ fontSize: '0.9rem' }}>{a.bankName}</span></div>
                       <div className="wealth-row-mid"><span className="wealth-row-detail">利率 {a.rate || 0}%</span></div>
-                      <div className="wealth-row-value">NT$ <AnimatedNumber value={Math.round(a.balance || 0)} format={v => formatAmount(v, 'asset')} effect="scroll" /></div>
+                      <div className="wealth-row-value">NT$ <AnimatedNumber value={Math.round(a.balance || 0)} format={v => maskMoney(v, isPrivacyMode)} effect="scroll" /></div>
                       <div className="wealth-row-actions">
                         <button type="button" className="icon-btn" title="編輯" aria-label="編輯" onClick={() => { setEditBankId(a.id); setShowBankModal(true); }}><i className="fa-solid fa-pen"></i></button>
                         <button type="button" className="icon-btn delete" title="刪除" aria-label="刪除" onClick={() => handleDeleteBank(a.id)}><i className="fa-solid fa-trash"></i></button>
@@ -827,7 +832,7 @@ export default function WealthTab() {
                   const atAge = Math.round(num(planRetire.age) + num(g.years));
                   return (
                     <PlanRow key={g.id} id={g.id} title={g.name || '未命名'} open={openRow === g.id} onToggle={() => toggleRow(g.id)}
-                      desc={`${atAge} 歲・頭期 ${wan(num(g.cash))}${num(g.loan) > 0 ? `・貸 ${wan(num(g.loan))}・月付 ${wan(pay)}` : ''}`}>
+                      desc={`${atAge} 歲・頭期 ${wan(num(g.cash), isPrivacyMode)}${num(g.loan) > 0 ? `・貸 ${wan(num(g.loan), isPrivacyMode)}・月付 ${wan(pay, isPrivacyMode)}` : ''}`}>
                       <div className="form-group">
                         <label className="form-label" htmlFor={`${g.id}-name`}>名稱</label>
                         <input className="form-input" id={`${g.id}-name`} value={g.name} onChange={e => updateGoal(g.id, { name: e.target.value })} />
@@ -861,7 +866,7 @@ export default function WealthTab() {
               </div>
               <div className="wl-prows">
                 <PlanRow id="retire" title="退休" open={openRow === 'retire'} onToggle={() => toggleRow('retire')}
-                  desc={`${Math.round(num(planRetire.age))} → ${Math.round(num(planRetire.retireAge))} 歲退休，用到 ${Math.round(num(planRetire.lifeAge))} 歲・月花 ${wan(num(planRetire.monthlySpend))}（勞保勞退 ${wan(num(planRetire.pension))}）`}>
+                  desc={`${Math.round(num(planRetire.age))} → ${Math.round(num(planRetire.retireAge))} 歲退休，用到 ${Math.round(num(planRetire.lifeAge))} 歲・月花 ${wan(num(planRetire.monthlySpend), isPrivacyMode)}（勞保勞退 ${wan(num(planRetire.pension), isPrivacyMode)}）`}>
                   <p className="wl-prow-note">月花費、勞保勞退請用「今天的錢」填，會依通膨自動換算</p>
                   <div className="wl-life-grid">
                     {[
@@ -877,14 +882,14 @@ export default function WealthTab() {
                   </div>
                 </PlanRow>
                 <PlanRow id="assume" title="報酬假設" open={openRow === 'assume'} onToggle={() => toggleRow('assume')}
-                  desc={`投資 ${num(invRate)}%・存款 ${num(cashRate)}%・目前每月存 ${wan(curInv + curCashM)}`}>
-                  <p className="wl-prow-note">從現有資產 NT$ {formatAmount(Math.round(totalAssets), 'asset')} 起算；每月存的錢照目前定期定額與存款的比例分配</p>
+                  desc={`投資 ${num(invRate)}%・存款 ${num(cashRate)}%・目前每月存 ${wan(curInv + curCashM, isPrivacyMode)}`}>
+                  <p className="wl-prow-note">從現有資產 NT$ {maskMoney(Math.round(totalAssets), isPrivacyMode)} 起算；每月存的錢照目前定期定額與存款的比例分配</p>
                   <div className="wl-calc-groups">
                   {/* Investment */}
                   <fieldset className="wl-group is-invest">
                     <legend className="wl-group-head">
                       <span className="wl-group-title"><i aria-hidden="true"></i>投資部位</span>
-                      <span className="wl-group-current" id="wealthInvestCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => formatAmount(v, 'asset')} /></span>
+                      <span className="wl-group-current" id="wealthInvestCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalInvest)} format={v => maskMoney(v, isPrivacyMode)} /></span>
                     </legend>
                     <div className="wl-grid-2">
                       <div className="form-group">
@@ -947,7 +952,7 @@ export default function WealthTab() {
                   <fieldset className="wl-group is-cash">
                     <legend className="wl-group-head">
                       <span className="wl-group-title"><i aria-hidden="true"></i>現金 / 存款</span>
-                      <span className="wl-group-current" id="wealthCashCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => formatAmount(v, 'asset')} /></span>
+                      <span className="wl-group-current" id="wealthCashCurrentDisplay">現有 NT$ <AnimatedNumber value={Math.round(totalCash)} format={v => maskMoney(v, isPrivacyMode)} /></span>
                     </legend>
                     <div className="wl-grid-2">
                       <div className="form-group">
@@ -972,9 +977,9 @@ export default function WealthTab() {
                 <div className="wl-goal-result-main">目標太大，無法達成</div>
               ) : (
                 <>
-                  <div className="wl-goal-result-main">NT$ <AnimatedNumber value={life.budget} format={v => formatAmount(v, 'asset')} /></div>
+                  <div className="wl-goal-result-main">NT$ <AnimatedNumber value={life.budget} format={v => maskMoney(v, isPrivacyMode)} /></div>
                   <div className="wl-goal-summary">
-                    <span>退休時要備 <strong>NT$ {formatAmount(Math.round(life.sim.need), 'asset')}</strong></span>
+                    <span>退休時要備 <strong>NT$ {maskMoney(Math.round(life.sim.need), isPrivacyMode)}</strong></span>
                     <span className="wl-goal-summary-sub">{Math.round(num(planRetire.retireAge))} 歲退休，用到 {Math.round(num(planRetire.lifeAge))} 歲</span>
                   </div>
                   <ol className="wl-life-phases">
@@ -982,10 +987,10 @@ export default function WealthTab() {
                       <li key={k}>
                         <span className="wl-life-phase-age">{Math.round(ph.from)}–{Math.round(ph.to)} 歲</span>
                         <span className="wl-life-phase-desc">
-                          {ph.pay > 0 && <>還貸 NT$ {formatAmount(Math.round(ph.pay), 'asset')}，</>}
+                          {ph.pay > 0 && <>還貸 NT$ {maskMoney(Math.round(ph.pay), isPrivacyMode)}，</>}
                           {ph.free >= 0
-                            ? <>存 <strong>NT$ {formatAmount(Math.round(ph.free), 'asset')}</strong></>
-                            : <strong className="is-short">每月要從存款補 NT$ {formatAmount(Math.round(-ph.free), 'asset')}</strong>}
+                            ? <>存 <strong>NT$ {maskMoney(Math.round(ph.free), isPrivacyMode)}</strong></>
+                            : <strong className="is-short">每月要從存款補 NT$ {maskMoney(Math.round(-ph.free), isPrivacyMode)}</strong>}
                         </span>
                       </li>
                     ))}
@@ -993,8 +998,8 @@ export default function WealthTab() {
                   <div className="wl-plan-compare">
                     <span className={life.budget > life.current ? 'is-short' : 'is-ok'}>
                       {life.budget > life.current
-                        ? `目前每月存 NT$ ${formatAmount(life.current, 'asset')}，還差 NT$ ${formatAmount(life.budget - life.current, 'asset')}`
-                        : `目前每月存 NT$ ${formatAmount(life.current, 'asset')} 已足夠`}
+                        ? `目前每月存 NT$ ${maskMoney(life.current, isPrivacyMode)}，還差 NT$ ${maskMoney(life.budget - life.current, isPrivacyMode)}`
+                        : `目前每月存 NT$ ${maskMoney(life.current, isPrivacyMode)} 已足夠`}
                     </span>
                   </div>
                 </>

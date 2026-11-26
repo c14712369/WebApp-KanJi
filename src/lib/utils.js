@@ -33,6 +33,14 @@ export const fmtMoney = (v) => formatAmount(v, 'money');
 // 給 AnimatedNumber 的 format 用：收入金額（隱私模式遮蔽）
 export const fmtIncomeMoney = (v) => formatAmount(v, 'income');
 
+// 通用金額遮罩（資產試算等非收入頁面）：isMasked 為 true 時回 '****'；支援數值或已格式化字串
+export function maskMoney(val, isMasked = useAppStore.getState().isPrivacyMode) {
+  if (isMasked) return '****';
+  if (typeof val === 'string') return val;
+  if (val == null) return '0';
+  return Number(val).toLocaleString();
+}
+
 export function toMonthlyAmount(item) {
   const base = Number(item.originalAmount || item.amount) || 0;
   const rate  = Number(item.exchangeRate) || 1;
