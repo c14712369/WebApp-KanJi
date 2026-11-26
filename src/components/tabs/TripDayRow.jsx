@@ -7,7 +7,7 @@ import { TRIP_COLOR } from '../../lib/trips';
  * 日常清單裡「當天該趟旅程」的收合列：點一下打開那趟的旅程明細抽屜。
  * 外觀對齊 LifeEntryRow（同列高、左右留白與字級），不與日常支出混排細節。
  */
-export default function TripDayRow({ entry, idx = 0, onOpen }) {
+export default function TripDayRow({ entry, idx = 0, isJustSaved = false, onOpen }) {
   const tripName = entry.note || '旅程';
   const count = Number(entry.count) || 0;
   const roundedAmount = Math.round(Number(entry.amount) || 0);
@@ -26,7 +26,7 @@ export default function TripDayRow({ entry, idx = 0, onOpen }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.15, delay: idx * 0.01, ease: 'easeOut' }}
-      className="kk-tripday"
+      className={`kk-tripday${isJustSaved ? ' life-row-flash' : ''}`}
       style={{ '--trip-color': TRIP_COLOR }}
       data-entry-id={entry.id}
       aria-label={ariaLabel}

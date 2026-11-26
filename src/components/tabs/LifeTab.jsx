@@ -11,7 +11,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
 import { computeSpendPace } from '../../lib/spendPace';
 import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
-import { splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, summarizeTrip, pendingEntries, TRIP_COLOR } from '../../lib/trips';
+import { entryTripId, splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, summarizeTrip, pendingEntries, TRIP_COLOR } from '../../lib/trips';
 import { tripEntryDraft } from '../../lib/tripActions';
 import { useTripContext } from '../../hooks/useTripContext';
 import { useTripActions } from '../../hooks/useTripActions';
@@ -333,20 +333,29 @@ export default function LifeTab() {
   const filterIcon = filterTripId ? 'fa-plane' : null;
   const clearFilters = () => { setSelectedCatId(null); setFilterType('all'); };
 
-  // 存檔後聚焦該筆日期、捲過去並閃爍提示
+  // 存檔後聚焦該筆日期、捲過去並閃爍提示（跨月不動選取日期，也不捲動）
+  const savedEntry = justSavedId ? lifeExpenses.find(e => e.id === justSavedId) : null;
+  const savedTripId = savedEntry && savedEntry.type !== 'income' && !filterTripId
+    ? entryTripId(savedEntry, trips, tripCtx)
+    : null;
+  const calJustSavedId = justSavedId
+    ? (savedTripId && savedEntry.date ? `tripday_${savedTripId}_${savedEntry.date}` : justSavedId)
+    : null;
+
   useEffect(() => {
     if (!justSavedId) return;
-    const savedEntry = lifeExpenses.find(e => e.id === justSavedId);
-    if (savedEntry && savedEntry.date) {
+    const inViewMonth = !!(savedEntry?.date && savedEntry.date.startsWith(ym));
+    let timer;
+    if (inViewMonth) {
       setSelectedCalDate(savedEntry.date);
+      timer = setTimeout(() => {
+        document.querySelector(`[data-entry-id="${CSS.escape(calJustSavedId)}"]`)
+          ?.scrollIntoView({ block: 'center', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+      }, 120);
     }
-    const timer = setTimeout(() => {
-      document.querySelector(`[data-entry-id="${CSS.escape(justSavedId)}"]`)
-        ?.scrollIntoView({ block: 'center', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-    }, 120);
     const t = setTimeout(() => setJustSavedId(null), 1600);
-    return () => { clearTimeout(timer); clearTimeout(t); };
-  }, [justSavedId, lifeExpenses]);
+    return () => { if (timer) clearTimeout(timer); clearTimeout(t); };
+  }, [justSavedId, calJustSavedId, savedEntry, ym, prefersReducedMotion]);
 
   // ── Month nav ──
   const changeMonth = (delta) => {
@@ -544,7 +553,7 @@ export default function LifeTab() {
                   lifeIncomeCategories={lifeIncomeCategories}
                   paymentMethods={paymentMethods}
                   rewardMap={rewardMap}
-                  justSavedId={justSavedId}
+                  justSavedId={calJustSavedId}
                   onEdit={openEdit}
                   filterType={filterType}
                   setFilterType={setFilterType}

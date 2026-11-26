@@ -161,7 +161,7 @@ export default function CalendarView({
     for (const e of allEntries) {
       if (selectedDate && e.date !== selectedDate) continue;
       if (visible.has(e.id)) continue;
-      if (e.type === 'income') inc++; else exp++;
+      if (e.type === 'income') inc++; else exp += e._tripDay ? (e.count || 1) : 1;
     }
     return [exp ? `${exp} 筆支出` : '', inc ? `${inc} 筆收入` : ''].filter(Boolean).join('、');
   }, [filterLabel, allEntries, entries, selectedDate]);
@@ -283,7 +283,7 @@ export default function CalendarView({
 
   const renderRow = (e, idx) => (
     e._tripDay ? (
-      <TripDayRow key={e.id} entry={e} idx={idx} onOpen={onOpenTrip} />
+      <TripDayRow key={e.id} entry={e} idx={idx} isJustSaved={e.id === justSavedId} onOpen={onOpenTrip} />
     ) : (
       <LifeEntryRow
         key={e.id}
