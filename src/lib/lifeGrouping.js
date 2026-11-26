@@ -2,13 +2,15 @@
  * 記帳明細「依日期分組」與「分頁時整天不切斷」邏輯（純函式，零依賴，可單元測試）。
  */
 import { entryTripId } from './trips.js';
+import { spendOf } from './share.js';
 
 /**
  * 將已過濾、已排序的明細依日期分組（保留原排序）。
  * @param {Array} entries
+ * @param {Object} [ctx]
  * @returns {Array<{date:string, entries:Array, total:number}>} total 為當日支出合計（不含收入）
  */
-export function groupEntriesByDay(entries = []) {
+export function groupEntriesByDay(entries = [], ctx = {}) {
   const arr = Array.isArray(entries) ? entries : [];
   const order = [];
   const map = {};
@@ -18,10 +20,10 @@ export function groupEntriesByDay(entries = []) {
     map[d].entries.push(e);
     // total 維持「當日支出」（既有語意）；收入另計，只有收入的日子才不會顯示「合計 $0」
     // 筆數另計：同類只有 1 筆時合計等於那筆金額，畫面上不重複顯示
-    if (e && e.type !== 'income') { map[d].total += (Number(e.amount) || 0); map[d].expenseCount += 1; }
+    if (e && e.type !== 'income') { map[d].total += spendOf(e, ctx); map[d].expenseCount += 1; }
     else if (e) { map[d].incomeTotal += (Number(e.amount) || 0); map[d].incomeCount += 1; }
   }
-  return order.map(d => map[d]);
+  return order.map(d => ({ ...map[d], total: Math.round(map[d].total) }));
 }
 
 /**
@@ -104,7 +106,7 @@ function buildPages(groups, targetSize) {
  * @param {Array} entries - 當月明細列表
  * @returns {{paddingDays: number, days: Array<{date: string, day: number, entries: Array, hasExpense: boolean, hasIncome: boolean, totalExpense: number, totalIncome: number}>}}
  */
-export function buildMonthCalendar(ym, entries = []) {
+export function buildMonthCalendar(ym, entries = [], ctx = {}) {
   if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return { paddingDays: 0, days: [] };
   const [yearStr, monthStr] = ym.split('-');
   const year = parseInt(yearStr, 10);
@@ -133,22 +135,21 @@ export function buildMonthCalendar(ym, entries = []) {
     if (!e || !e.date || !dayMap[e.date]) continue;
     const item = dayMap[e.date];
     item.entries.push(e);
-    const amt = Number(e.amount) || 0;
     if (e.type === 'income') {
       // 排除信用卡回饋金折抵，避免虛擬收入綠點
       if (!e._linkedExpenseId) {
         item.hasIncome = true;
-        item.totalIncome += amt;
+        item.totalIncome += (Number(e.amount) || 0);
       }
     } else {
       item.hasExpense = true;
-      item.totalExpense += amt;
+      item.totalExpense += spendOf(e, ctx);
     }
   }
 
   return {
     paddingDays: firstDayOfWeek,
-    days: Object.values(dayMap),
+    days: Object.values(dayMap).map(d => ({ ...d, totalExpense: Math.round(d.totalExpense) })),
   };
 }
 
@@ -213,8 +214,9 @@ export function collapseTripEntries(entries = [], trips = [], ctx = {}) {
     const date = e.date || '';
     const key = `${tid}\0${date}`;
     const existing = groups.get(key);
+    const amt = spendOf(e, ctx);
     if (existing) {
-      existing.amount += Number(e.amount) || 0;
+      existing.amount += amt;
       existing.count += 1;
     } else {
       const row = {
@@ -223,7 +225,7 @@ export function collapseTripEntries(entries = [], trips = [], ctx = {}) {
         tripId: tid,
         date,
         type: 'expense',
-        amount: Number(e.amount) || 0,
+        amount: amt,
         count: 1,
         note: tripNames.get(tid) || '旅程',
       };

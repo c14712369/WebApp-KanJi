@@ -16,6 +16,7 @@
 
 import { isImportedId } from './syncMerge.js';
 import { isTripExcluded } from './tripMerchants.js';
+import { spendOf } from './share.js';
 
 export const NO_TRIP = 'none';
 const DAY_MS = 86400000;
@@ -113,13 +114,13 @@ export function summarizeTrip(trip, entries, trips, categories = [], ctx = {}) {
     .sort((a, b) => (b.date || '').localeCompare(a.date || '')
       || (Number(b.amount) || 0) - (Number(a.amount) || 0)
       || String(a.id || '').localeCompare(String(b.id || '')));
-  const total = list.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const total = list.reduce((s, e) => s + spendOf(e, ctx), 0);
   const days = tripDays(trip);
 
   const catMap = new Map();
   const foreignMap = new Map();
   list.forEach(e => {
-    const amt = Number(e.amount) || 0;
+    const amt = spendOf(e, ctx);
     const cat = categories.find(c => c.id === e.categoryId);
     const key = cat ? cat.id : '__none';
     const row = catMap.get(key) || { id: key, name: cat?.name || '未分類', color: cat?.color || '#8A8A8A', icon: cat?.icon, amount: 0 };
@@ -135,15 +136,23 @@ export function summarizeTrip(trip, entries, trips, categories = [], ctx = {}) {
 
   const byCategory = [...catMap.values()]
     .sort((a, b) => b.amount - a.amount)
-    .map(c => ({ ...c, pct: total > 0 ? Math.round((c.amount / total) * 100) : 0 }));
+    .map(c => ({
+      ...c,
+      amount: Math.round(c.amount),
+      pct: total > 0 ? Math.round((c.amount / total) * 100) : 0,
+    }));
 
   return {
-    total,
+    total: Math.round(total),
     count: list.length,
     days,
     perDay: total > 0 ? Math.round(total / days) : 0,
     byCategory,
-    foreign: [...foreignMap.values()].map(f => ({ ...f, original: Math.round(f.original * 100) / 100 })),
+    foreign: [...foreignMap.values()].map(f => ({
+      ...f,
+      original: Math.round(f.original * 100) / 100,
+      twd: Math.round(f.twd),
+    })),
     entries: list,
   };
 }
@@ -152,18 +161,18 @@ export function summarizeTrip(trip, entries, trips, categories = [], ctx = {}) {
  * 旅程明細抽屜：依分類篩選（catId＝summarizeTrip 的分類 id，'__none' 是未分類；null 不篩），
  * 再依日分組（沿用傳入順序，summarizeTrip 已排成新到舊），每組附當日小計。
  */
-export function groupTripEntries(entries, catId, categories = []) {
+export function groupTripEntries(entries, catId, categories = [], ctx = {}) {
   const known = new Set((categories || []).map(c => c.id));
   const keyOf = (e) => (known.has(e.categoryId) ? e.categoryId : '__none');
   const out = [];
   (entries || []).forEach(e => {
     if (catId && keyOf(e) !== catId) return;
-    const amt = Number(e.amount) || 0;
+    const amt = spendOf(e, ctx);
     const last = out[out.length - 1];
     if (last && last.date === e.date) { last.items.push(e); last.sum += amt; }
     else out.push({ date: e.date, items: [e], sum: amt });
   });
-  return out;
+  return out.map(g => ({ ...g, sum: Math.round(g.sum) }));
 }
 
 /** 11/14–11/22；跨年寫完整年份 */
@@ -231,18 +240,25 @@ export function splitMonthSpend(entries, trips, ym, categories = [], ctx = {}) {
   let uncategorized = 0;
   (entries || []).forEach(e => {
     if (!e || e.type === 'income' || !(e.date || '').startsWith(ym)) return;
-    const amt = Number(e.amount) || 0;
+    const amt = spendOf(e, ctx);
     const tid = entryTripId(e, trips, ctx);
     if (tid) { byTrip.set(tid, (byTrip.get(tid) || 0) + amt); return; }
     if (catIds.has(e.categoryId)) byCat.set(e.categoryId, (byCat.get(e.categoryId) || 0) + amt);
     else uncategorized += amt;
   });
-  const daily = categories.filter(c => byCat.get(c.id) > 0).map(c => ({ ...c, amount: byCat.get(c.id) }));
+  const dailyRaw = [...byCat.values()].reduce((s, v) => s + v, 0) + uncategorized;
+  const tripRaw = [...byTrip.values()].reduce((s, v) => s + v, 0);
+  const daily = categories.filter(c => byCat.get(c.id) > 0).map(c => ({ ...c, amount: Math.round(byCat.get(c.id)) }));
   const tripRows = [...byTrip.entries()]
-    .map(([id, amount]) => ({ id, name: (trips || []).find(t => t.id === id)?.name || '旅程', amount }))
+    .map(([id, amount]) => ({ id, name: (trips || []).find(t => t.id === id)?.name || '旅程', amount: Math.round(amount) }))
     .sort((a, b) => b.amount - a.amount);
-  const dailyTotal = daily.reduce((s, c) => s + c.amount, 0) + uncategorized;
-  return { daily, uncategorized, dailyTotal, trips: tripRows, tripTotal: tripRows.reduce((s, t) => s + t.amount, 0) };
+  return {
+    daily,
+    uncategorized: Math.round(uncategorized),
+    dailyTotal: Math.round(dailyRaw),
+    trips: tripRows,
+    tripTotal: Math.round(tripRaw),
+  };
 }
 
 /** 篩選值：分類 id，或 'trip:<旅程 id>' */

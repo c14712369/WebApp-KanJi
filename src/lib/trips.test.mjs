@@ -399,6 +399,54 @@ test('依年份分組：出發年、保持順序、年合計', () => {
   assert.deepEqual(g[0].items.map(x => x.trip.id), ['a', 'b']);
 });
 
+console.log('幫大家付：旅程總額、分類、當日小計、splitMonthSpend 改用有效花費');
+test('均分後旅程總額與分類（加總用未四捨五入、最後才取整；原幣與排序仍用原值）', () => {
+  const tTh = { id: 't_th', name: '泰國', startDate: '2026-10-14', endDate: '2026-10-19', currency: 'THB', groupSize: 6 };
+  const sCats = [
+    { id: 'lc_stay', name: '住宿', color: '#4A6CB3' },
+    { id: 'lc_food', name: '飲食', color: '#C17B2E' },
+  ];
+  const sEntries = [
+    { id: 'kk', type: 'expense', amount: 8950, currency: 'THB', originalAmount: 9000, categoryId: 'lc_stay', date: '2026-10-15', splitN: 6 },
+    { id: 'g1', type: 'expense', amount: 166, categoryId: 'lc_food', date: '2026-10-15', myShare: 0 },
+    { id: 'gf', type: 'expense', amount: 3, categoryId: 'lc_food', date: '2026-10-15', feeOf: 'g1' },
+    { id: 'm1', type: 'expense', amount: 100, categoryId: 'lc_food', date: '2026-10-15' },
+  ];
+  const ctx = getTripContext(sEntries, {});
+  const s = summarizeTrip(tTh, sEntries, [tTh], sCats, ctx);
+  assert.equal(s.total, 1592); // 8950/6 + 0 + 0 + 100 = 1591.6667 → 1592
+  assert.deepEqual(s.byCategory.map(c => [c.name, c.amount]), [['住宿', 1492], ['飲食', 100]]);
+  assert.deepEqual(s.foreign, [{ code: 'THB', original: 9000, twd: 1492 }]);
+  // 同日排序照舊用 amount（g1=166 > m1=100 > gf=3）
+  assert.deepEqual(s.entries.map(e => e.id), ['kk', 'g1', 'm1', 'gf']);
+
+  // 加總用未四捨五入：兩筆 100÷3 = 66.67 → 67（不是 33+33=66）
+  const two = [
+    { id: 'x1', type: 'expense', amount: 100, categoryId: 'lc_food', date: '2026-10-15', splitN: 3 },
+    { id: 'x2', type: 'expense', amount: 100, categoryId: 'lc_food', date: '2026-10-16', splitN: 3 },
+  ];
+  assert.equal(summarizeTrip(tTh, two, [tTh], sCats).total, 67);
+
+  // groupTripEntries 傳 ctx 時服務費也跟比例
+  const g = groupTripEntries(s.entries, null, sCats, ctx);
+  assert.equal(g[0].sum, 1592);
+});
+
+test('splitMonthSpend 用有效花費', () => {
+  const tTh = { id: 't_th', name: '泰國', startDate: '2026-10-14', endDate: '2026-10-19', currency: 'THB', groupSize: 6 };
+  const sCats = [{ id: 'lc_food', name: '飲食', color: '#C17B2E' }];
+  const sEntries = [
+    { id: 'd1', type: 'expense', amount: 200, categoryId: 'lc_food', date: '2026-10-05', myShare: 50 },
+    { id: 'k1', type: 'expense', amount: 8950, categoryId: 'lc_food', date: '2026-10-15', splitN: 6 },
+    { id: 'kf', type: 'expense', amount: 134, categoryId: 'lc_food', date: '2026-10-15', feeOf: 'k1' },
+  ];
+  const ctx = getTripContext(sEntries, {});
+  const r = splitMonthSpend(sEntries, [tTh], '2026-10', sCats, ctx);
+  assert.equal(r.dailyTotal, 50);
+  assert.equal(r.tripTotal, Math.round(8950 / 6 + 134 / 6));
+  assert.deepEqual(r.trips, [{ id: 't_th', name: '泰國', amount: Math.round(8950 / 6 + 134 / 6) }]);
+});
+
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);
 if (failed > 0) process.exit(1);
 console.log('全部通過 ✅');

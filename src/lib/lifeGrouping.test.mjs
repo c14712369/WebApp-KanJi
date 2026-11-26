@@ -303,6 +303,43 @@ test('收合後再分組，合成列在第一筆原本的位置', () => {
   assert.equal(g.entries[0].id, 'tripday_t_tn_2026-12-06');
 });
 
+console.log('\n[幫大家付 — 當日小計與收合列加總改用有效花費]');
+test('當日小計用有效花費（groupEntriesByDay / buildMonthCalendar）', () => {
+  const g1 = { id: 'g1', date: '2026-10-15', amount: 166, type: 'expense', myShare: 0 };
+  const gf = { id: 'gf', date: '2026-10-15', amount: 3, type: 'expense', feeOf: 'g1' };
+  const k1 = { id: 'k1', date: '2026-10-15', amount: 8950, type: 'expense', splitN: 6 };
+  const x1 = { id: 'x1', date: '2026-10-16', amount: 100, type: 'expense', splitN: 3 };
+  const x2 = { id: 'x2', date: '2026-10-16', amount: 100, type: 'expense', splitN: 3 };
+  const list = [k1, g1, gf, x1, x2];
+  const ctx = { byId: new Map(list.map(e => [e.id, e])) };
+
+  const days = groupEntriesByDay(list, ctx);
+  assert.equal(days[0].total, 1492);
+  assert.equal(days[1].total, 67); // 33.33 + 33.33 = 66.67 → 67
+
+  const cal = buildMonthCalendar('2026-10', list, ctx);
+  assert.equal(cal.days[14].totalExpense, 1492);
+  assert.equal(cal.days[14].hasExpense, true);
+  assert.equal(cal.days[15].totalExpense, 67);
+});
+
+test('收合列加總用有效花費（collapseTripEntries 保留未四捨五入，最後分組才取整）', () => {
+  const tTh = [{ id: 't_th', name: '泰國', startDate: '2026-10-14', endDate: '2026-10-19', currency: 'THB' }];
+  const list = [
+    { id: 'k1', type: 'expense', amount: 8950, date: '2026-10-15', splitN: 6 },
+    { id: 'g1', type: 'expense', amount: 166, date: '2026-10-15', myShare: 0 },
+    { id: 'gf', type: 'expense', amount: 3, date: '2026-10-15', feeOf: 'g1' },
+    { id: 'd1', type: 'expense', amount: 1200, date: '2026-10-15', tripId: 'none', splitN: 6 },
+  ];
+  const ctx = { byId: new Map(list.map(e => [e.id, e])) };
+  const collapsed = collapseTripEntries(list, tTh, ctx);
+  const tripRow = collapsed.find(e => e.id === 'tripday_t_th_2026-10-15');
+  assert.ok(Math.abs(tripRow.amount - (8950 / 6)) < 1e-9);
+  assert.equal(tripRow.count, 3);
+  const dayGroup = groupEntriesByDay(collapsed, ctx).find(g => g.date === '2026-10-15');
+  assert.equal(dayGroup.total, Math.round(8950 / 6 + 200));
+});
+
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);
 if (failed > 0) process.exit(1);
 console.log('全部通過 ✅');
