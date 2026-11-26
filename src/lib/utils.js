@@ -102,24 +102,81 @@ export function calculateExpenseForMonth(item, year, month) {
 
 // ─── Toast ──────────────────────────────────────────────────────────────────
 
-export function showToast(message, type = 'success') {
+export function showToast(message, type = 'success', opts = {}) {
   const existing = document.getElementById('_toast');
   if (existing) existing.remove();
+
+  const { actionLabel, onAction, duration } = opts || {};
+  const hasAction = !!actionLabel;
+  const stayMs = Number(duration) > 0 ? Number(duration) : (hasAction ? 6000 : 2500);
 
   const toast = document.createElement('div');
   toast.id = '_toast';
   toast.className = `toast toast-${type}`;
-  toast.textContent = message;
+
   Object.assign(toast.style, {
     position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
     background: type === 'error' ? '#D46060' : 'var(--primary-color)',
-    color: '#fff', padding: '10px 20px', borderRadius: '8px',
-    zIndex: 9999, fontSize: '0.9rem', whiteSpace: 'nowrap',
+    color: '#fff', padding: hasAction ? '10px 14px 10px 18px' : '10px 20px', borderRadius: '8px',
+    zIndex: 9999, fontSize: '0.9rem',
+    whiteSpace: hasAction ? 'normal' : 'nowrap',
     boxShadow: '0 4px 12px rgba(0,0,0,0.2)', opacity: 0, transition: 'opacity 0.2s',
+    ...(hasAction ? {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      maxWidth: 'calc(100vw - 32px)',
+      width: 'max-content',
+      lineHeight: '1.45',
+    } : {}),
   });
+
+  let timer;
+  let removed = false;
+  const close = () => {
+    if (removed) return;
+    removed = true;
+    clearTimeout(timer);
+    toast.style.opacity = 0;
+    setTimeout(() => toast.remove(), 200);
+  };
+
+  if (hasAction) {
+    const text = document.createElement('span');
+    text.textContent = message;
+    text.style.flex = '1 1 auto';
+    text.style.minWidth = '0';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = actionLabel;
+    Object.assign(btn.style, {
+      flex: '0 0 auto',
+      whiteSpace: 'nowrap',
+      background: 'rgba(255,255,255,0.22)',
+      color: '#fff',
+      border: '1px solid rgba(255,255,255,0.35)',
+      borderRadius: '6px',
+      padding: '5px 12px',
+      minHeight: '32px',
+      fontFamily: 'inherit',
+      fontSize: '0.85rem',
+      fontWeight: '700',
+      cursor: 'pointer',
+      lineHeight: '1',
+    });
+    btn.addEventListener('click', () => {
+      if (typeof onAction === 'function') onAction();
+      close();
+    });
+    toast.append(text, btn);
+  } else {
+    toast.textContent = message;
+  }
+
   document.body.appendChild(toast);
   requestAnimationFrame(() => { toast.style.opacity = 1; });
-  setTimeout(() => { toast.style.opacity = 0; setTimeout(() => toast.remove(), 200); }, 2500);
+  timer = setTimeout(close, stayMs);
 }
 
 // 自製確認對話框（取代瀏覽器原生 confirm）。回傳 Promise<boolean>。

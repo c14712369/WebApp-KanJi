@@ -11,8 +11,10 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
 import { computeSpendPace } from '../../lib/spendPace';
 import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
-import { splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, summarizeTrip, TRIP_COLOR } from '../../lib/trips';
+import { splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, summarizeTrip, pendingEntries, TRIP_COLOR } from '../../lib/trips';
+import { tripEntryDraft } from '../../lib/tripActions';
 import { useTripContext } from '../../hooks/useTripContext';
+import { useTripActions } from '../../hooks/useTripActions';
 import LifeEntryRow from './LifeEntryRow';
 import CalendarView from './CalendarView';
 import EntrySheet from './EntrySheet';
@@ -152,6 +154,7 @@ export default function LifeTab() {
   } = useAppStore();
   const { saveEntry, deleteEntry } = useLifeEntryActions();
   const tripCtx = useTripContext();
+  const { decide } = useTripActions();
 
   // 手機版：月份切換列放進單列頁首（Header 的 #mobileHeaderSlot），不另外佔一列
   const isMobile = useMediaQuery('(max-width: 768px)');
@@ -642,8 +645,11 @@ export default function LifeTab() {
             key={`life-trip-entries-${openTrip.id}`}
             trip={openTrip}
             summary={summarizeTrip(openTrip, lifeExpenses, trips, lifeCategories, tripCtx)}
+            pending={pendingEntries(openTrip, lifeExpenses, trips, tripCtx)}
             onClose={() => setOpenTripId(null)}
             onEditEntry={(entry) => setExpModal(entry)}
+            onDecide={(entry, decision) => decide(entry, openTrip, decision)}
+            onAddEntry={() => { setNewType('expense'); setExpModal(tripEntryDraft(openTrip, todayIso)); }}
             justSavedId={justSavedId}
             entrySheetOpen={expModal !== null}
             lifeCategories={lifeCategories}
@@ -663,7 +669,7 @@ export default function LifeTab() {
             paymentMethods={paymentMethods}
             trips={trips}
             currentMonth={ym}
-            initial={expModal.id ? expModal : { type: newType, ...(expModal.date ? { date: expModal.date } : {}) }}
+            initial={expModal.id ? expModal : { type: newType, ...expModal }}
             onClose={() => setExpModal(null)}
             onSave={handleSaveExp}
             onDelete={async (id) => { if (await handleDelete(id)) setExpModal(null); }}

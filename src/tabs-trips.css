@@ -845,3 +845,271 @@
     gap: 8px;
   }
 }
+
+/* ── 旅程記一筆按鈕（旅程卡 & 抽屜標題列） ── */
+.tp-card-actions,
+.tp-sheet-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.tp-sheet-title {
+  flex: 1;
+}
+
+.tp-card-add,
+.tp-add-entry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tp-card-add:active,
+.tp-add-entry-btn:active {
+  background: var(--hover-bg);
+}
+
+@media (hover: hover) {
+  .tp-card-add:hover,
+  .tp-add-entry-btn:hover {
+    background: var(--hover-bg);
+    border-color: var(--text-muted);
+  }
+}
+
+.tp-card-add:focus-visible,
+.tp-add-entry-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* ── 待確認刷卡（旅程卡提醒列 & 抽屜清單區） ── */
+.tp-pending-hint-icon {
+  background: var(--trip-color, #2B9FD8);
+  font-size: 0.95rem;
+}
+
+.tp-pending {
+  margin-bottom: 14px;
+  padding: 10px 10px 8px;
+  border: 1px dashed color-mix(in srgb, var(--trip-color, #2B9FD8) 50%, var(--border-color));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--trip-color, #2B9FD8) 6%, var(--bg-color));
+}
+
+.tp-pending-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0 2px;
+  color: var(--text-main);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.tp-pending-head i {
+  flex: 0 0 auto;
+  color: var(--trip-color, #2B9FD8);
+}
+
+.tp-pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tp-pending-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.tp-pending-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tp-pending-date {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tp-pending-amt {
+  color: var(--expense-ink);
+  font-family: var(--font-num);
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tp-pending-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.tp-pending-btn {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tp-pending-btn:active { background: var(--hover-bg); }
+
+@media (hover: hover) {
+  .tp-pending-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
+}
+
+.tp-pending-btn.is-trip {
+  border-color: color-mix(in srgb, var(--trip-color, #2B9FD8) 45%, transparent);
+  background: color-mix(in srgb, var(--trip-color, #2B9FD8) 12%, transparent);
+  color: var(--trip-color, #2B9FD8);
+}
+
+@media (hover: hover) {
+  .tp-pending-btn.is-trip:hover {
+    border-color: var(--trip-color, #2B9FD8);
+    background: color-mix(in srgb, var(--trip-color, #2B9FD8) 18%, transparent);
+    color: var(--trip-color, #2B9FD8);
+  }
+}
+
+.tp-pending-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
+}
+
+@media (max-width: 360px) {
+  .tp-pending { padding: 8px 8px 6px; }
+  .tp-pending-row { gap: 4px; padding: 6px; }
+  .tp-pending-btn { padding: 0 7px; font-size: 0.75rem; }
+}
+
+/* ── 旅程例外商家入口與管理對話框 ── */
+.tp-exclude-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.tp-exclude-entry i {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.tp-exclude-entry:active { background: var(--hover-bg); }
+
+@media (hover: hover) {
+  .tp-exclude-entry:hover { background: var(--hover-bg); }
+  .tp-exclude-entry:hover i { transform: translateX(2px); }
+}
+
+.tp-exclude-entry:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+
+.tp-excl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tp-excl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--bg-color);
+}
+
+.tp-excl-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tp-excl-remove {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .tp-excl-remove:hover { color: var(--danger-color); border-color: var(--danger-color); }
+}

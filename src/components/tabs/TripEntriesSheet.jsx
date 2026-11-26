@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useDragControls, useReducedMotion } from 'framer-motion';
 import { groupTripEntries } from '../../lib/trips';
+import { exclusionLabel } from '../../lib/tripActions';
 import { fmtMoney } from '../../lib/utils';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import LifeEntryRow from './LifeEntryRow';
@@ -21,10 +22,15 @@ const dayLabel = (iso) => {
   if (!y) return '';
   return `${m}/${d}（${WEEKDAYS[new Date(y, m - 1, d).getDay()]}）`;
 };
+const shortDate = (iso) => {
+  const [, m, d] = String(iso || '').split('-').map(Number);
+  return m ? `${m}/${d}` : '';
+};
 
 export default function TripEntriesSheet({
   trip, summary, initialCatId = null, onClose, onEditEntry, justSavedId, entrySheetOpen = false,
   lifeCategories, lifeIncomeCategories, paymentMethods,
+  pending = [], onDecide, onAddEntry,
 }) {
   const [catId, setCatId] = useState(initialCatId);
   const sheetRef = useRef(null);
@@ -39,6 +45,7 @@ export default function TripEntriesSheet({
   const activeId = catId && cats.some(c => c.id === catId) ? catId : null;
   const active = cats.find(c => c.id === activeId) || null;
   const groups = useMemo(() => groupTripEntries(summary.entries, activeId, lifeCategories), [summary.entries, activeId, lifeCategories]);
+  const showPending = !activeId && pending.length > 0;
   const shownCount = groups.reduce((s, g) => s + g.items.length, 0);
   const shownSum = groups.reduce((s, g) => s + g.sum, 0);
 
@@ -115,9 +122,16 @@ export default function TripEntriesSheet({
               <i className="fa-solid fa-plane" aria-hidden="true"></i>
               <span>{trip.name}</span>
             </h2>
-            <button type="button" className="icon-btn" onClick={onClose} onPointerDown={e => e.stopPropagation()} aria-label="關閉">
-              <i className="fa-solid fa-xmark"></i>
-            </button>
+            <div className="tp-sheet-actions" onPointerDown={e => e.stopPropagation()}>
+              {onAddEntry && (
+                <button type="button" className="btn btn-ghost btn-sm tp-add-entry-btn" onClick={onAddEntry}>
+                  <i className="fa-solid fa-plus" aria-hidden="true"></i> 記一筆
+                </button>
+              )}
+              <button type="button" className="icon-btn" onClick={onClose} aria-label="關閉">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -148,6 +162,32 @@ export default function TripEntriesSheet({
         </div>
 
         <div className="tp-sheet-list" ref={listRef}>
+          {showPending && (
+            <section className="tp-pending" aria-label="待確認刷卡">
+              <h3 className="tp-pending-head">
+                <i className="fa-solid fa-circle-question" aria-hidden="true"></i>
+                <span>待確認 {pending.length} 筆 · 旅程期間的刷卡，是旅費嗎？</span>
+              </h3>
+              <ul className="tp-pending-list">
+                {pending.map(e => (
+                  <li key={e.id} className="tp-pending-row">
+                    <span className="tp-pending-name" title={exclusionLabel(e) || undefined}>
+                      {exclusionLabel(e) || '未命名'}
+                    </span>
+                    <span className="tp-pending-date">{shortDate(e.date)}</span>
+                    <span className="tp-pending-amt">−${fmtMoney(Math.round(Number(e.amount) || 0))}</span>
+                    <span className="tp-pending-actions">
+                      <button type="button" className="btn btn-ghost btn-sm tp-pending-btn" onClick={() => onDecide?.(e, 'daily')}>日常</button>
+                      <button type="button" className="btn btn-ghost btn-sm tp-pending-btn is-trip" onClick={() => onDecide?.(e, 'trip')}>算旅費</button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {groups.length === 0 && !showPending && (
+            <p className="tp-empty-note">這趟還沒有明細</p>
+          )}
           {groups.map(g => (
             <section key={g.date} className="tp-day">
               <h3 className="tp-day-head">

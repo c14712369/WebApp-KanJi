@@ -3,9 +3,12 @@ import { AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../../store/appStore';
 import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
 import { useTripContext } from '../../hooks/useTripContext';
+import { useTripActions } from '../../hooks/useTripActions';
 import {
-  summarizeTrip, sortTrips, formatTripRange, tripStatus, validateTrip,
+  summarizeTrip, sortTrips, formatTripRange, tripStatus, validateTrip, pendingEntries,
 } from '../../lib/trips';
+import { activeTripExclusions } from '../../lib/tripMerchants';
+import { tripEntryDraft } from '../../lib/tripActions';
 import { CURRENCIES, currencyMeta, formatForeign } from '../../lib/fx';
 import { STAY_CATEGORY } from '../../lib/constants';
 import { fmtMoney, showToast, confirmDialog, autoFocusDesktop } from '../../lib/utils';
@@ -146,8 +149,51 @@ function TripModal({ initial, onClose, onSave, onDelete }) {
   );
 }
 
+// ── 例外商家管理 ─────────────────────────────────────────────────────────────
+function TripExclusionsModal({ items, onRemove, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-overlay active settings-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal fx-item-modal" role="dialog" aria-modal="true" aria-labelledby="tpExclTitle" onPointerDown={e => e.stopPropagation()}>
+        <div className="fx-item-head">
+          <div className="settings-grabber" aria-hidden="true"></div>
+          <div className="fx-item-head-row">
+            <h3 id="tpExclTitle">旅程例外商家</h3>
+            <button type="button" className="icon-btn" onClick={onClose} aria-label="關閉"><i className="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+
+        <div className="fx-item-body">
+          <p className="fx-help tp-fx-intro">旅程期間在這些店的台幣消費算日常</p>
+          {items.length === 0 ? (
+            <p className="tp-empty-note">目前沒有例外商家</p>
+          ) : (
+            <ul className="tp-excl-list">
+              {items.map(it => (
+                <li key={it.key} className="tp-excl-row">
+                  <span className="tp-excl-label">{it.label}</span>
+                  <button type="button" className="btn btn-ghost btn-sm tp-excl-remove" onClick={() => onRemove(it.key)}>移除</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="fx-item-foot">
+          <button type="button" className="btn btn-primary" onClick={onClose}>完成</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 一趟旅程的卡片 ───────────────────────────────────────────────────────────
-function TripCard({ trip, summary, today, onEdit, onOpenEntries, fxItems, fxDone, onOpenFx, onUndoFx }) {
+function TripCard({ trip, summary, today, onEdit, onAddEntry, onOpenEntries, pendingCount = 0, fxItems, fxDone, onOpenFx, onUndoFx }) {
   const status = tripStatus(trip, today);
   const cur = currencyMeta(trip.currency || 'TWD');
   // 只有 Apple Pay 列（或後端待補匯率的）才提醒；只剩手記列時不吵，要換到明細裡一筆筆改
@@ -167,9 +213,14 @@ function TripCard({ trip, summary, today, onEdit, onOpenEntries, fxItems, fxDone
             {status.kind === 'upcoming' && <span className="tp-badge">還有 {status.daysUntil} 天</span>}
           </p>
         </div>
-        <button type="button" className="icon-btn tp-edit" onClick={onEdit} aria-label={`編輯旅程「${trip.name}」`}>
-          <i className="fa-solid fa-pen" aria-hidden="true"></i>
-        </button>
+        <div className="tp-card-actions">
+          <button type="button" className="btn btn-ghost btn-sm tp-card-add" onClick={onAddEntry}>
+            <i className="fa-solid fa-plus" aria-hidden="true"></i> 記一筆
+          </button>
+          <button type="button" className="icon-btn tp-edit" onClick={onEdit} aria-label={`編輯旅程「${trip.name}」`}>
+            <i className="fa-solid fa-pen" aria-hidden="true"></i>
+          </button>
+        </div>
       </div>
 
       {/* 外幣換算提醒：總花費在換算前是錯的，所以放在總花費上面 */}
@@ -190,6 +241,19 @@ function TripCard({ trip, summary, today, onEdit, onOpenEntries, fxItems, fxDone
             <span>總花費還不準</span>
           </p>
           <button type="button" className="btn btn-ghost tp-hint-btn" onClick={onOpenFx}>換算</button>
+        </div>
+      )}
+
+      {pendingCount > 0 && (
+        <div className="tp-hint tp-fx-hint tp-pending-hint">
+          <span className="tp-hint-icon tp-pending-hint-icon" aria-hidden="true">
+            <i className="fa-solid fa-circle-question"></i>
+          </span>
+          <p className="tp-hint-text">
+            <strong>{pendingCount} 筆刷卡待確認</strong>
+            <span>旅程期間的台幣刷卡，是旅費嗎？</span>
+          </p>
+          <button type="button" className="btn btn-ghost tp-hint-btn" onClick={() => onOpenEntries(null)}>確認</button>
         </div>
       )}
 
@@ -246,8 +310,8 @@ function TripCard({ trip, summary, today, onEdit, onOpenEntries, fxItems, fxDone
 // ── 主畫面 ───────────────────────────────────────────────────────────────────
 export default function TripsView() {
   const {
-    trips, lifeExpenses, lifeCategories, lifeIncomeCategories, paymentMethods,
-    addTrip, updateTrip, removeTrip, setLifeCategories, patchLifeExpenses,
+    trips, lifeExpenses, lifeCategories, lifeIncomeCategories, paymentMethods, tripExcludeMerchants,
+    addTrip, updateTrip, removeTrip, setLifeCategories, patchLifeExpenses, setTripExclusion,
   } = useAppStore();
   const [fxTripId, setFxTripId] = useState(null); // 開著「換算成台幣」的那趟
   const [fxDone, setFxDone] = useState({});       // tripId → { count, before }：剛換算完，可復原
@@ -255,7 +319,9 @@ export default function TripsView() {
   const [editingEntry, setEditingEntry] = useState(null); // 正在編輯的明細（開記一筆抽屜）
   const [justSavedId, setJustSavedId] = useState(null);   // 剛改完的那筆閃一下
   const [entriesSheet, setEntriesSheet] = useState(null); // 明細抽屜：{ tripId, catId }（catId null＝全部）
+  const [excludeModalOpen, setExcludeModalOpen] = useState(false);
   const { saveEntry, deleteEntry } = useLifeEntryActions();
+  const { decide } = useTripActions();
   const tripCtx = useTripContext();
   const today = toIso(new Date());
 
@@ -276,7 +342,9 @@ export default function TripsView() {
     trip: t,
     summary: summarizeTrip(t, lifeExpenses, trips, lifeCategories, tripCtx),
     fxItems: unconvertedTripEntries(t, lifeExpenses, trips, tripCtx),
+    pending: pendingEntries(t, lifeExpenses, trips, tripCtx),
   })), [trips, lifeExpenses, lifeCategories, tripCtx]);
+  const exclusions = useMemo(() => activeTripExclusions(tripExcludeMerchants), [tripExcludeMerchants]);
   const fxOpen = fxTripId ? list.find(x => x.trip.id === fxTripId) : null;
   const sheetOpen = entriesSheet ? list.find(x => x.trip.id === entriesSheet.tripId) : null;
 
@@ -373,20 +441,29 @@ export default function TripsView() {
           </button>
         </div>
       ) : (
-        list.map(({ trip, summary, fxItems }) => (
+        list.map(({ trip, summary, fxItems, pending }) => (
           <TripCard
             key={trip.id}
             trip={trip}
             summary={summary}
             today={today}
+            pendingCount={pending.length}
             fxItems={fxItems}
             fxDone={fxDone[trip.id]}
             onOpenFx={() => setFxTripId(trip.id)}
             onUndoFx={() => undoFx(trip)}
             onEdit={() => setModal(trip)}
+            onAddEntry={() => openEntry(tripEntryDraft(trip, today))}
             onOpenEntries={(catId) => { if (navigator.vibrate) navigator.vibrate(20); setEntriesSheet({ tripId: trip.id, catId }); }}
           />
         ))
+      )}
+
+      {exclusions.length > 0 && (
+        <button type="button" className="an-card tp-exclude-entry" onClick={() => setExcludeModalOpen(true)}>
+          <span>旅程例外商家（{exclusions.length}）</span>
+          <i className="fa-solid fa-chevron-right" aria-hidden="true"></i>
+        </button>
       )}
 
       {/* 明細抽屜（層級在記一筆抽屜下面，點明細編輯時疊在上面） */}
@@ -396,9 +473,12 @@ export default function TripsView() {
             key={`trip-entries-${sheetOpen.trip.id}`}
             trip={sheetOpen.trip}
             summary={sheetOpen.summary}
+            pending={sheetOpen.pending}
             initialCatId={entriesSheet.catId}
             onClose={() => setEntriesSheet(null)}
             onEditEntry={openEntry}
+            onDecide={(e, d) => decide(e, sheetOpen.trip, d)}
+            onAddEntry={() => openEntry(tripEntryDraft(sheetOpen.trip, today))}
             justSavedId={justSavedId}
             entrySheetOpen={!!editingEntry}
             lifeCategories={lifeCategories}
@@ -407,6 +487,14 @@ export default function TripsView() {
           />
         )}
       </AnimatePresence>
+
+      {excludeModalOpen && (
+        <TripExclusionsModal
+          items={exclusions}
+          onRemove={(key) => setTripExclusion(key, false)}
+          onClose={() => setExcludeModalOpen(false)}
+        />
+      )}
 
       {modal && (
         <TripModal

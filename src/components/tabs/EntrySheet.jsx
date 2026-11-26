@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { motion, useDragControls, useReducedMotion } from 'framer-motion';
 import IconRenderer from '../../lib/IconRenderer';
 import { OPS, pressKey, evaluateExpr, hasOperator, formatExpr, exprFromAmount } from '../../lib/calcPad';
-import { NO_TRIP, tripForDate, sheetTripDefault, tripIdToSave, sortTrips, formatTripRange } from '../../lib/trips';
+import { NO_TRIP, entryTripId, tripForDate, sheetTripDefault, tripIdToSave, sortTrips, formatTripRange } from '../../lib/trips';
 import { useTripContext } from '../../hooks/useTripContext';
+import { useTripActions } from '../../hooks/useTripActions';
 import { confirmsTwdOnEdit } from '../../lib/tripFx';
 import { CURRENCIES, currencyMeta, formatRate, toTWD, fetchRateToTWD, entryAmountFields } from '../../lib/fx';
 
@@ -76,6 +77,7 @@ export default function EntrySheet({
 }) {
   const isEdit = !!(initial?.id && initial?.type);
   const tripCtx = useTripContext();
+  const { offerExclusion } = useTripActions();
   const initType = initial?.type || 'expense';
   const lastSaved = useMemo(() => (isEdit ? {} : readLastEntry()), [isEdit]);
 
@@ -89,7 +91,8 @@ export default function EntrySheet({
   const [date, setDate] = useState(() => initial?.date || defaultDate(currentMonth));
   // 旅程選項：旅程 id 或 'none'；新增時跟著日期自動換，使用者自己選過就不再自動
   const [tripSel, setTripSel] = useState(() => sheetTripDefault(trips, date, isEdit ? initial : (initial || null), tripCtx));
-  const autoTripRef = useRef(!isEdit || !initial?.tripId);
+  // 帶著旅程打開（編輯有 tripId 的、或從旅程按「記一筆」）→ 改日期不自動換旅程
+  const autoTripRef = useRef(!initial?.tripId);
   const curTouchedRef = useRef(isEdit); // 使用者自己選過幣別（或編輯舊筆）→ 換旅程不改幣別
   const [note, setNote] = useState(initial?.note || '');
   const [pmId, setPmId] = useState(initial?.paymentMethod || lastSaved.pmId || paymentMethods[0]?.id || 'cash');
@@ -101,7 +104,9 @@ export default function EntrySheet({
   const [currency, setCurrency] = useState(() => {
     if (initForeign) return initial.currency;
     if (isEdit) return 'TWD';
-    return trips.find(t => t.id === tripSel)?.currency || 'TWD';
+    // 同 pickTrip：日期在旅程期間才用當地幣別；行前補記（從還沒出發的旅程按記一筆）維持台幣
+    const t = trips.find(x => x.id === tripSel);
+    return t && date >= t.startDate && date <= t.endDate ? (t.currency || 'TWD') : 'TWD';
   });
   const [rate, setRate] = useState(initForeign ? (Number(initial.fxRate) || null) : null);
   // 自訂過匯率：改日期不重抓；換幣別或清空才回到自動。編輯舊筆時打開不重抓（fxReqRef 預設成該筆的鍵）
@@ -185,7 +190,12 @@ export default function EntrySheet({
   // 換日期：還沒手動選旅程 → 旅程跟著日期走；還沒手動選幣別 → 幣別跟著旅程走
   const changeDate = (next) => {
     setDate(next);
-    if (!autoTripRef.current) return;
+    if (!autoTripRef.current) {
+      // 旅程已選定：幣別跟著「日期在不在這趟期間」走（使用者自己選過幣別就不動）
+      const t = trips.find(x => x.id === tripSel);
+      if (t && !curTouchedRef.current) applyCurrency(next >= t.startDate && next <= t.endDate ? (t.currency || 'TWD') : 'TWD');
+      return;
+    }
     const t = tripForDate(trips, next);
     const sel = t ? t.id : NO_TRIP;
     if (sel === tripSel) return;
@@ -244,7 +254,9 @@ export default function EntrySheet({
     if (!isEdit) {
       try { localStorage.setItem(LAST_ENTRY_KEY, JSON.stringify({ catId, incCatId, pmId })); } catch { /* 私密模式等寫不進去時略過 */ }
     }
-    onSave({
+    const wasInTrip = isEdit && !!entryTripId(initial, trips, tripCtx);
+    const nextTripId = isIncome ? undefined : tripIdToSave(tripSel, trips, date);
+    const payload = {
       id: initial?.id || crypto.randomUUID(),
       type,
       ...entryAmountFields(amount, currency, rate, rateManual),
@@ -254,8 +266,12 @@ export default function EntrySheet({
       date,
       note: note.trim(),
       ...(isIncome ? {} : { paymentMethod: pmId }),
-      tripId: isIncome ? undefined : tripIdToSave(tripSel, trips, date),
-    });
+      tripId: nextTripId,
+    };
+    onSave(payload);
+    if (wasInTrip && nextTripId === NO_TRIP) {
+      offerExclusion({ ...initial, ...payload });
+    }
   };
 
   const switchType = (next) => {
