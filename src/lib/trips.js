@@ -1,12 +1,21 @@
 /**
  * 旅程（純函式，零依賴，可單元測試）。
  * 旅程不是分類：分類回答「花在什麼」，旅程回答「為了哪趟」。
- * 明細歸屬規則（entryTripId）：
- *   - tripId === 'none' → 手動排除（旅途中付的家裡帳單）
- *   - tripId 指向存在的旅程 → 手動指定（出發前先付的住宿、機票）
- *   - 其他 → 依日期自動歸入起訖日涵蓋它的旅程；所以刷卡自動匯入的明細不用一筆筆改
- * 只有支出算進旅程；收入（例如旅途中領到的薪水）不算。
+ * 明細歸屬規則（entryTripId，看「來源」；由上往下，第一條成立就停；收入一律不算旅程）：
+ *   1. tripId === 'none' → 日常（使用者手動排除）
+ *   2. tripId 指向存在的旅程 → 那趟旅程（使用者手動指定，例如出發前先付的住宿、機票）
+ *   3. 日期不在任何旅程期間 → 日常
+ *   4. 台幣列（沒有 currency 或為 TWD）且店名在「旅程例外商家」名單 → 日常（外幣列不受影響）
+ *   5. 手動列（id 不是 gmail_、live_ 開頭）→ 那趟旅程（建旅程前就記好的手動帳也會自動歸入）
+ *   6. 即時列（live）或從即時列換成的帳單列（fromLive）→ 那趟旅程（Apple Pay、Uber 收據）
+ *   7. 帳單列，幣別等於旅程幣別（且不是 TWD）→ 那趟旅程
+ *   8. 帳單列是「國外交易服務費」（有 feeOf），且它連到的那筆交易依本表歸到某趟 → 同一趟
+ *   9. 其他帳單列 → 日常，但列入該旅程的「待確認」（tripPendingId / pendingEntries）
+ * ctx = { exclude, byId }（getTripContext 產生）：沒有 exclude 就略過第 4 條，沒有 byId 就略過第 8 條。
  */
+
+import { isImportedId } from './syncMerge.js';
+import { isTripExcluded } from './tripMerchants.js';
 
 export const NO_TRIP = 'none';
 const DAY_MS = 86400000;
@@ -28,12 +37,65 @@ export function tripForDate(trips, date) {
   return best;
 }
 
-/** 這筆明細屬於哪趟旅程（id），不屬於回傳 null */
-export function entryTripId(entry, trips) {
-  const tid = entry?.tripId;
-  if (tid === NO_TRIP) return null;
-  if (tid && (trips || []).some(t => t.id === tid)) return tid;
-  return tripForDate(trips, entry?.date)?.id || null;
+const hasId = (id, prefix) => typeof id === 'string' && id.indexOf(prefix) === 0;
+/** 帳單列：gmail_ 開頭，且不是即時列、也不是從即時列換來的 */
+const isBillRow = (e) => hasId(e?.id, 'gmail_') && !e.live && !e.fromLive;
+
+/** 這筆明細屬於哪趟旅程（id），不屬於回傳 null。規則見檔頭 1–9 條 */
+export function entryTripId(entry, trips, ctx = {}) {
+  if (!entry || entry.type === 'income') return null;
+  const c = ctx || {};
+  const tid = entry.tripId;
+  if (tid === NO_TRIP) return null;                                           // 規則 1
+  if (tid && (trips || []).some(t => t.id === tid)) return tid;               // 規則 2
+  const trip = tripForDate(trips, entry.date);
+  if (!trip) return null;                                                     // 規則 3
+  if (c.exclude && isTripExcluded(entry, c.exclude)) return null;             // 規則 4（isTripExcluded 內部只認台幣列）
+  if (!isImportedId(entry.id)) return trip.id;                                // 規則 5
+  if (entry.live || entry.fromLive) return trip.id;                           // 規則 6
+  if (isBillRow(entry) && entry.currency && entry.currency !== 'TWD'
+      && entry.currency === trip.currency) return trip.id;                    // 規則 7
+  if (entry.feeOf && c.byId) {                                                // 規則 8
+    const parent = c.byId.get(entry.feeOf);
+    if (parent && !parent.feeOf) return entryTripId(parent, trips, c);
+  }
+  return null;                                                                // 規則 9（待確認見 tripPendingId）
+}
+
+/**
+ * 落在第 9 條（帳單列、日期在旅程內、使用者還沒決定、不是例外、支出且金額 > 0）→ 回傳那趟的 id，否則 null
+ */
+export function tripPendingId(entry, trips, ctx = {}) {
+  if (!isBillRow(entry) || entry.type === 'income' || !(Number(entry.amount) > 0)) return null;
+  if (entry.tripId === NO_TRIP) return null;
+  const trip = tripForDate(trips, entry.date);
+  if (!trip) return null;
+  const c = ctx || {};
+  if (c.exclude && isTripExcluded(entry, c.exclude)) return null;
+  return entryTripId(entry, trips, c) === null ? trip.id : null;
+}
+
+/** 某趟旅程的待確認列，新到舊（同日金額大到小、再依 id，順序固定） */
+export function pendingEntries(trip, entries, trips, ctx = {}) {
+  return (entries || [])
+    .filter(e => e && tripPendingId(e, trips, ctx) === trip.id)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '')
+      || (Number(b.amount) || 0) - (Number(a.amount) || 0)
+      || String(a.id || '').localeCompare(String(b.id || '')));
+}
+
+let lastCtx = null;
+/**
+ * 建立歸屬規則要用的 ctx。只記住上一次的 (entries, exclude) 參照，參照都沒變就回傳同一個物件
+ * （讓畫面的 useMemo 依賴穩定，也避免每次重建 byId）。
+ */
+export function getTripContext(entries, exclude) {
+  if (lastCtx && lastCtx.entries === entries && lastCtx.exclude === exclude) return lastCtx.ctx;
+  const byId = new Map();
+  (entries || []).forEach(e => { if (e && e.id != null) byId.set(e.id, e); });
+  const ctx = { exclude, byId };
+  lastCtx = { entries, exclude, ctx };
+  return ctx;
 }
 
 export function tripDays(trip) {
@@ -43,10 +105,10 @@ export function tripDays(trip) {
 /**
  * 一趟旅程的彙總：總額、筆數、天數、日均、分類拆解（大到小、含占比）、外幣原幣小計、明細（新到舊，同日金額大到小）。
  */
-export function summarizeTrip(trip, entries, trips, categories = []) {
+export function summarizeTrip(trip, entries, trips, categories = [], ctx = {}) {
   // 新到舊；同一天依金額由大到小（使用者 2026-11-24 定），同金額依 id 讓順序固定
   const list = (entries || [])
-    .filter(e => e && e.type !== 'income' && entryTripId(e, trips) === trip.id)
+    .filter(e => e && e.type !== 'income' && entryTripId(e, trips, ctx) === trip.id)
     .sort((a, b) => (b.date || '').localeCompare(a.date || '')
       || (Number(b.amount) || 0) - (Number(a.amount) || 0)
       || String(a.id || '').localeCompare(String(b.id || '')));
@@ -132,8 +194,10 @@ export function validateTrip({ name, startDate, endDate }) {
 }
 
 /** 記一筆抽屜打開時的旅程選項：編輯照該筆歸屬；新增看日期落在哪趟。回傳旅程 id 或 'none' */
-export function sheetTripDefault(trips, date, initial) {
-  if (initial?.id) return entryTripId(initial, trips) || NO_TRIP;
+export function sheetTripDefault(trips, date, initial, ctx = {}) {
+  if (initial?.id) return entryTripId(initial, trips, ctx) || NO_TRIP;
+  // 新增：從旅程裡按「記一筆」會帶 initial.tripId，指向存在的旅程就照它
+  if (initial?.tripId && (trips || []).some(t => t.id === initial.tripId)) return initial.tripId;
   return tripForDate(trips, date)?.id || NO_TRIP;
 }
 
@@ -151,7 +215,7 @@ export const TRIP_COLOR = '#2B9FD8';
 const TRIP_FILTER_PREFIX = 'trip:';
 
 /** 支出是否算在某趟旅程（收入一律不算） */
-const tripOfExpense = (e, trips) => (e && e.type !== 'income' ? entryTripId(e, trips) : null);
+const tripOfExpense = (e, trips, ctx) => (e && e.type !== 'income' ? entryTripId(e, trips, ctx) : null);
 
 /**
  * 某月（'YYYY-MM'）的支出拆成：
@@ -159,7 +223,7 @@ const tripOfExpense = (e, trips) => (e && e.type !== 'income' ? entryTripId(e, t
  *   trips：每趟一行（大到小）；只算日期在這個月的明細，行前先付的算在付款那個月
  * dailyTotal + tripTotal = 當月全部支出。
  */
-export function splitMonthSpend(entries, trips, ym, categories = []) {
+export function splitMonthSpend(entries, trips, ym, categories = [], ctx = {}) {
   const catIds = new Set(categories.map(c => c.id));
   const byCat = new Map();
   const byTrip = new Map();
@@ -167,7 +231,7 @@ export function splitMonthSpend(entries, trips, ym, categories = []) {
   (entries || []).forEach(e => {
     if (!e || e.type === 'income' || !(e.date || '').startsWith(ym)) return;
     const amt = Number(e.amount) || 0;
-    const tid = entryTripId(e, trips);
+    const tid = entryTripId(e, trips, ctx);
     if (tid) { byTrip.set(tid, (byTrip.get(tid) || 0) + amt); return; }
     if (catIds.has(e.categoryId)) byCat.set(e.categoryId, (byCat.get(e.categoryId) || 0) + amt);
     else uncategorized += amt;
@@ -186,8 +250,8 @@ export const tripIdFromFilter = (filterId) =>
   (typeof filterId === 'string' && filterId.startsWith(TRIP_FILTER_PREFIX) ? filterId.slice(TRIP_FILTER_PREFIX.length) : null);
 
 /** 明細是否符合篩選：點分類只看「日常」的該分類（金額才對得上），點旅程只看那一趟 */
-export function matchesCatFilter(entry, filterId, trips) {
+export function matchesCatFilter(entry, filterId, trips, ctx = {}) {
   const tid = tripIdFromFilter(filterId);
-  if (tid) return tripOfExpense(entry, trips) === tid;
-  return entry.categoryId === filterId && !tripOfExpense(entry, trips);
+  if (tid) return tripOfExpense(entry, trips, ctx) === tid;
+  return entry.categoryId === filterId && !tripOfExpense(entry, trips, ctx);
 }

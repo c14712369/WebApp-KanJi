@@ -7,6 +7,7 @@ import {
   tripForDate, entryTripId, summarizeTrip, tripDays, formatTripRange,
   tripStatus, sortTrips, validateTrip, sheetTripDefault, tripIdToSave,
   splitMonthSpend, matchesCatFilter, tripFilterId, groupTripEntries,
+  tripPendingId, pendingEntries, getTripContext,
 } from './trips.js';
 
 let passed = 0, failed = 0;
@@ -230,6 +231,70 @@ test('篩飲食 → 只剩飲食，小計跟著變', () => {
 test('分類已刪除的明細 → 歸在「未分類」（__none，同 summarizeTrip）', () => {
   const g = groupTripEntries(tEntries, '__none', tCats);
   assert.deepEqual(g.flatMap(x => x.items.map(e => e.id)), ['d']);
+});
+
+console.log('歸屬規則 v2：看來源');
+const T = [
+  { id: 't_tainan', name: '台南小旅行', startDate: '2026-12-05', endDate: '2026-12-07', currency: 'TWD' },
+  { id: 't_tokyo',  name: '東京賞楓',   startDate: '2026-11-14', endDate: '2026-11-22', currency: 'JPY' },
+];
+const ex = { '7-11': { on: true, at: 1 } };
+const X = (o) => ({ type: 'expense', amount: 100, ...o });
+test('規則 5：手動列看日期', () => assert.equal(entryTripId(X({ id: 'm1', date: '2026-12-06' }), T), 't_tainan'));
+test('規則 6：Apple Pay 台幣列看日期', () => assert.equal(entryTripId(X({ id: 'live_1', live: true, date: '2026-12-06' }), T), 't_tainan'));
+test('規則 6：Uber 收據（gmail_ 但 live）', () => assert.equal(entryTripId(X({ id: 'gmail_u', live: true, date: '2026-12-06' }), T), 't_tainan'));
+test('規則 6：從即時列換成的帳單列', () => assert.equal(entryTripId(X({ id: 'gmail_s', fromLive: true, date: '2026-12-06' }), T), 't_tainan'));
+test('規則 7：日圓帳單列進東京', () => assert.equal(entryTripId(X({ id: 'gmail_j', currency: 'JPY', date: '2026-11-16' }), T), 't_tokyo'));
+test('規則 9：美金訂閱在東京期間 → 日常＋待確認', () => {
+  const e = X({ id: 'gmail_c', currency: 'USD', date: '2026-11-16', note: '[台新] CLAUDE.AI SUBSCRIPTION' });
+  assert.equal(entryTripId(e, T), null); assert.equal(tripPendingId(e, T), 't_tokyo');
+});
+test('規則 9：台幣帳單列在台南期間 → 日常＋待確認', () => {
+  const e = X({ id: 'gmail_t', date: '2026-12-06', note: '[台新] 台灣大哥大' });
+  assert.equal(entryTripId(e, T), null); assert.equal(tripPendingId(e, T), 't_tainan');
+});
+test('規則 8：服務費跟著日圓交易進東京；美金交易的服務費不算', () => {
+  const j = X({ id: 'gmail_j', currency: 'JPY', date: '2026-11-16' });
+  const fj = X({ id: 'gmail_fj', note: '[台新] 國外交易服務費－680.00', feeOf: 'gmail_j', date: '2026-11-16', amount: 10 });
+  const c = X({ id: 'gmail_c', currency: 'USD', date: '2026-11-16' });
+  const fc = X({ id: 'gmail_fc', note: '[台新] 國外交易服務費－632.00', feeOf: 'gmail_c', date: '2026-11-16', amount: 9 });
+  const ctx = getTripContext([j, fj, c, fc], {});
+  assert.equal(entryTripId(fj, T, ctx), 't_tokyo'); assert.equal(entryTripId(fc, T, ctx), null);
+  assert.equal(entryTripId(fj, T), null);   // 沒有 byId 就不套第 8 條
+});
+test('規則 4：台幣 7-11 被例外，不進待確認', () => {
+  const e = X({ id: 'live_7', live: true, note: '7-ELEVEN', date: '2026-12-06' });
+  const ctx = { exclude: ex };
+  assert.equal(entryTripId(e, T, ctx), null); assert.equal(tripPendingId(e, T, ctx), null);
+});
+test('規則 4：日本 7-11（日圓）不受例外影響', () => {
+  assert.equal(entryTripId(X({ id: 'live_8', live: true, note: '7-ELEVEN', currency: 'JPY', date: '2026-11-16' }), T, { exclude: ex }), 't_tokyo');
+});
+test("規則 1：tripId 'none' 的帳單列不進待確認", () => {
+  assert.equal(tripPendingId(X({ id: 'gmail_n', tripId: 'none', date: '2026-12-06' }), T), null);
+});
+test('收入不算旅程也不待確認', () => {
+  const e = { id: 'gmail_i', type: 'income', amount: 100, date: '2026-12-06' };
+  assert.equal(entryTripId(e, T), null); assert.equal(tripPendingId(e, T), null);
+});
+test('待確認的帳單列在每月統計算日常', () => {
+  const r = splitMonthSpend([X({ id: 'gmail_t', date: '2026-12-06', categoryId: 'c1' })], T, '2026-12', [{ id: 'c1', name: '通訊' }]);
+  assert.equal(r.dailyTotal, 100); assert.equal(r.tripTotal, 0);
+});
+test('getTripContext 參照沒變就回傳同一個物件', () => {
+  const es = [], exc = {}; assert.equal(getTripContext(es, exc), getTripContext(es, exc));
+});
+test('從旅程記一筆：新增時照 initial.tripId 預設', () => {
+  assert.equal(sheetTripDefault(T, '2026-10-01', { type: 'expense', tripId: 't_tokyo' }), 't_tokyo');
+});
+test('pendingEntries 只列台南期間的台幣帳單列，新到舊', () => {
+  const es = [
+    { id: 'gmail_a', type: 'expense', amount: 599, date: '2026-12-05' },
+    { id: 'gmail_b', type: 'expense', amount: 85, date: '2026-12-06' },
+    { id: 'gmail_c', type: 'expense', amount: 85, date: '2026-12-06', tripId: 'none' },
+    { id: 'live_d', live: true, type: 'expense', amount: 85, date: '2026-12-06' },
+  ];
+  assert.deepEqual(pendingEntries(T[0], es, T).map(e => e.id), ['gmail_b', 'gmail_a']);
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);
