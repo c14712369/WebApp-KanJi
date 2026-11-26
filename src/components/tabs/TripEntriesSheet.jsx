@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useDragControls, useReducedMotion } from 'framer-motion';
 import { groupTripEntries } from '../../lib/trips';
+import { spendOf } from '../../lib/share';
 import { exclusionLabel } from '../../lib/tripActions';
 import { fmtMoney } from '../../lib/utils';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useTripContext } from '../../hooks/useTripContext';
 import LifeEntryRow from './LifeEntryRow';
 
 /**
@@ -39,12 +41,13 @@ export default function TripEntriesSheet({
   const dragControls = useDragControls();
   const reduceMotion = useReducedMotion();
   const isDialog = useMediaQuery('(min-width: 769px)');
+  const tripCtx = useTripContext();
 
   // 分類被改掉、該分類的明細都沒了 → 回到全部
   const cats = summary.byCategory;
   const activeId = catId && cats.some(c => c.id === catId) ? catId : null;
   const active = cats.find(c => c.id === activeId) || null;
-  const groups = useMemo(() => groupTripEntries(summary.entries, activeId, lifeCategories), [summary.entries, activeId, lifeCategories]);
+  const groups = useMemo(() => groupTripEntries(summary.entries, activeId, lifeCategories, tripCtx), [summary.entries, activeId, lifeCategories, tripCtx]);
   const showPending = !activeId && pending.length > 0;
   const shownCount = groups.reduce((s, g) => s + g.items.length, 0);
   const shownSum = groups.reduce((s, g) => s + g.sum, 0);
@@ -175,7 +178,7 @@ export default function TripEntriesSheet({
                       <span className="tp-pending-name" title={exclusionLabel(e) || undefined}>
                         {exclusionLabel(e) || '未命名'}
                       </span>
-                      <span className="tp-pending-amt">−${fmtMoney(Math.round(Number(e.amount) || 0))}</span>
+                      <span className="tp-pending-amt">−${fmtMoney(Math.round(spendOf(e, tripCtx)))}</span>
                     </div>
                     <div className="tp-pending-bottom">
                       <span className="tp-pending-date">{shortDate(e.date)}</span>

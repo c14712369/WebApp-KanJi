@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import TripsView from './TripsView';
 import { splitMonthSpend, tripFilterId, TRIP_COLOR } from '../../lib/trips';
+import { spendOf } from '../../lib/share';
 import { useTripContext } from '../../hooks/useTripContext';
 import { Chart, registerables } from 'chart.js';
 import { useAppStore } from '../../store/appStore';
@@ -46,8 +47,12 @@ function calculateExpenseForYear(item, year) {
 function getLifeIncomeForMonth(lifeExpenses, ym) {
   return lifeExpenses.filter(e => e.type === 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
 }
-function getLifeExpForMonth(lifeExpenses, ym) {
-  return lifeExpenses.filter(e => e.type !== 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+function getLifeExpForMonth(lifeExpenses, ym, tripCtx = {}) {
+  return Math.round(
+    lifeExpenses
+      .filter(e => e.type !== 'income' && (e.date || '').startsWith(ym))
+      .reduce((s, e) => s + spendOf(e, tripCtx), 0)
+  );
 }
 
 function buildChartYears(items) {
@@ -293,9 +298,9 @@ export default function AnalysisTab() {
     await prefetchFXRates(items, pairs);
     const labels  = months.map(m => m.split('-')[1] + '月');
     const subData = months.map(m => Math.round(getMonthlyFixedTotal(items, m)));
-    const lifeData = months.map(m => getLifeExpForMonth(lifeExpenses, m));
+    const lifeData = months.map(m => getLifeExpForMonth(lifeExpenses, m, tripCtx));
     return { labels, subData, lifeData };
-  }, [trendRange, items, lifeExpenses]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trendRange, items, lifeExpenses, tripCtx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let alive = true;
@@ -334,9 +339,9 @@ export default function AnalysisTab() {
         annualFixed += calculateExpenseForMonth(item, year, m);
       }
     }
-    const annualLife = lifeExpenses
+    const annualLife = Math.round(lifeExpenses
       .filter(e => e.type !== 'income' && e.date && e.date.startsWith(String(year)))
-      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      .reduce((sum, e) => sum + spendOf(e, tripCtx), 0));
     const annualProject = sumProjectExpenses(projects, projectExpenses, year);
     // 收入：該月有記收入就用實記，沒有就用預估月收入（原年度報表的算法）
     const estInc = parseFloat(estimatedIncome) || 0;
@@ -348,7 +353,7 @@ export default function AnalysisTab() {
     }
     const total = annualFixed + annualLife + annualProject;
     return { year, fixed: annualFixed, life: annualLife, project: annualProject, total, income, balance: income - total };
-  }), [uniqueYears, items, lifeExpenses, projects, projectExpenses, estimatedIncome]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [uniqueYears, items, lifeExpenses, projects, projectExpenses, estimatedIncome, tripCtx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 年度總計（原「年度報表」頁）：預設今年
   const [sumYear, setSumYear] = useState(now.getFullYear());
@@ -368,13 +373,13 @@ export default function AnalysisTab() {
         for (const item of items) annualFixed += calculateExpenseForMonth(item, year, m);
       }
       fixedData.push(Math.round(annualFixed));
-      lifeData.push(lifeExpenses
+      lifeData.push(Math.round(lifeExpenses
         .filter(e => e.type !== 'income' && e.date && e.date.startsWith(String(year)))
-        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
+        .reduce((sum, e) => sum + spendOf(e, tripCtx), 0)));
       projectData.push(sumProjectExpenses(projects, projectExpenses, year));
     });
     return { labels: uniqueYears.map(y => `${y} 年`), fixedData, lifeData, projectData };
-  }, [uniqueYears, items, lifeExpenses, projects, projectExpenses]);
+  }, [uniqueYears, items, lifeExpenses, projects, projectExpenses, tripCtx]);
 
   useEffect(() => {
     let alive = true;

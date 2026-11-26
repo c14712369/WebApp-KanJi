@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { buildMonthCalendar, groupEntriesByDay, calendarFocusRow, noteDisplayMap } from '../../lib/lifeGrouping';
+import { spendOf } from '../../lib/share';
 import { formatAmount } from '../../lib/utils';
 import AnimatedNumber from '../../lib/AnimatedNumber';
 import LifeEntryRow from './LifeEntryRow';
@@ -47,6 +48,7 @@ export default function CalendarView({
   sortMode = 'date-desc',
   setSortMode,
   monthSummary = null,   // { expense, income, remain, isCurrentMonth }
+  tripCtx = {},
   onOpenOverview,
   onOpenTrip,
 }) {
@@ -99,8 +101,8 @@ export default function CalendarView({
 
   // 月曆網格資料
   const { paddingDays, days } = useMemo(() => {
-    return buildMonthCalendar(ym, entries);
-  }, [ym, entries]);
+    return buildMonthCalendar(ym, entries, tripCtx);
+  }, [ym, entries, tripCtx]);
 
   // 前後月補位的日期數字（淡色、不可點），讓每一列都是完整一週
   const { leadNums, trailNums, monthNum } = useMemo(() => {
@@ -140,18 +142,18 @@ export default function CalendarView({
     if (!selectedDate) return { dayExpense: 0, dayIncome: 0, showDayExpense: false, showDayIncome: false };
     let exp = 0, inc = 0;
     for (const e of selectedEntries) {
-      const amt = Number(e.amount) || 0;
-      if (e.type === 'income') inc += amt;
-      else exp += amt;
+      if (e.type === 'income') inc += Number(e.amount) || 0;
+      else exp += spendOf(e, tripCtx);
     }
-    return { dayExpense: exp, dayIncome: inc, showDayExpense: exp > 0, showDayIncome: inc > 0 };
-  }, [selectedEntries, selectedDate]);
+    const dayExpenseRounded = Math.round(exp);
+    return { dayExpense: dayExpenseRounded, dayIncome: inc, showDayExpense: dayExpenseRounded > 0, showDayIncome: inc > 0 };
+  }, [selectedEntries, selectedDate, tripCtx]);
 
   // 全月依日期分組（當未選取單日 / 看整月時）
   const dayGroups = useMemo(() => {
     if (selectedDate !== null) return [];
-    return groupEntriesByDay(entries);
-  }, [entries, selectedDate]);
+    return groupEntriesByDay(entries, tripCtx);
+  }, [entries, selectedDate, tripCtx]);
 
   // 篩選中被藏起來的筆數（單日看那天、整月看全月）→ 空狀態說「有 3 筆支出沒顯示」，不會誤以為沒記帳
   const hiddenText = useMemo(() => {

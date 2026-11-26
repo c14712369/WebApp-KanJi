@@ -6,6 +6,8 @@ import AnimatedNumber from '../../lib/AnimatedNumber';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChartEmpty from '../ui/ChartEmpty';
 import { projectExpensesByMonth, projectExpenseYears, nearestYear } from '../../lib/projectSpend';
+import { spendOf } from '../../lib/share';
+import { useTripContext } from '../../hooks/useTripContext';
 
 Chart.register(...registerables);
 
@@ -26,6 +28,7 @@ function getYears(items, lifeExpenses, projects, projectExpenses) {
 
 export default function AnnualTab() {
   const { items, lifeExpenses, projects, projectExpenses, estimatedIncome, theme, isPrivacyMode } = useAppStore();
+  const tripCtx = useTripContext();
   const thisYear = String(new Date().getFullYear());
   const years = useMemo(() => getYears(items, lifeExpenses, projects, projectExpenses), [items, lifeExpenses, projects, projectExpenses]);
   const [pickedYear, setYear] = useState(thisYear);
@@ -63,8 +66,9 @@ export default function AnnualTab() {
       lifeExpenses.forEach(e => {
         if (!(e.date || '').startsWith(ym)) return;
         if (e.type === 'income') lifeInc += Number(e.amount) || 0;
-        else lifeExp += Number(e.amount) || 0;
+        else lifeExp += spendOf(e, tripCtx);
       });
+      lifeExp = Math.round(lifeExp);
       md[m - 1].life = lifeExp;
       totalLife += lifeExp;
 
@@ -82,7 +86,7 @@ export default function AnnualTab() {
     const totalExp = totalFixed + totalLife + totalProject;
     setTotals({ income: totalIncome, expense: totalExp, balance: totalIncome - totalExp });
     setMonthly(md);
-  }, [year, items, lifeExpenses, projects, projectExpenses, estimatedIncome]);
+  }, [year, items, lifeExpenses, projects, projectExpenses, estimatedIncome, tripCtx]);
 
   useEffect(() => {
     let alive = true;

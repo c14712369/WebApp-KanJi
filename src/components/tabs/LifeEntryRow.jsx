@@ -4,6 +4,7 @@ import AnimatedNumber from '../../lib/AnimatedNumber';
 import { formatAmount, fmtIncomeMoney } from '../../lib/utils';
 import { formatForeign } from '../../lib/fx';
 import { entryTripId } from '../../lib/trips';
+import { spendOf, shareLabel } from '../../lib/share';
 import { useAppStore } from '../../store/appStore';
 import { useTripContext } from '../../hooks/useTripContext';
 
@@ -40,10 +41,12 @@ export default function LifeEntryRow({
     : '';
   const note = (noteLabel || entry.note || '').trim();
   const title = note || cat.name;
-  const metaText = [note && !hideCategory ? cat.name : null, paymentLabel].filter(Boolean).join(' · ');
+  const sharedText = !isIncome ? shareLabel(entry) : '';
+  const metaText = [note && !hideCategory ? cat.name : null, paymentLabel, sharedText].filter(Boolean).join(' · ');
   const amountType = isIncome ? 'income' : 'expense';
+  const displayAmount = Math.round(isIncome ? (Number(entry.amount) || 0) : spendOf(entry, tripCtx));
   // 百萬以上縮小一號，避免擠出固定寬的金額欄
-  const isLongAmount = String(Math.round(Math.abs(Number(entry.amount) || 0))).length >= 7;
+  const isLongAmount = String(Math.abs(displayAmount)).length >= 7;
 
   // 外幣筆：金額欄下多一行原幣（收入在隱藏模式下逐位換星號，寬度不變）
   const isForeign = !!(entry.currency && entry.currency !== 'TWD' && Number(entry.originalAmount) > 0);
@@ -63,7 +66,7 @@ export default function LifeEntryRow({
       data-entry-id={entry.id}
       role={onEdit ? 'button' : undefined}
       tabIndex={onEdit ? 0 : undefined}
-      aria-label={`${isIncome ? '收入' : '支出'} ${cat.name}${note ? ` ${note}` : ''} ${formatAmount(entry.amount, amountType)} 元${isForeign ? `（${origShown}）` : ''}，點一下編輯`}
+      aria-label={`${isIncome ? '收入' : '支出'} ${cat.name}${note ? ` ${note}` : ''} ${formatAmount(displayAmount, amountType)} 元${sharedText ? `（${sharedText}）` : ''}${isForeign ? `（${origShown}）` : ''}，點一下編輯`}
       onClick={open}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}
     >
@@ -92,11 +95,11 @@ export default function LifeEntryRow({
       <span className={`kk-entry-amount ${isIncome ? 'is-income' : 'is-expense'}${isLongAmount ? ' is-long' : ''}${isForeign ? ' has-orig' : ''}`}>
         {isForeign ? (
           <>
-            <span className="kk-entry-amt-main">$<AnimatedNumber value={Math.round(entry.amount)} format={v => formatAmount(v, amountType)} /></span>
+            <span className="kk-entry-amt-main">$<AnimatedNumber value={displayAmount} format={v => formatAmount(v, amountType)} /></span>
             <span className="kk-entry-orig">{origShown}</span>
           </>
         ) : (
-          <>$<AnimatedNumber value={Math.round(entry.amount)} format={v => formatAmount(v, amountType)} /></>
+          <>$<AnimatedNumber value={displayAmount} format={v => formatAmount(v, amountType)} /></>
         )}
       </span>
     </motion.div>

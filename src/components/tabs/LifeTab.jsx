@@ -12,6 +12,7 @@ import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
 import { computeSpendPace } from '../../lib/spendPace';
 import { normalizeSalaryConfig, shouldApplySalaryToMonth, salaryDateForMonth, planSalaryUpdates } from '../../lib/salarySchedule';
 import { entryTripId, splitMonthSpend, matchesCatFilter, tripFilterId, tripIdFromFilter, summarizeTrip, pendingEntries, TRIP_COLOR } from '../../lib/trips';
+import { spendOf } from '../../lib/share';
 import { tripEntryDraft } from '../../lib/tripActions';
 import { useTripContext } from '../../hooks/useTripContext';
 import { useTripActions } from '../../hooks/useTripActions';
@@ -265,7 +266,7 @@ export default function LifeTab() {
 
   // ── Computed stats ──
   const tInc   = lifeExpenses.filter(e => e.type === 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const tExp   = lifeExpenses.filter(e => e.type !== 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const tExp   = Math.round(lifeExpenses.filter(e => e.type !== 'income' && (e.date || '').startsWith(ym)).reduce((s, e) => s + spendOf(e, tripCtx), 0));
   // 每月現金固定支出（信用卡項目已由 Gmail 記帳匯入明細、計在 tExp，不重複加）
   const fixedMonthly = Math.round(getFixedLifeMonthly(items, ym));
   const now      = new Date();
@@ -560,6 +561,7 @@ export default function LifeTab() {
                   sortMode={sortMode}
                   setSortMode={setSortMode}
                   monthSummary={{ expense: tExp, income: tInc, remain, isCurrentMonth: pace.isCurrentMonth }}
+                  tripCtx={tripCtx}
                   onOpenOverview={() => setLifeView('overview')}
                   onOpenTrip={(id) => setOpenTripId(id)}
                 />

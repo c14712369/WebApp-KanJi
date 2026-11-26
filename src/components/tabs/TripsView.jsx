@@ -56,10 +56,16 @@ function CurrencyOptions() {
   );
 }
 
+const normalizeGroupSize = (v) => Math.min(30, Math.max(1, Math.round(Number(v) || 1)));
+
 // ── 新增／編輯旅程 ───────────────────────────────────────────────────────────
 function TripModal({ initial, onClose, onSave, onDelete }) {
   const isEdit = !!initial?.id;
-  const [form, setForm] = useState(() => initial || { name: '', startDate: toIso(new Date()), endDate: toIso(new Date()), currency: 'JPY' });
+  const [form, setForm] = useState(() => (
+    initial
+      ? { ...initial, groupSize: normalizeGroupSize(initial.groupSize) }
+      : { name: '', startDate: toIso(new Date()), endDate: toIso(new Date()), currency: 'JPY', groupSize: 1 }
+  ));
   const [errors, setErrors] = useState({});
   const [shake, setShake] = useState(false);
 
@@ -82,7 +88,7 @@ function TripModal({ initial, onClose, onSave, onDelete }) {
       setTimeout(() => setShake(false), 400);
       return;
     }
-    onSave({ ...form, name: form.name.trim() });
+    onSave({ ...form, name: form.name.trim(), groupSize: normalizeGroupSize(form.groupSize) });
   };
 
   const err = (k) => errors[k] && <span className="fx-field-error" id={`tp-err-${k}`} role="alert">{errors[k]}</span>;
@@ -101,19 +107,37 @@ function TripModal({ initial, onClose, onSave, onDelete }) {
 
         <form onSubmit={submit} noValidate className="fx-item-form">
           <div className="fx-item-body">
-            {/* 名稱（長）＋幣別（短）同一列 */}
-            <div className="tp-grid-name">
-              <div className="form-group">
-                <label className="form-label" htmlFor="tpName">名稱</label>
-                <input id="tpName" className="form-input" value={form.name} onChange={e => set('name', e.target.value)}
-                  placeholder="例如：東京賞楓" autoFocus={autoFocusDesktop} {...invalid('name')} />
-                {err('name')}
-              </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="tpName">名稱</label>
+              <input id="tpName" className="form-input" value={form.name} onChange={e => set('name', e.target.value)}
+                placeholder="例如：東京賞楓" autoFocus={autoFocusDesktop} {...invalid('name')} />
+              {err('name')}
+            </div>
+
+            {/* 幣別＋人數（短欄位併排） */}
+            <div className="tp-grid-cur">
               <div className="form-group">
                 <label className="form-label" htmlFor="tpCur">幣別</label>
                 <select id="tpCur" className="form-select" value={form.currency} onChange={e => set('currency', e.target.value)}>
                   <CurrencyOptions />
                 </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="tpGroupSize">人數</label>
+                <input
+                  id="tpGroupSize"
+                  className="form-input"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={30}
+                  value={form.groupSize ?? 1}
+                  onChange={e => {
+                    const raw = e.target.value;
+                    set('groupSize', raw === '' ? '' : raw.replace(/\D/g, ''));
+                  }}
+                  onBlur={() => set('groupSize', normalizeGroupSize(form.groupSize))}
+                />
               </div>
             </div>
 
@@ -210,6 +234,7 @@ function TripCard({ trip, summary, today, onEdit, onAddEntry, onOpenEntries, pen
           </h3>
           <p className="tp-card-meta">
             {formatTripRange(trip)} · {summary.days} 天 · {cur.name}
+            {Number(trip.groupSize) > 1 ? ` · ${Math.round(trip.groupSize)} 人` : ''}
             {status.kind === 'ongoing' && <span className="tp-badge is-live">進行中・第 {status.day} 天</span>}
             {status.kind === 'upcoming' && <span className="tp-badge">還有 {status.daysUntil} 天</span>}
           </p>

@@ -4,6 +4,10 @@ import { motion, useDragControls, useReducedMotion } from 'framer-motion';
 import IconRenderer from '../../lib/IconRenderer';
 import { OPS, pressKey, evaluateExpr, hasOperator, formatExpr, exprFromAmount } from '../../lib/calcPad';
 import { NO_TRIP, entryTripId, tripForDate, sheetTripDefault, tripIdToSave, sortTrips, formatTripRange } from '../../lib/trips';
+import { isShared, sharePatch } from '../../lib/share';
+import { bulkShareTargets } from '../../lib/shareBulk';
+import { showToast } from '../../lib/utils';
+import { useAppStore } from '../../store/appStore';
 import { useTripContext } from '../../hooks/useTripContext';
 import { useTripActions } from '../../hooks/useTripActions';
 import { confirmsTwdOnEdit } from '../../lib/tripFx';
@@ -64,6 +68,31 @@ function readLastEntry() {
   try { return JSON.parse(localStorage.getItem(LAST_ENTRY_KEY)) || {}; } catch { return {}; }
 }
 
+const hasMyShareVal = (entry) => {
+  const ms = entry?.myShare;
+  return ms !== undefined && ms !== null && ms !== ''
+    && Number.isFinite(Number(ms)) && Number(ms) >= 0;
+};
+
+const initialShareMode = (entry) => {
+  if (!entry || entry.type === 'income') return 'none';
+  if (hasMyShareVal(entry)) return 'fixed';
+  if (Number(entry.splitN) >= 2) return 'split';
+  return 'none';
+};
+
+const tripDefaultSplitN = (trips, sel) => {
+  const t = trips.find(x => x.id === sel);
+  const gs = Math.round(Number(t?.groupSize) || 1);
+  return gs > 1 ? gs : 2;
+};
+
+const sanitizeDecimal = (raw) => {
+  const s = String(raw || '').replace(/[^\d.]/g, '');
+  const dot = s.indexOf('.');
+  return dot === -1 ? s : s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, '');
+};
+
 export default function EntrySheet({
   lifeCategories = [],
   lifeIncomeCategories = [],
@@ -117,6 +146,18 @@ export default function EntrySheet({
   const [rateDraft, setRateDraft] = useState('');
   const [error, setError] = useState('');
 
+  const initShareMode = initialShareMode(isEdit ? initial : null);
+  const [shareMode, setShareMode] = useState(initShareMode);
+  const [splitNStr, setSplitNStr] = useState(() => (
+    initShareMode === 'split'
+      ? String(Math.round(Number(initial.splitN)))
+      : String(tripDefaultSplitN(trips, tripSel))
+  ));
+  const [myShareStr, setMyShareStr] = useState(() => (
+    initShareMode === 'fixed' ? String(initial.myShare) : ''
+  ));
+  const splitNTouchedRef = useRef(initShareMode === 'split');
+
   const sheetRef = useRef(null);
   const returnFocusRef = useRef(null);
   const typeSwitchedRef = useRef(false); // 使用者切換過類型後，分類圖示才播進場動畫
@@ -144,6 +185,10 @@ export default function EntrySheet({
   const showTrip = !isIncome && tripOptions.length > 0;
   const cur = currencyMeta(currency);
   const twd = isForeign ? toTWD(amount, rate) : amount;
+  const effectiveSplitN = Math.max(2, Math.round(Number(splitNStr) || tripDefaultSplitN(trips, tripSel)));
+  const splitPreviewText = twd != null
+    ? `$${Math.round(twd / effectiveSplitN).toLocaleString('en-US')}`
+    : '—';
   const amountText = amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
   const isLongAmount = (cur.symbol + amountText).length > 10;
   const title = `${isEdit ? '編輯' : '新增'}${isIncome ? '收入' : '支出'}`;
@@ -200,6 +245,7 @@ export default function EntrySheet({
     const sel = t ? t.id : NO_TRIP;
     if (sel === tripSel) return;
     setTripSel(sel);
+    if (!splitNTouchedRef.current) setSplitNStr(String(tripDefaultSplitN(trips, sel)));
     if (!curTouchedRef.current) applyCurrency(t ? (t.currency || 'TWD') : 'TWD');
   };
 
@@ -207,11 +253,32 @@ export default function EntrySheet({
     buzz(10);
     autoTripRef.current = false;
     setTripSel(sel);
+    if (!splitNTouchedRef.current) setSplitNStr(String(tripDefaultSplitN(trips, sel)));
     if (curTouchedRef.current) return;
     const t = trips.find(x => x.id === sel);
     if (!t) { applyCurrency('TWD'); return; }
     // 日期在旅程期間才切當地幣別；行前補記（10 月訂房）通常在台灣用台幣付，維持原幣別
     if (date >= t.startDate && date <= t.endDate) applyCurrency(t.currency || 'TWD');
+  };
+
+  const switchShareMode = (next) => {
+    if (next === shareMode) return;
+    buzz(10);
+    setShareMode(next);
+    if (next === 'split' && !splitNTouchedRef.current) {
+      setSplitNStr(String(tripDefaultSplitN(trips, tripSel)));
+    }
+  };
+
+  const handleSplitNChange = (e) => {
+    splitNTouchedRef.current = true;
+    const raw = e.target.value.replace(/\D/g, '');
+    setSplitNStr(raw);
+  };
+
+  const handleSplitNBlur = () => {
+    const n = Math.min(99, Math.max(2, Math.round(Number(splitNStr) || tripDefaultSplitN(trips, tripSel))));
+    setSplitNStr(String(n));
   };
 
   const openRateEdit = () => {
@@ -256,6 +323,9 @@ export default function EntrySheet({
     }
     const wasInTrip = isEdit && !!entryTripId(initial, trips, tripCtx);
     const nextTripId = isIncome ? undefined : tripIdToSave(tripSel, trips, date);
+    const sp = isIncome
+      ? sharePatch('none')
+      : sharePatch(shareMode, { n: effectiveSplitN, myShare: myShareStr });
     const payload = {
       id: initial?.id || crypto.randomUUID(),
       type,
@@ -267,10 +337,21 @@ export default function EntrySheet({
       note: note.trim(),
       ...(isIncome ? {} : { paymentMethod: pmId }),
       tripId: nextTripId,
+      ...sp,
     };
     onSave(payload);
     if (wasInTrip && nextTripId === NO_TRIP) {
       offerExclusion(initial);
+    } else if (isShared(payload)) {
+      const { lifeExpenses, patchLifeExpenses } = useAppStore.getState();
+      const targets = bulkShareTargets(payload, lifeExpenses, trips, tripCtx);
+      if (targets.length > 0) {
+        const shopName = payload.note.replace(/^\s*\[[^\]]*\]\s*/, '').trim() || '這家店';
+        showToast(`同一趟還有 ${targets.length} 筆「${shopName}」，也套用？`, 'success', {
+          actionLabel: '好',
+          onAction: () => patchLifeExpenses(targets.map(t => ({ id: t.id, patch: sp }))),
+        });
+      }
     }
   };
 
@@ -580,6 +661,78 @@ export default function EntrySheet({
               <i className="fa-solid fa-pen" aria-hidden="true"></i>
               <span className="kk-pill-text">{note || '備註'}</span>
             </button>
+          </div>
+        )}
+
+        {/* 幫大家付（只對支出顯示；三種模式下固定高度，不讓抽屜跳動） */}
+        {!isIncome && !noteEditing && !rateEditing && (
+          <div className={`kk-share-box${shareMode !== 'none' ? ' is-shared' : ''}`}>
+            <div className="kk-share-head">
+              <span className="kk-share-title">
+                <i className="fa-solid fa-users" aria-hidden="true"></i>
+                <span>幫大家付</span>
+              </span>
+              <div className="kk-share-seg" role="radiogroup" aria-label="幫大家付">
+                {[['none', '不是'], ['split', '均分'], ['fixed', '自填']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={shareMode === key}
+                    className={`kk-share-btn${shareMode === key ? ' is-active' : ''}`}
+                    onClick={() => switchShareMode(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="kk-share-body">
+              {shareMode === 'none' && (
+                <span className="kk-share-hint">整筆計入我的花費</span>
+              )}
+
+              {shareMode === 'split' && (
+                <div className="kk-share-split">
+                  <label className="kk-share-field">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={2}
+                      max={99}
+                      className="kk-share-num"
+                      value={splitNStr}
+                      onChange={handleSplitNChange}
+                      onBlur={handleSplitNBlur}
+                      aria-label="均分人數"
+                    />
+                    <span className="kk-share-unit">人</span>
+                  </label>
+                  <span className="kk-share-preview">
+                    我的份 <strong>{splitPreviewText}</strong>
+                  </span>
+                </div>
+              )}
+
+              {shareMode === 'fixed' && (
+                <div className="kk-share-fixed">
+                  <label className="kk-share-field is-money" htmlFor="kkShareMyInput">
+                    <span className="kk-share-unit">我的份 NT$</span>
+                    <input
+                      id="kkShareMyInput"
+                      type="text"
+                      inputMode="decimal"
+                      className="kk-share-money"
+                      value={myShareStr}
+                      placeholder="0"
+                      onChange={e => setMyShareStr(sanitizeDecimal(e.target.value))}
+                      aria-label="我的份金額（台幣）"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
