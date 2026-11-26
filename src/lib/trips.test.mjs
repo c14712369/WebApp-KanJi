@@ -297,6 +297,84 @@ test('pendingEntries 只列台南期間的台幣帳單列，新到舊', () => {
   assert.deepEqual(pendingEntries(T[0], es, T).map(e => e.id), ['gmail_b', 'gmail_a']);
 });
 
+console.log('歸屬規則 v2：服務費、邊界');
+const T2 = [
+  { id: 't_tainan', name: '台南小旅行', startDate: '2026-12-05', endDate: '2026-12-07', currency: 'TWD' },
+  { id: 't_tokyo',  name: '東京賞楓',   startDate: '2026-11-14', endDate: '2026-11-22', currency: 'JPY' },
+];
+const Y = (o) => ({ type: 'expense', amount: 100, ...o });
+test('服務費：交易是待確認的美金訂閱 → 服務費不進待確認', () => {
+  const c = Y({ id: 'gmail_c', currency: 'USD', date: '2026-11-16', amount: 632 });
+  const fc = Y({ id: 'gmail_fc', feeOf: 'gmail_c', date: '2026-11-16', amount: 9, note: '[台新] 國外交易服務費' });
+  const ctx = getTripContext([c, fc], {});
+  assert.equal(tripPendingId(c, T2, ctx), 't_tokyo');
+  assert.equal(tripPendingId(fc, T2, ctx), null);
+  assert.equal(entryTripId(fc, T2, ctx), null);
+});
+test("服務費：交易被設成日常（'none'）→ 服務費也是日常且不待確認", () => {
+  const c = Y({ id: 'gmail_c', currency: 'USD', date: '2026-11-16', tripId: 'none' });
+  const fc = Y({ id: 'gmail_fc', feeOf: 'gmail_c', date: '2026-11-16', amount: 9 });
+  const ctx = getTripContext([c, fc], {});
+  assert.equal(entryTripId(fc, T2, ctx), null); assert.equal(tripPendingId(fc, T2, ctx), null);
+});
+test('服務費：交易被確認為旅費 → 服務費跟著進旅程', () => {
+  const c = Y({ id: 'gmail_c', date: '2026-12-06', tripId: 't_tainan' });
+  const fc = Y({ id: 'gmail_fc', feeOf: 'gmail_c', date: '2026-12-06', amount: 9 });
+  assert.equal(entryTripId(fc, T2, getTripContext([c, fc], {})), 't_tainan');
+});
+test('服務費：出發前先刷的外幣飯店（手動指定旅程），服務費跟著進旅程', () => {
+  const h = Y({ id: 'gmail_h', currency: 'JPY', date: '2026-10-02', tripId: 't_tokyo', amount: 8000 });
+  const fh = Y({ id: 'gmail_fh', feeOf: 'gmail_h', date: '2026-10-02', amount: 120 });
+  assert.equal(entryTripId(fh, T2, getTripContext([h, fh], {})), 't_tokyo');
+});
+test('服務費：例外名單擋不住服務費（跟著日圓交易）', () => {
+  const j = Y({ id: 'gmail_j', currency: 'JPY', date: '2026-11-16' });
+  const fj = Y({ id: 'gmail_fj', feeOf: 'gmail_j', date: '2026-11-16', amount: 10, note: '[台新] 國外交易服務費' });
+  const ctx = { ...getTripContext([j, fj], {}), exclude: { '國外交易服務費': { on: true, at: 1 } } };
+  assert.equal(entryTripId(fj, T2, ctx), 't_tokyo');
+});
+test('服務費：feeOf 指向不存在、指向另一筆服務費、指向自己 → 不當機，照一般帳單列處理', () => {
+  const a = Y({ id: 'gmail_a', feeOf: 'gmail_missing', date: '2026-12-06' });
+  const b = Y({ id: 'gmail_b', feeOf: 'gmail_a', date: '2026-12-06' });
+  const s = Y({ id: 'gmail_s', feeOf: 'gmail_s', date: '2026-12-06' });
+  const ctx = getTripContext([a, b, s], {});
+  for (const e of [a, b, s]) { assert.equal(entryTripId(e, T2, ctx), null); }
+  assert.equal(tripPendingId(a, T2, ctx), 't_tainan');
+});
+test('規則 4：台幣帳單列命中例外 → 日常且不待確認', () => {
+  const e = Y({ id: 'gmail_7', note: '[台新] 統一超商－京發A3709 TAIPEI', date: '2026-12-06' });
+  const ctx = { exclude: { '7-11': { on: true, at: 1 } } };
+  assert.equal(entryTripId(e, T2, ctx), null); assert.equal(tripPendingId(e, T2, ctx), null);
+});
+test('規則 2 優先於規則 4：例外商家被手動指定旅程仍歸旅程', () => {
+  const e = Y({ id: 'live_7', live: true, note: '7-ELEVEN', date: '2026-12-06', tripId: 't_tainan' });
+  assert.equal(entryTripId(e, T2, { exclude: { '7-11': { on: true, at: 1 } } }), 't_tainan');
+});
+test('規則 6：live_ 開頭但沒有 live 標記的舊列也算即時列', () => {
+  assert.equal(entryTripId(Y({ id: 'live_old', date: '2026-12-06' }), T2), 't_tainan');
+});
+test('金額 0 與退款：0 元帳單列不待確認；日圓退款歸東京；台幣退款不待確認', () => {
+  assert.equal(tripPendingId(Y({ id: 'gmail_z', amount: 0, date: '2026-12-06' }), T2), null);
+  assert.equal(entryTripId(Y({ id: 'gmail_r', amount: -500, currency: 'JPY', date: '2026-11-16' }), T2), 't_tokyo');
+  assert.equal(tripPendingId(Y({ id: 'gmail_rt', amount: -85, date: '2026-12-06' }), T2), null);
+});
+test('getTripContext：換新參照就重建 byId', () => {
+  const a = [{ id: 'x' }], b = [{ id: 'y' }], ex = {};
+  assert.ok(getTripContext(a, ex).byId.has('x'));
+  assert.ok(getTripContext(b, ex).byId.has('y'));
+  assert.ok(!getTripContext(b, ex).byId.has('x'));
+});
+test('ctx 有往下傳：summarizeTrip 與 splitMonthSpend 套用例外', () => {
+  const e = Y({ id: 'live_7', live: true, note: '7-ELEVEN', date: '2026-12-06', categoryId: 'c1' });
+  const ctx = { exclude: { '7-11': { on: true, at: 1 } } };
+  assert.equal(summarizeTrip(T2[0], [e], T2, [], ctx).count, 0);
+  assert.equal(splitMonthSpend([e], T2, '2026-12', [{ id: 'c1', name: '餐飲' }], ctx).dailyTotal, 100);
+  assert.equal(matchesCatFilter(e, 'c1', T2, ctx), true);
+});
+test('sheetTripDefault：initial.tripId 指向不存在的旅程時退回看日期', () => {
+  assert.equal(sheetTripDefault(T2, '2026-12-06', { type: 'expense', tripId: 't_gone' }), 't_tainan');
+});
+
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);
 if (failed > 0) process.exit(1);
 console.log('全部通過 ✅');

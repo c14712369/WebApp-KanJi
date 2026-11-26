@@ -4,14 +4,14 @@
  * 明細歸屬規則（entryTripId，看「來源」；由上往下，第一條成立就停；收入一律不算旅程）：
  *   1. tripId === 'none' → 日常（使用者手動排除）
  *   2. tripId 指向存在的旅程 → 那趟旅程（使用者手動指定，例如出發前先付的住宿、機票）
- *   3. 日期不在任何旅程期間 → 日常
- *   4. 台幣列（沒有 currency 或為 TWD）且店名在「旅程例外商家」名單 → 日常（外幣列不受影響）
- *   5. 手動列（id 不是 gmail_、live_ 開頭）→ 那趟旅程（建旅程前就記好的手動帳也會自動歸入）
- *   6. 即時列（live）或從即時列換成的帳單列（fromLive）→ 那趟旅程（Apple Pay、Uber 收據）
- *   7. 帳單列，幣別等於旅程幣別（且不是 TWD）→ 那趟旅程
- *   8. 帳單列是「國外交易服務費」（有 feeOf），且它連到的那筆交易依本表歸到某趟 → 同一趟
+ *   3. 帳單列是「國外交易服務費」（有 feeOf），且 ctx.byId 找得到它連到的那筆交易（且那筆本身沒有 feeOf）→ 跟那筆交易同一結果（不看服務費自己的日期與例外名單）
+ *   4. 日期不在任何旅程期間 → 日常
+ *   5. 台幣列（沒有 currency 或為 TWD）且店名在「旅程例外商家」名單 → 日常（外幣列不受影響）
+ *   6. 手動列（id 不是 gmail_、live_ 開頭）→ 那趟旅程（建旅程前就記好的手動帳也會自動歸入）
+ *   7. 即時列（live）、從即時列換成的帳單列（fromLive）或 id 以 live_ 開頭 → 那趟旅程（Apple Pay、Uber 收據）
+ *   8. 帳單列，幣別等於旅程幣別（且不是 TWD）→ 那趟旅程
  *   9. 其他帳單列 → 日常，但列入該旅程的「待確認」（tripPendingId / pendingEntries）
- * ctx = { exclude, byId }（getTripContext 產生）：沒有 exclude 就略過第 4 條，沒有 byId 就略過第 8 條。
+ * ctx = { exclude, byId }（getTripContext 產生）：沒有 exclude 就略過第 5 條，沒有 byId 就略過第 3 條。
  */
 
 import { isImportedId } from './syncMerge.js';
@@ -48,29 +48,30 @@ export function entryTripId(entry, trips, ctx = {}) {
   const tid = entry.tripId;
   if (tid === NO_TRIP) return null;                                           // 規則 1
   if (tid && (trips || []).some(t => t.id === tid)) return tid;               // 規則 2
-  const trip = tripForDate(trips, entry.date);
-  if (!trip) return null;                                                     // 規則 3
-  if (c.exclude && isTripExcluded(entry, c.exclude)) return null;             // 規則 4（isTripExcluded 內部只認台幣列）
-  if (!isImportedId(entry.id)) return trip.id;                                // 規則 5
-  if (entry.live || entry.fromLive) return trip.id;                           // 規則 6
-  if (isBillRow(entry) && entry.currency && entry.currency !== 'TWD'
-      && entry.currency === trip.currency) return trip.id;                    // 規則 7
-  if (entry.feeOf && c.byId) {                                                // 規則 8
+  if (entry.feeOf && c.byId) {                                                // 規則 3
     const parent = c.byId.get(entry.feeOf);
     if (parent && !parent.feeOf) return entryTripId(parent, trips, c);
   }
+  const trip = tripForDate(trips, entry.date);
+  if (!trip) return null;                                                     // 規則 4
+  if (c.exclude && isTripExcluded(entry, c.exclude)) return null;             // 規則 5（isTripExcluded 內部只認台幣列）
+  if (!isImportedId(entry.id)) return trip.id;                                // 規則 6
+  if (entry.live || entry.fromLive || hasId(entry.id, 'live_')) return trip.id; // 規則 7
+  if (isBillRow(entry) && entry.currency && entry.currency !== 'TWD'
+      && entry.currency === trip.currency) return trip.id;                    // 規則 8
   return null;                                                                // 規則 9（待確認見 tripPendingId）
 }
 
 /**
- * 落在第 9 條（帳單列、日期在旅程內、使用者還沒決定、不是例外、支出且金額 > 0）→ 回傳那趟的 id，否則 null
+ * 落在第 9 條（帳單列、日期在旅程內、使用者還沒決定、不是例外、不是服務費、支出且金額 > 0）→ 回傳那趟的 id，否則 null
  */
 export function tripPendingId(entry, trips, ctx = {}) {
   if (!isBillRow(entry) || entry.type === 'income' || !(Number(entry.amount) > 0)) return null;
   if (entry.tripId === NO_TRIP) return null;
+  const c = ctx || {};
+  if (entry.feeOf && c.byId && c.byId.has(entry.feeOf)) return null;
   const trip = tripForDate(trips, entry.date);
   if (!trip) return null;
-  const c = ctx || {};
   if (c.exclude && isTripExcluded(entry, c.exclude)) return null;
   return entryTripId(entry, trips, c) === null ? trip.id : null;
 }
