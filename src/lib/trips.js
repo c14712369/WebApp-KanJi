@@ -256,3 +256,46 @@ export function matchesCatFilter(entry, filterId, trips, ctx = {}) {
   if (tid) return tripOfExpense(entry, trips, ctx) === tid;
   return entry.categoryId === filterId && !tripOfExpense(entry, trips, ctx);
 }
+
+/**
+ * 旅程頁預設展開哪一趟：
+ *   1. 進行中（startDate <= today <= endDate）取 startDate 最晚
+ *   2. 即將出發（startDate > today）取 startDate 最早
+ *   3. 已結束取 endDate 最晚
+ *   沒有旅程回傳 null。
+ */
+export function featuredTripId(trips, today) {
+  const list = (trips || []).filter(t => t && t.id && t.startDate && t.endDate);
+  if (!list.length) return null;
+
+  const ongoing = list.filter(t => t.startDate <= today && today <= t.endDate);
+  if (ongoing.length) {
+    return ongoing.sort((a, b) => b.startDate.localeCompare(a.startDate))[0].id;
+  }
+
+  const upcoming = list.filter(t => t.startDate > today);
+  if (upcoming.length) {
+    return upcoming.sort((a, b) => a.startDate.localeCompare(b.startDate))[0].id;
+  }
+
+  return [...list].sort((a, b) => b.endDate.localeCompare(a.endDate))[0].id;
+}
+
+/**
+ * 旅程頁依年份分組（以出發年計，沿用傳入順序），每組附趟數與總花費合計。
+ */
+export function groupTripsByYear(items) {
+  const groups = new Map();
+  (items || []).forEach(it => {
+    const year = String(it?.trip?.startDate || '').slice(0, 4);
+    let g = groups.get(year);
+    if (!g) {
+      g = { year, count: 0, total: 0, items: [] };
+      groups.set(year, g);
+    }
+    g.items.push(it);
+    g.count += 1;
+    g.total += Number(it?.summary?.total) || 0;
+  });
+  return [...groups.values()];
+}

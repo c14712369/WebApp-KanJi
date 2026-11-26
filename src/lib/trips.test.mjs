@@ -8,6 +8,7 @@ import {
   tripStatus, sortTrips, validateTrip, sheetTripDefault, tripIdToSave,
   splitMonthSpend, matchesCatFilter, tripFilterId, groupTripEntries,
   tripPendingId, pendingEntries, getTripContext,
+  featuredTripId, groupTripsByYear,
 } from './trips.js';
 
 let passed = 0, failed = 0;
@@ -373,6 +374,29 @@ test('ctx 有往下傳：summarizeTrip 與 splitMonthSpend 套用例外', () => 
 });
 test('sheetTripDefault：initial.tripId 指向不存在的旅程時退回看日期', () => {
   assert.equal(sheetTripDefault(T2, '2026-12-06', { type: 'expense', tripId: 't_gone' }), 't_tainan');
+});
+
+console.log('旅程頁：預設展開、依年份分組');
+const FT = [
+  { id: 'past', startDate: '2026-07-03', endDate: '2026-07-07' },
+  { id: 'old', startDate: '2025-10-02', endDate: '2025-10-06' },
+  { id: 'now', startDate: '2026-11-24', endDate: '2026-11-28' },
+  { id: 'soon', startDate: '2026-12-20', endDate: '2026-12-24' },
+  { id: 'later', startDate: '2027-02-01', endDate: '2027-02-05' },
+];
+test('預設展開：進行中優先', () => assert.equal(featuredTripId(FT, '2026-11-26'), 'now'));
+test('預設展開：沒有進行中 → 最快出發的', () => assert.equal(featuredTripId(FT.filter(t => t.id !== 'now'), '2026-11-26'), 'soon'));
+test('預設展開：都結束了 → 回程日最晚的', () => assert.equal(featuredTripId(FT.filter(t => ['past', 'old'].includes(t.id)), '2026-11-26'), 'past'));
+test('預設展開：沒有旅程 → null', () => assert.equal(featuredTripId([], '2026-11-26'), null));
+test('依年份分組：出發年、保持順序、年合計', () => {
+  const items = [
+    { trip: { id: 'a', startDate: '2026-12-30', endDate: '2027-01-03' }, summary: { total: 100 } },
+    { trip: { id: 'b', startDate: '2026-07-03', endDate: '2026-07-07' }, summary: { total: 50 } },
+    { trip: { id: 'c', startDate: '2025-10-02', endDate: '2025-10-06' }, summary: { total: 30 } },
+  ];
+  const g = groupTripsByYear(items);
+  assert.deepEqual(g.map(x => [x.year, x.count, x.total]), [['2026', 2, 150], ['2025', 1, 30]]);
+  assert.deepEqual(g[0].items.map(x => x.trip.id), ['a', 'b']);
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);

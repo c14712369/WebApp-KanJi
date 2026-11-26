@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAppStore } from '../../store/appStore';
 import { useLifeEntryActions } from '../../hooks/useLifeEntryActions';
 import { useTripContext } from '../../hooks/useTripContext';
 import { useTripActions } from '../../hooks/useTripActions';
 import {
   summarizeTrip, sortTrips, formatTripRange, tripStatus, validateTrip, pendingEntries,
+  featuredTripId, groupTripsByYear, TRIP_COLOR,
 } from '../../lib/trips';
 import { activeTripExclusions } from '../../lib/tripMerchants';
 import { tripEntryDraft } from '../../lib/tripActions';
@@ -307,12 +308,43 @@ function TripCard({ trip, summary, today, onEdit, onAddEntry, onOpenEntries, pen
   );
 }
 
+// ── 收起來的那一行旅程 ───────────────────────────────────────────────────────
+function TripRow({ trip, summary, pendingCount = 0, needsFx = false, onOpen }) {
+  const badge = needsFx ? '需換算' : (pendingCount > 0 ? `${pendingCount} 筆待確認` : null);
+  const range = formatTripRange(trip);
+  const label = `展開「${trip.name}」，${range}，總花費 $${fmtMoney(summary.total)}${badge ? `，${badge}` : ''}`;
+
+  return (
+    <button
+      type="button"
+      className="tp-row"
+      aria-expanded="false"
+      aria-label={label}
+      onClick={onOpen}
+    >
+      <span className="tp-row-icon" style={{ '--trip-color': TRIP_COLOR }} aria-hidden="true">
+        <i className="fa-solid fa-plane"></i>
+      </span>
+      <span className="tp-row-main">
+        <span className="tp-row-name">{trip.name}</span>
+        <span className="tp-row-meta">
+          <span>{range} · {summary.days} 天</span>
+          {badge && <span className="tp-row-badge">{badge}</span>}
+        </span>
+      </span>
+      <span className="tp-row-amt">${fmtMoney(summary.total)}</span>
+      <i className="fa-solid fa-chevron-right tp-row-go" aria-hidden="true"></i>
+    </button>
+  );
+}
+
 // ── 主畫面 ───────────────────────────────────────────────────────────────────
 export default function TripsView() {
   const {
     trips, lifeExpenses, lifeCategories, lifeIncomeCategories, paymentMethods, tripExcludeMerchants,
     addTrip, updateTrip, removeTrip, setLifeCategories, patchLifeExpenses, setTripExclusion,
   } = useAppStore();
+  const [expandedId, setExpandedId] = useState(null); // null 時自動挑目前／最近一趟展開
   const [fxTripId, setFxTripId] = useState(null); // 開著「換算成台幣」的那趟
   const [fxDone, setFxDone] = useState({});       // tripId → { count, before }：剛換算完，可復原
   const [modal, setModal] = useState(null); // null | {} 新增 | trip 編輯
@@ -320,6 +352,8 @@ export default function TripsView() {
   const [justSavedId, setJustSavedId] = useState(null);   // 剛改完的那筆閃一下
   const [entriesSheet, setEntriesSheet] = useState(null); // 明細抽屜：{ tripId, catId }（catId null＝全部）
   const [excludeModalOpen, setExcludeModalOpen] = useState(false);
+  const scrollTargetRef = useRef(null);
+  const reduceMotion = useReducedMotion();
   const { saveEntry, deleteEntry } = useLifeEntryActions();
   const { decide } = useTripActions();
   const tripCtx = useTripContext();
@@ -344,6 +378,28 @@ export default function TripsView() {
     fxItems: unconvertedTripEntries(t, lifeExpenses, trips, tripCtx),
     pending: pendingEntries(t, lifeExpenses, trips, tripCtx),
   })), [trips, lifeExpenses, lifeCategories, tripCtx]);
+  const yearGroups = useMemo(() => groupTripsByYear(list), [list]);
+  const activeTripId = useMemo(() => (
+    expandedId && trips.some(t => t.id === expandedId) ? expandedId : featuredTripId(trips, today)
+  ), [expandedId, trips, today]);
+
+  useEffect(() => {
+    const targetId = scrollTargetRef.current;
+    if (!targetId || targetId !== activeTripId) return;
+    scrollTargetRef.current = null;
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(`trip-${targetId}`)?.scrollIntoView({
+        block: 'nearest',
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeTripId, reduceMotion]);
+
+  const openTrip = (id) => {
+    scrollTargetRef.current = id;
+    setExpandedId(id);
+  };
   const exclusions = useMemo(() => activeTripExclusions(tripExcludeMerchants), [tripExcludeMerchants]);
   const fxOpen = fxTripId ? list.find(x => x.trip.id === fxTripId) : null;
   const sheetOpen = entriesSheet ? list.find(x => x.trip.id === entriesSheet.tripId) : null;
@@ -394,7 +450,10 @@ export default function TripsView() {
       updateTrip(form.id, form);
       showToast('旅程已更新');
     } else {
-      addTrip({ ...form, id: `trip_${crypto.randomUUID()}`, createdAt: Date.now() });
+      const id = `trip_${crypto.randomUUID()}`;
+      addTrip({ ...form, id, createdAt: Date.now() });
+      scrollTargetRef.current = id;
+      setExpandedId(id);
       showToast(`已新增「${form.name}」`);
     }
     setModal(null);
@@ -441,21 +500,43 @@ export default function TripsView() {
           </button>
         </div>
       ) : (
-        list.map(({ trip, summary, fxItems, pending }) => (
-          <TripCard
-            key={trip.id}
-            trip={trip}
-            summary={summary}
-            today={today}
-            pendingCount={pending.length}
-            fxItems={fxItems}
-            fxDone={fxDone[trip.id]}
-            onOpenFx={() => setFxTripId(trip.id)}
-            onUndoFx={() => undoFx(trip)}
-            onEdit={() => setModal(trip)}
-            onAddEntry={() => openEntry(tripEntryDraft(trip, today))}
-            onOpenEntries={(catId) => { if (navigator.vibrate) navigator.vibrate(20); setEntriesSheet({ tripId: trip.id, catId }); }}
-          />
+        yearGroups.map(group => (
+          <section key={group.year} className="tp-year-group">
+            <h3 className="tp-year">
+              <span>{group.year} · {group.count} 趟</span>
+              <span className="tp-year-total">${fmtMoney(group.total)}</span>
+            </h3>
+            <div className="tp-year-list">
+              {group.items.map(({ trip, summary, fxItems, pending }) => (
+                trip.id === activeTripId ? (
+                  <div key={trip.id} id={`trip-${trip.id}`} className="tp-card-wrap">
+                    <TripCard
+                      trip={trip}
+                      summary={summary}
+                      today={today}
+                      pendingCount={pending.length}
+                      fxItems={fxItems}
+                      fxDone={fxDone[trip.id]}
+                      onOpenFx={() => setFxTripId(trip.id)}
+                      onUndoFx={() => undoFx(trip)}
+                      onEdit={() => setModal(trip)}
+                      onAddEntry={() => openEntry(tripEntryDraft(trip, today))}
+                      onOpenEntries={(catId) => { if (navigator.vibrate) navigator.vibrate(20); setEntriesSheet({ tripId: trip.id, catId }); }}
+                    />
+                  </div>
+                ) : (
+                  <TripRow
+                    key={trip.id}
+                    trip={trip}
+                    summary={summary}
+                    pendingCount={pending.length}
+                    needsFx={!fxDone[trip.id] && fxItems.some(it => it.suggested)}
+                    onOpen={() => openTrip(trip.id)}
+                  />
+                )
+              ))}
+            </div>
+          </section>
         ))
       )}
 
