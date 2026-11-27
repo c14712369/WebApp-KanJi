@@ -29,18 +29,25 @@ export function mergeLifeExpenses(local = [], cloud = [], deletedIds = []) {
   const deleted = new Set(Array.isArray(deletedIds) ? deletedIds : []);
 
   // 匯入列存在與否以雲端為準；同 id 本地編輯較新（_editedAt）→ 用本地版，
-  // 只改過分類（_catLocked）→ 保留本地分類，其餘欄位以雲端為準
+  // 只改過分類（_catLocked）→ 保留本地分類，其餘欄位以雲端為準；
+  // 但雲端有較晚的編輯（別台裝置改的）時，分類也跟雲端走，鎖照樣保留
+  const editedAt = e => (e && e._editedAt) || 0;
   const localImported = {};
   localArr.forEach(e => { if (e && isImportedId(e.id)) localImported[e.id] = e; });
   const cloudImported = cloudArr.filter(e => isImportedId(e && e.id)).map(e => {
     const l = localImported[e.id];
-    if (l && (l._editedAt || 0) > (e._editedAt || 0)) return l;
-    return l && l._catLocked ? { ...e, categoryId: l.categoryId, _catLocked: true } : e;
+    if (l && editedAt(l) > editedAt(e)) return l;
+    if (!l || !l._catLocked) return e;
+    return editedAt(e) > editedAt(l) ? { ...e, _catLocked: true } : { ...e, categoryId: l.categoryId, _catLocked: true };
   });
 
+  // 手動列：聯集，同 id 以本地為準；雲端有較晚的編輯時改用雲端版（電腦上改的不會被手機蓋回）
   const manualById = {};
   cloudArr.filter(e => !isImportedId(e && e.id)).forEach(e => { manualById[e.id] = e; });
-  localArr.filter(e => !isImportedId(e && e.id)).forEach(e => { manualById[e.id] = e; }); // 本地覆蓋
+  localArr.filter(e => !isImportedId(e && e.id)).forEach(e => {
+    const c = manualById[e.id];
+    if (!c || editedAt(e) >= editedAt(c)) manualById[e.id] = e;
+  });
 
   return [...Object.values(manualById), ...cloudImported].filter(e => !deleted.has(e && e.id));
 }
@@ -86,4 +93,9 @@ export function buildPushPayload(cloud, local) {
   const out = { ...base, ...local };
   if (base.settings || local?.settings) out.settings = { ...(base.settings || {}), ...(local?.settings || {}) };
   return out;
+}
+
+/** 編輯一筆記帳：套用修改並蓋上編輯時間（手動列與匯入列都蓋，跨裝置合併時較晚的編輯優先） */
+export function withEdit(entry, data, now = Date.now()) {
+  return { ...entry, ...data, _editedAt: now };
 }

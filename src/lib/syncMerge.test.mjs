@@ -3,7 +3,7 @@
  * 驗證雲端/本地合併邏輯——GAS 匯入列（gmail_）以雲端為準，手動列以本地為準。
  */
 import assert from 'node:assert';
-import { isImportedId, mergeLifeExpenses, purgePreAprilManualExpenses, mergeDeletedIds, buildPushPayload } from './syncMerge.js';
+import { isImportedId, mergeLifeExpenses, purgePreAprilManualExpenses, mergeDeletedIds, buildPushPayload, withEdit } from './syncMerge.js';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => {
@@ -140,6 +140,45 @@ test('不改動傳入的物件', () => {
   buildPushPayload(cloud, local);
   assert.deepEqual(cloud, { a: 1, settings: { x: 1 } });
   assert.deepEqual(local, { b: 2, settings: { y: 2 } });
+});
+
+console.log('\n[較晚的編輯優先（跨裝置）]');
+test('手動列：雲端較晚的編輯優先於本地沒編輯過的版本（電腦改的不會被手機蓋回）', () => {
+  const local = [{ id: 'm1', categoryId: 'cat_travel' }];
+  const cloud = [{ id: 'm1', categoryId: 'lc_food', _editedAt: 200 }];
+  assert.equal(mergeLifeExpenses(local, cloud)[0].categoryId, 'lc_food');
+});
+test('手動列：本地較晚的編輯優先於雲端較早的編輯', () => {
+  const local = [{ id: 'm1', categoryId: 'lc_ent', _editedAt: 300 }];
+  const cloud = [{ id: 'm1', categoryId: 'lc_food', _editedAt: 200 }];
+  assert.equal(mergeLifeExpenses(local, cloud)[0].categoryId, 'lc_ent');
+});
+test('手動列：編輯時間相同時仍以本地為準', () => {
+  const local = [{ id: 'm1', amount: 200, _editedAt: 200 }];
+  const cloud = [{ id: 'm1', amount: 100, _editedAt: 200 }];
+  assert.equal(mergeLifeExpenses(local, cloud)[0].amount, 200);
+});
+test('鎖住分類的匯入列：雲端較晚的編輯會換掉本地鎖住的分類，鎖照樣保留', () => {
+  const local = [{ id: 'gmail_b', categoryId: 'cat_travel', _catLocked: true, _editedAt: 100 }];
+  const cloud = [{ id: 'gmail_b', categoryId: 'lc_stay', _editedAt: 200 }];
+  const out = mergeLifeExpenses(local, cloud)[0];
+  assert.equal(out.categoryId, 'lc_stay');
+  assert.equal(out._catLocked, true);
+});
+test('鎖住分類的匯入列：雲端沒有較晚的編輯（GAS 重新匯入）時保留本地分類', () => {
+  const local = [{ id: 'gmail_b', categoryId: 'cat_travel', _catLocked: true, _editedAt: 100 }];
+  const cloud = [{ id: 'gmail_b', categoryId: 'lc_other', _editedAt: 100, fromLive: true }];
+  const out = mergeLifeExpenses(local, cloud)[0];
+  assert.equal(out.categoryId, 'cat_travel');
+  assert.equal(out.fromLive, true);
+});
+
+console.log('\n[withEdit]');
+test('手動列編輯也蓋上編輯時間', () => {
+  assert.deepEqual(withEdit({ id: 'm1', amount: 1 }, { amount: 2 }, 500), { id: 'm1', amount: 2, _editedAt: 500 });
+});
+test('匯入列編輯蓋上編輯時間（覆蓋舊的）', () => {
+  assert.equal(withEdit({ id: 'gmail_x', _editedAt: 1 }, { note: 'n' }, 500)._editedAt, 500);
 });
 
 console.log(`\n通過 ${passed} / 失敗 ${failed}`);

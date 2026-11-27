@@ -10,7 +10,7 @@ import {
 } from '../lib/constants';
 import { learnCategory } from '../lib/merchantRules';
 import { setTripExclusion as setExclusionIn } from '../lib/tripMerchants';
-import { isImportedId } from '../lib/syncMerge';
+import { withEdit } from '../lib/syncMerge';
 import { getTripContext } from '../lib/trips';
 import {
   planTripMigration,
@@ -144,9 +144,9 @@ export const useAppStore = create((set, get) => {
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
     updateLifeExpense: (id, data) => {
-      // 匯入列被編輯過要蓋時間戳，雲端/GAS 重新匯入時才會保留使用者的版本
-      const edited = isImportedId(id) ? { _editedAt: Date.now() } : {};
-      const next = get().lifeExpenses.map(e => e.id === id ? { ...e, ...data, ...edited } : e);
+      // 每次編輯都蓋時間戳（手動列也蓋）：GAS 重新匯入保留使用者的版本，跨裝置合併時較晚的編輯優先
+      const now = Date.now();
+      const next = get().lifeExpenses.map(e => e.id === id ? withEdit(e, data, now) : e);
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
     // 多筆各自修改（旅程換算外幣用）：每筆依 id 改「目前」的資料，只存一次；不接受整份清單
@@ -154,9 +154,7 @@ export const useAppStore = create((set, get) => {
       const byId = new Map((patches || []).map(p => [p.id, p.patch]));
       if (!byId.size) return;
       const now = Date.now();
-      const next = get().lifeExpenses.map(e => byId.has(e.id)
-        ? { ...e, ...byId.get(e.id), ...(isImportedId(e.id) ? { _editedAt: now } : {}) }
-        : e);
+      const next = get().lifeExpenses.map(e => byId.has(e.id) ? withEdit(e, byId.get(e.id), now) : e);
       save(LIFE_EXP_KEY, next); stamp(); set({ lifeExpenses: next });
     },
     deleteLifeExpense: (id) => {
